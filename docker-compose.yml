@@ -1,0 +1,213 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: data_pipeline_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: data_pipeline
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Celery and caching
+  redis:
+    image: redis:7-alpine
+    container_name: data_pipeline_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MLflow Tracking Server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.10.0
+    container_name: data_pipeline_mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:postgres@postgres:5432/mlflow
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
+    volumes:
+      - mlflow_data:/mlflow/artifacts
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Argilla for Human Annotation
+  argilla:
+    image: argilla/argilla-server:latest
+    container_name: data_pipeline_argilla
+    ports:
+      - "6900:6900"
+    environment:
+      ARGILLA_ELASTICSEARCH: http://elasticsearch:9200
+      ARGILLA_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/argilla
+      ARGILLA_HOME_PATH: /var/lib/argilla
+      # Default admin credentials
+      ARGILLA_AUTH_SECRET_KEY: supersecretkey
+    volumes:
+      - argilla_data:/var/lib/argilla
+    depends_on:
+      - elasticsearch
+      - postgres
+
+  # Elasticsearch for Argilla
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.5.3
+    container_name: data_pipeline_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'status.*green\\|yellow'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Prefect Server
+  prefect-server:
+    image: prefecthq/prefect:2-python3.11
+    container_name: data_pipeline_prefect
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/prefect
+    command: prefect server start
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data_pipeline_celery_worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/data_pipeline
+      REDIS_URL: redis://redis:6379/0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      ARGILLA_API_URL: http://argilla:6900
+    command: celery -A pipeline.celery_app worker --loglevel=info -Q pipeline,preprocessing,validation
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data_pipeline_celery_beat
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/data_pipeline
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A pipeline.celery_app beat --loglevel=info
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+
+  # Flower (Celery Monitoring)
+  flower:
+    image: mher/flower:0.9.7
+    container_name: data_pipeline_flower
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    command: celery flower --broker=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  # FastAPI Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data_pipeline_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/data_pipeline
+      REDIS_URL: redis://redis:6379/0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      ARGILLA_API_URL: http://argilla:6900
+      PREFECT_API_URL: http://prefect-server:4200/api
+    command: uvicorn backend.api:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+
+  # Streamlit Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data_pipeline_frontend
+    ports:
+      - "8501:8501"
+    environment:
+      API_URL: http://api:8000/api
+    command: streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
+    depends_on:
+      - api
+    volumes:
+      - .:/app
+
+  # Code Server (VS Code in Browser)
+  code-server:
+    image: codercom/code-server:latest
+    container_name: data_pipeline_code_editor
+    ports:
+      - "8080:8080"
+    environment:
+      PASSWORD: "datapipeline"  # Change this password
+    volumes:
+      - .:/home/coder/project
+      - code_server_data:/home/coder/.local
+    command: >
+      code-server
+      --auth password
+      --bind-addr 0.0.0.0:8080
+      /home/coder/project
+
+volumes:
+  postgres_data:
+  redis_data:
+  mlflow_data:
+  argilla_data:
+  elasticsearch_data:
+  code_server_data:
