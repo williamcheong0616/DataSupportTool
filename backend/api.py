@@ -1,32 +1,39 @@
-"""FastAPI application and routes."""
+"""FastAPI application for Text and ASR Annotation."""
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, BackgroundTasks, Query
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import pandas as pd
 import json
+import os
+import io
+import csv
+import httpx
 
 from backend.database import get_db, init_db
 from backend.models import (
-    Dataset, DataRecord, PipelineRun, ModelResponse, 
-    ValidationRecord, PipelineStatus, ValidationResult
+    TextDataset, TextRecord, ASRDataset, AudioFile,
+    TaskType, TranscriptionStatus
 )
 from backend.schemas import (
-    DatasetCreate, DatasetResponse, DataRecordCreate, DataRecordBulkCreate,
-    DataRecordResponse, PipelineRunCreate, PipelineRunResponse,
-    HumanReviewSubmit, ValidationResponse, PipelineStats, ValidationSummary
+    TextDatasetCreate, TextDatasetUpdate, TextDatasetResponse,
+    TextRecordResponse, BahasaRojakAnnotation, ClassificationAnnotation,
+    TextModificationAnnotation, QuestionGenerationAnnotation,
+    ASRDatasetCreate, ASRDatasetResponse, AudioFileResponse,
+    TranscriptAnnotation, AnnotationStats
 )
-from pipeline.orchestrator import PipelineOrchestrator
 
 app = FastAPI(
-    title="Data Pipeline API",
-    description="API for data collection, preprocessing, and validation pipeline",
-    version="1.0.0"
+    title="Annotation Tool API",
+    description="API for Text and ASR Annotation",
+    version="2.0.0"
 )
 
-# CORS middleware
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,441 +42,702 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Audio files directory
+AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+# Whisper API URL (from docker-compose)
+WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://localhost:9000")
+
 
 @app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup."""
+def startup():
     init_db()
 
 
-# --- Dataset Endpoints ---
-@app.post("/api/datasets", response_model=DatasetResponse)
-def create_dataset(dataset: DatasetCreate, db: Session = Depends(get_db)):
-    """Create a new dataset."""
-    db_dataset = Dataset(**dataset.model_dump())
-    db.add(db_dataset)
+# === Health Check ===
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "healthy"}
+
+
+# === Stats ===
+
+@app.get("/api/stats", response_model=AnnotationStats)
+def get_stats(db: Session = Depends(get_db)):
+    """Get overall annotation statistics."""
+    text_records = db.query(TextRecord).count()
+    text_annotated = db.query(TextRecord).filter(TextRecord.is_annotated == True).count()
+    audio_files = db.query(AudioFile).count()
+    asr_completed = db.query(AudioFile).filter(AudioFile.status == TranscriptionStatus.COMPLETED).count()
+    
+    return {
+        "text_datasets": db.query(TextDataset).count(),
+        "text_records": text_records,
+        "text_annotated": text_annotated,
+        "asr_datasets": db.query(ASRDataset).count(),
+        "audio_files": audio_files,
+        "asr_completed": asr_completed,
+    }
+
+
+# =====================
+# TEXT ANNOTATION APIs
+# =====================
+
+@app.get("/api/text/datasets", response_model=List[TextDatasetResponse])
+def list_text_datasets(db: Session = Depends(get_db)):
+    """List all text datasets."""
+    datasets = db.query(TextDataset).order_by(TextDataset.created_at.desc()).all()
+    result = []
+    for ds in datasets:
+        record_count = db.query(TextRecord).filter(TextRecord.dataset_id == ds.id).count()
+        annotated_count = db.query(TextRecord).filter(
+            TextRecord.dataset_id == ds.id,
+            TextRecord.is_annotated == True
+        ).count()
+        result.append({
+            **ds.__dict__,
+            "record_count": record_count,
+            "annotated_count": annotated_count,
+        })
+    return result
+
+
+@app.post("/api/text/datasets", response_model=TextDatasetResponse)
+def create_text_dataset(data: TextDatasetCreate, db: Session = Depends(get_db)):
+    """Create a new text dataset."""
+    dataset = TextDataset(
+        name=data.name,
+        description=data.description,
+        task_type=data.task_type,
+    )
+    db.add(dataset)
     db.commit()
-    db.refresh(db_dataset)
-    return db_dataset
+    db.refresh(dataset)
+    return {**dataset.__dict__, "record_count": 0, "annotated_count": 0}
 
 
-@app.get("/api/datasets", response_model=List[DatasetResponse])
-def list_datasets(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """List all datasets."""
-    return db.query(Dataset).offset(skip).limit(limit).all()
-
-
-@app.get("/api/datasets/{dataset_id}", response_model=DatasetResponse)
-def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
-    """Get a specific dataset."""
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    return dataset
-
-
-@app.delete("/api/datasets/{dataset_id}")
-def delete_dataset(dataset_id: int, db: Session = Depends(get_db)):
-    """Delete a dataset and all its records."""
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+@app.get("/api/text/datasets/{dataset_id}", response_model=TextDatasetResponse)
+def get_text_dataset(dataset_id: int, db: Session = Depends(get_db)):
+    """Get a specific text dataset."""
+    dataset = db.query(TextDataset).filter(TextDataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    # Delete all related records first
-    db.query(DataRecord).filter(DataRecord.dataset_id == dataset_id).delete()
+    record_count = db.query(TextRecord).filter(TextRecord.dataset_id == dataset_id).count()
+    annotated_count = db.query(TextRecord).filter(
+        TextRecord.dataset_id == dataset_id,
+        TextRecord.is_annotated == True
+    ).count()
+    return {**dataset.__dict__, "record_count": record_count, "annotated_count": annotated_count}
+
+
+@app.put("/api/text/datasets/{dataset_id}", response_model=TextDatasetResponse)
+def update_text_dataset(dataset_id: int, data: TextDatasetUpdate, db: Session = Depends(get_db)):
+    """Update dataset (name, description, column mapping)."""
+    dataset = db.query(TextDataset).filter(TextDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
     
-    # Delete all related pipeline runs and their validations
-    runs = db.query(PipelineRun).filter(PipelineRun.dataset_id == dataset_id).all()
-    for run in runs:
-        db.query(ValidationRecord).filter(ValidationRecord.pipeline_run_id == run.id).delete()
-        db.query(ModelResponse).filter(ModelResponse.pipeline_run_id == run.id).delete()
-    db.query(PipelineRun).filter(PipelineRun.dataset_id == dataset_id).delete()
+    if data.name is not None:
+        dataset.name = data.name
+    if data.description is not None:
+        dataset.description = data.description
+    if data.column_mapping is not None:
+        dataset.column_mapping = data.column_mapping
     
-    # Delete the dataset
+    dataset.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(dataset)
+    
+    record_count = db.query(TextRecord).filter(TextRecord.dataset_id == dataset_id).count()
+    annotated_count = db.query(TextRecord).filter(
+        TextRecord.dataset_id == dataset_id,
+        TextRecord.is_annotated == True
+    ).count()
+    return {**dataset.__dict__, "record_count": record_count, "annotated_count": annotated_count}
+
+
+@app.delete("/api/text/datasets/{dataset_id}")
+def delete_text_dataset(dataset_id: int, db: Session = Depends(get_db)):
+    """Delete a text dataset and all its records."""
+    dataset = db.query(TextDataset).filter(TextDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
     db.delete(dataset)
     db.commit()
-    
-    return {"message": f"Dataset '{dataset.name}' and all related data deleted successfully"}
+    return {"message": f"Dataset '{dataset.name}' deleted"}
 
 
-@app.post("/api/datasets/{dataset_id}/upload")
-async def upload_data_file(
+@app.post("/api/text/datasets/{dataset_id}/upload")
+async def upload_text_data(
     dataset_id: int,
     file: UploadFile = File(...),
-    input_column: Optional[str] = Query(None, description="Column to use as input_text"),
-    output_column: Optional[str] = Query(None, description="Column to use as expected_output"),
-    auto_convert: bool = Query(True, description="Auto-convert all columns to input_text if no input_column specified"),
+    text_column: Optional[str] = Query(None, description="Column to use as text"),
     db: Session = Depends(get_db)
 ):
-    """Upload a CSV/JSON file to add records to a dataset.
-    
-    If input_column is not specified and auto_convert is True, 
-    all columns will be combined into input_text as JSON.
-    """
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    """Upload CSV/JSON file to a text dataset."""
+    dataset = db.query(TextDataset).filter(TextDataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
     content = await file.read()
     
-    print(f"Received file: {file.filename}, size: {len(content)} bytes")
-    
     try:
-        if file.filename and file.filename.endswith('.csv'):
-            # Try parsing with different options to handle malformed CSVs
+        if file.filename.endswith('.csv'):
+            # Try different parsing options
             try:
-                df = pd.read_csv(pd.io.common.BytesIO(content))
-            except Exception:
-                # Try with error handling for bad lines
-                try:
-                    df = pd.read_csv(pd.io.common.BytesIO(content), on_bad_lines='skip')
-                except Exception:
-                    # Try with different separator detection
-                    try:
-                        df = pd.read_csv(pd.io.common.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
-                    except Exception as e:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Could not parse CSV file. Error: {str(e)}. Please check the file format."
-                        )
-        elif file.filename and file.filename.endswith('.json'):
-            data = json.loads(content)
-            if isinstance(data, list):
-                df = pd.DataFrame(data)
-            elif isinstance(data, dict) and 'data' in data:
-                df = pd.DataFrame(data['data'])
+                df = pd.read_csv(io.BytesIO(content))
+            except:
+                df = pd.read_csv(io.BytesIO(content), on_bad_lines='skip', sep=None, engine='python')
+        elif file.filename.endswith('.json') or file.filename.endswith('.jsonl'):
+            if file.filename.endswith('.jsonl'):
+                lines = content.decode('utf-8').strip().split('\n')
+                data = [json.loads(line) for line in lines if line.strip()]
             else:
-                df = pd.DataFrame([data])
+                data = json.loads(content)
+                if isinstance(data, dict):
+                    data = data.get('data', [data])
+            df = pd.DataFrame(data)
         else:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Unsupported file format: {file.filename}. Use CSV or JSON."
-            )
-        
-        print(f"Parsed DataFrame with columns: {list(df.columns)}")
-        
-        records_added = 0
-        for _, row in df.iterrows():
-            # Determine input_text
-            if input_column and input_column in df.columns:
-                input_text = str(row[input_column])
-            elif 'input_text' in df.columns:
-                input_text = str(row['input_text'])
-            elif auto_convert:
-                # Convert entire row to a formatted string
-                input_text = json.dumps(row.to_dict(), default=str, ensure_ascii=False)
-            else:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"No input_column specified. Found columns: {list(df.columns)}"
-                )
-            
-            # Determine expected_output
-            expected_output = None
-            if output_column and output_column in df.columns:
-                expected_output = str(row[output_column])
-            elif 'expected_output' in df.columns:
-                expected_output = str(row['expected_output'])
-            
-            record = DataRecord(
-                dataset_id=dataset_id,
-                input_text=input_text,
-                expected_output=expected_output,
-                record_metadata=row.to_dict()
-            )
-            db.add(record)
-            records_added += 1
-        
-        dataset.record_count += records_added
-        db.commit()
-        
-        return {
-            "message": f"Successfully added {records_added} records", 
-            "total_records": dataset.record_count,
-            "columns_found": list(df.columns)
-        }
-    
-    except HTTPException:
-        raise
+            raise HTTPException(status_code=400, detail="Unsupported file format. Use CSV or JSON.")
     except Exception as e:
-        print(f"Error processing file: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
-
-
-# --- Data Record Endpoints ---
-@app.post("/api/datasets/{dataset_id}/records", response_model=DataRecordResponse)
-def add_record(dataset_id: int, record: DataRecordCreate, db: Session = Depends(get_db)):
-    """Add a single record to a dataset."""
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+        raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
     
-    db_record = DataRecord(dataset_id=dataset_id, **record.model_dump())
-    db.add(db_record)
-    dataset.record_count += 1
-    db.commit()
-    db.refresh(db_record)
-    return db_record
-
-
-@app.post("/api/datasets/{dataset_id}/records/bulk")
-def add_records_bulk(dataset_id: int, data: DataRecordBulkCreate, db: Session = Depends(get_db)):
-    """Add multiple records to a dataset."""
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    # Store original headers
+    headers = list(df.columns)
+    if not dataset.original_headers:
+        dataset.original_headers = headers
     
+    # Determine text column
+    if text_column and text_column in df.columns:
+        selected_col = text_column
+    elif dataset.column_mapping and 'text' in dataset.column_mapping:
+        selected_col = dataset.column_mapping['text']
+    else:
+        # Try common column names
+        for col in ['text', 'content', 'sentence', 'input', 'message', headers[0]]:
+            if col in df.columns:
+                selected_col = col
+                break
+        else:
+            selected_col = headers[0]
+    
+    # Add records
     records_added = 0
-    for record in data.records:
-        db_record = DataRecord(dataset_id=dataset_id, **record.model_dump())
-        db.add(db_record)
+    for _, row in df.iterrows():
+        record = TextRecord(
+            dataset_id=dataset_id,
+            original_text=str(row[selected_col]),
+            raw_data=row.to_dict(),
+        )
+        db.add(record)
         records_added += 1
     
-    dataset.record_count += records_added
     db.commit()
+    return {"message": f"Added {records_added} records", "headers": headers}
+
+
+@app.get("/api/text/datasets/{dataset_id}/records")
+def list_text_records(
+    dataset_id: int,
+    annotated: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """List records in a dataset with pagination info."""
+    base_query = db.query(TextRecord).filter(TextRecord.dataset_id == dataset_id)
     
-    return {"message": f"Successfully added {records_added} records"}
+    # Get totals
+    total = base_query.count()
+    annotated_count = base_query.filter(TextRecord.is_annotated == True).count()
+    
+    # Apply filter
+    query = base_query
+    if annotated is not None:
+        query = query.filter(TextRecord.is_annotated == annotated)
+    
+    records = query.offset(offset).limit(limit).all()
+    
+    return {
+        "records": records,
+        "total": total,
+        "annotated": annotated_count,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
-@app.get("/api/datasets/{dataset_id}/records", response_model=List[DataRecordResponse])
-def list_records(dataset_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """List records in a dataset."""
-    return db.query(DataRecord).filter(DataRecord.dataset_id == dataset_id).offset(skip).limit(limit).all()
-
-
-@app.get("/api/records/{record_id}", response_model=DataRecordResponse)
-def get_record(record_id: int, db: Session = Depends(get_db)):
+@app.get("/api/text/records/{record_id}", response_model=TextRecordResponse)
+def get_text_record(record_id: int, db: Session = Depends(get_db)):
     """Get a specific record."""
-    record = db.query(DataRecord).filter(DataRecord.id == record_id).first()
+    record = db.query(TextRecord).filter(TextRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     return record
 
 
-@app.put("/api/records/{record_id}", response_model=DataRecordResponse)
-def update_record(record_id: int, record_update: DataRecordCreate, db: Session = Depends(get_db)):
-    """Update a record."""
-    record = db.query(DataRecord).filter(DataRecord.id == record_id).first()
+@app.post("/api/text/records/{record_id}/annotate/bahasa-rojak")
+def annotate_bahasa_rojak(
+    record_id: int,
+    data: BahasaRojakAnnotation,
+    annotator: str = Query("anonymous"),
+    db: Session = Depends(get_db)
+):
+    """Annotate a record for Bahasa Rojak identification (Yes/No)."""
+    record = db.query(TextRecord).filter(TextRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     
-    record.input_text = record_update.input_text
-    record.expected_output = record_update.expected_output
-    record.record_metadata = record_update.record_metadata
-    record.is_preprocessed = False  # Reset preprocessing flag on edit
-    
+    record.is_bahasa_rojak = data.is_bahasa_rojak
+    record.is_annotated = True
+    record.annotated_by = annotator
+    record.annotated_at = datetime.utcnow()
     db.commit()
-    db.refresh(record)
-    return record
+    return {"message": "Annotation saved"}
 
 
-@app.delete("/api/records/{record_id}")
-def delete_record(record_id: int, db: Session = Depends(get_db)):
-    """Delete a record."""
-    record = db.query(DataRecord).filter(DataRecord.id == record_id).first()
+@app.post("/api/text/records/{record_id}/annotate/classification")
+def annotate_classification(
+    record_id: int,
+    data: ClassificationAnnotation,
+    annotator: str = Query("anonymous"),
+    db: Session = Depends(get_db)
+):
+    """Annotate a record with classification label."""
+    record = db.query(TextRecord).filter(TextRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     
-    # Update dataset record count
-    dataset = db.query(Dataset).filter(Dataset.id == record.dataset_id).first()
-    if dataset:
-        dataset.record_count = max(0, dataset.record_count - 1)
+    record.classification_label = data.classification_label
+    record.is_annotated = True
+    record.annotated_by = annotator
+    record.annotated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Annotation saved"}
+
+
+@app.post("/api/text/records/{record_id}/annotate/modification")
+def annotate_modification(
+    record_id: int,
+    data: TextModificationAnnotation,
+    annotator: str = Query("anonymous"),
+    db: Session = Depends(get_db)
+):
+    """Annotate a record with text modification."""
+    record = db.query(TextRecord).filter(TextRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    if data.modified_text:
+        record.modified_text = data.modified_text
+    if data.subject_added:
+        record.subject_added = data.subject_added
+    if data.context_added:
+        record.context_added = data.context_added
+    
+    record.is_annotated = True
+    record.annotated_by = annotator
+    record.annotated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Annotation saved"}
+
+
+@app.post("/api/text/records/{record_id}/annotate/questions")
+def annotate_questions(
+    record_id: int,
+    data: QuestionGenerationAnnotation,
+    annotator: str = Query("anonymous"),
+    db: Session = Depends(get_db)
+):
+    """Annotate a record with 3 questions."""
+    record = db.query(TextRecord).filter(TextRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    record.question_1 = data.question_1
+    record.question_2 = data.question_2
+    record.question_3 = data.question_3
+    record.is_annotated = True
+    record.annotated_by = annotator
+    record.annotated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Annotation saved"}
+
+
+@app.delete("/api/text/records/{record_id}")
+def delete_text_record(record_id: int, db: Session = Depends(get_db)):
+    """Delete a text record."""
+    record = db.query(TextRecord).filter(TextRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
     
     db.delete(record)
     db.commit()
-    
-    return {"message": "Record deleted successfully"}
+    return {"message": "Record deleted"}
 
 
-# --- Pipeline Endpoints ---
-@app.post("/api/pipeline/run", response_model=PipelineRunResponse)
-def start_pipeline(
-    run_config: PipelineRunCreate,
-    background_tasks: BackgroundTasks,
+@app.get("/api/text/datasets/{dataset_id}/export")
+def export_text_dataset(
+    dataset_id: int,
+    format: str = Query("csv", enum=["csv", "jsonl"]),
     db: Session = Depends(get_db)
 ):
-    """Start a new pipeline run."""
-    dataset = db.query(Dataset).filter(Dataset.id == run_config.dataset_id).first()
+    """Export dataset as CSV or JSONL."""
+    dataset = db.query(TextDataset).filter(TextDataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    if dataset.record_count == 0:
-        raise HTTPException(status_code=400, detail="Dataset has no records")
+    records = db.query(TextRecord).filter(TextRecord.dataset_id == dataset_id).all()
     
-    # Create pipeline run
-    pipeline_run = PipelineRun(
-        dataset_id=run_config.dataset_id,
-        status=PipelineStatus.PENDING,
-        config=run_config.config.model_dump() if run_config.config else None
-    )
-    db.add(pipeline_run)
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header based on task type
+        if dataset.task_type == TaskType.BAHASA_ROJAK_IDENTIFICATION:
+            writer.writerow(["id", "original_text", "is_bahasa_rojak", "annotated_by"])
+            for r in records:
+                writer.writerow([r.id, r.original_text, r.is_bahasa_rojak, r.annotated_by])
+        elif dataset.task_type == TaskType.BAHASA_ROJAK_CLASSIFICATION:
+            writer.writerow(["id", "original_text", "classification_label", "annotated_by"])
+            for r in records:
+                writer.writerow([r.id, r.original_text, r.classification_label, r.annotated_by])
+        elif dataset.task_type == TaskType.TEXT_MODIFICATION:
+            writer.writerow(["id", "original_text", "modified_text", "subject_added", "context_added", "annotated_by"])
+            for r in records:
+                writer.writerow([r.id, r.original_text, r.modified_text, r.subject_added, r.context_added, r.annotated_by])
+        else:  # QUESTION_GENERATION
+            writer.writerow(["id", "original_text", "question_1", "question_2", "question_3", "annotated_by"])
+            for r in records:
+                writer.writerow([r.id, r.original_text, r.question_1, r.question_2, r.question_3, r.annotated_by])
+        
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={dataset.name}.csv"}
+        )
+    else:  # jsonl
+        lines = []
+        for r in records:
+            row = {
+                "id": r.id,
+                "original_text": r.original_text,
+                "is_annotated": r.is_annotated,
+                "annotated_by": r.annotated_by,
+            }
+            if dataset.task_type == TaskType.BAHASA_ROJAK_IDENTIFICATION:
+                row["is_bahasa_rojak"] = r.is_bahasa_rojak
+            elif dataset.task_type == TaskType.BAHASA_ROJAK_CLASSIFICATION:
+                row["classification_label"] = r.classification_label
+            elif dataset.task_type == TaskType.TEXT_MODIFICATION:
+                row["modified_text"] = r.modified_text
+                row["subject_added"] = r.subject_added
+                row["context_added"] = r.context_added
+            else:
+                row["question_1"] = r.question_1
+                row["question_2"] = r.question_2
+                row["question_3"] = r.question_3
+            lines.append(json.dumps(row, ensure_ascii=False))
+        
+        content = "\n".join(lines)
+        return StreamingResponse(
+            iter([content]),
+            media_type="application/jsonl",
+            headers={"Content-Disposition": f"attachment; filename={dataset.name}.jsonl"}
+        )
+
+
+# =====================
+# ASR ANNOTATION APIs
+# =====================
+
+@app.get("/api/asr/datasets", response_model=List[ASRDatasetResponse])
+def list_asr_datasets(db: Session = Depends(get_db)):
+    """List all ASR datasets."""
+    datasets = db.query(ASRDataset).order_by(ASRDataset.created_at.desc()).all()
+    result = []
+    for ds in datasets:
+        file_count = db.query(AudioFile).filter(AudioFile.dataset_id == ds.id).count()
+        pending_count = db.query(AudioFile).filter(
+            AudioFile.dataset_id == ds.id,
+            AudioFile.status.in_([TranscriptionStatus.PENDING, TranscriptionStatus.TRANSCRIBING])
+        ).count()
+        completed_count = db.query(AudioFile).filter(
+            AudioFile.dataset_id == ds.id,
+            AudioFile.status == TranscriptionStatus.COMPLETED
+        ).count()
+        result.append({
+            **ds.__dict__,
+            "file_count": file_count,
+            "pending_count": pending_count,
+            "completed_count": completed_count,
+        })
+    return result
+
+
+@app.post("/api/asr/datasets", response_model=ASRDatasetResponse)
+def create_asr_dataset(data: ASRDatasetCreate, db: Session = Depends(get_db)):
+    """Create a new ASR dataset."""
+    dataset = ASRDataset(name=data.name, description=data.description)
+    db.add(dataset)
     db.commit()
-    db.refresh(pipeline_run)
-    
-    # Run pipeline in background
-    background_tasks.add_task(run_pipeline_async, pipeline_run.id)
-    
-    return pipeline_run
+    db.refresh(dataset)
+    return {**dataset.__dict__, "file_count": 0, "pending_count": 0, "completed_count": 0}
 
 
-@app.get("/api/pipeline/runs", response_model=List[PipelineRunResponse])
-def list_pipeline_runs(
-    dataset_id: Optional[int] = None,
-    status: Optional[PipelineStatus] = None,
-    skip: int = 0,
-    limit: int = 100,
+@app.delete("/api/asr/datasets/{dataset_id}")
+def delete_asr_dataset(dataset_id: int, db: Session = Depends(get_db)):
+    """Delete an ASR dataset and all its audio files."""
+    dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Delete audio files from disk
+    audio_files = db.query(AudioFile).filter(AudioFile.dataset_id == dataset_id).all()
+    for af in audio_files:
+        if os.path.exists(af.file_path):
+            os.remove(af.file_path)
+    
+    db.delete(dataset)
+    db.commit()
+    return {"message": f"Dataset '{dataset.name}' deleted"}
+
+
+@app.post("/api/asr/datasets/{dataset_id}/upload")
+async def upload_audio_files(
+    dataset_id: int,
+    files: List[UploadFile] = File(...),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    """List pipeline runs with optional filters."""
-    query = db.query(PipelineRun)
-    if dataset_id:
-        query = query.filter(PipelineRun.dataset_id == dataset_id)
-    if status:
-        query = query.filter(PipelineRun.status == status)
-    return query.order_by(PipelineRun.started_at.desc()).offset(skip).limit(limit).all()
+    """Upload audio files to an ASR dataset."""
+    dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    dataset_dir = os.path.join(AUDIO_DIR, str(dataset_id))
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    uploaded = []
+    for file in files:
+        # Save file
+        file_path = os.path.join(dataset_dir, file.filename)
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Create record
+        audio_file = AudioFile(
+            dataset_id=dataset_id,
+            filename=file.filename,
+            file_path=file_path,
+            file_size=len(content),
+            status=TranscriptionStatus.PENDING,
+        )
+        db.add(audio_file)
+        db.commit()
+        db.refresh(audio_file)
+        uploaded.append(audio_file.id)
+        
+        # Queue transcription
+        if background_tasks:
+            background_tasks.add_task(transcribe_audio, audio_file.id)
+    
+    return {"message": f"Uploaded {len(uploaded)} files", "file_ids": uploaded}
 
 
-@app.get("/api/pipeline/runs/{run_id}", response_model=PipelineRunResponse)
-def get_pipeline_run(run_id: int, db: Session = Depends(get_db)):
-    """Get details of a specific pipeline run."""
-    run = db.query(PipelineRun).filter(PipelineRun.id == run_id).first()
-    if not run:
-        raise HTTPException(status_code=404, detail="Pipeline run not found")
-    return run
-
-
-@app.post("/api/pipeline/runs/{run_id}/iterate")
-def iterate_pipeline(run_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Trigger a new iteration for a failed pipeline run."""
-    run = db.query(PipelineRun).filter(PipelineRun.id == run_id).first()
-    if not run:
-        raise HTTPException(status_code=404, detail="Pipeline run not found")
-    
-    if run.status not in [PipelineStatus.FAILED, PipelineStatus.HUMAN_REVIEW]:
-        raise HTTPException(status_code=400, detail="Can only iterate on failed or reviewed runs")
-    
-    # Create new iteration
-    new_run = PipelineRun(
-        dataset_id=run.dataset_id,
-        status=PipelineStatus.ITERATING,
-        iteration=run.iteration + 1,
-        config=run.config
-    )
-    db.add(new_run)
-    db.commit()
-    db.refresh(new_run)
-    
-    background_tasks.add_task(run_pipeline_async, new_run.id)
-    
-    return {"message": f"Started iteration {new_run.iteration}", "run_id": new_run.id}
-
-
-# --- Validation Endpoints ---
-@app.get("/api/pipeline/runs/{run_id}/validations", response_model=List[ValidationResponse])
-def get_validations(run_id: int, needs_review: bool = False, db: Session = Depends(get_db)):
-    """Get validation records for a pipeline run."""
-    query = db.query(ValidationRecord).filter(ValidationRecord.pipeline_run_id == run_id)
-    if needs_review:
-        query = query.filter(ValidationRecord.result == ValidationResult.NEEDS_REVIEW)
-    return query.all()
-
-
-@app.post("/api/validations/{validation_id}/review", response_model=ValidationResponse)
-def submit_human_review(
-    validation_id: int,
-    review: HumanReviewSubmit,
-    db: Session = Depends(get_db)
-):
-    """Submit human review for a validation record."""
-    validation = db.query(ValidationRecord).filter(ValidationRecord.id == validation_id).first()
-    if not validation:
-        raise HTTPException(status_code=404, detail="Validation record not found")
-    
-    validation.human_reviewed = True
-    validation.human_score = review.human_score
-    validation.human_feedback = review.human_feedback
-    validation.reviewer_id = review.reviewer_id
-    validation.reviewed_at = datetime.utcnow()
-    
-    # Update result based on human score
-    threshold = 0.8  # Could be from config
-    if review.human_score >= threshold:
-        validation.result = ValidationResult.PASSED
-    else:
-        validation.result = ValidationResult.FAILED
-    
-    db.commit()
-    db.refresh(validation)
-    return validation
-
-
-# --- Stats Endpoints ---
-@app.get("/api/stats", response_model=PipelineStats)
-def get_stats(db: Session = Depends(get_db)):
-    """Get overall pipeline statistics."""
-    total_datasets = db.query(Dataset).count()
-    total_records = db.query(DataRecord).count()
-    total_runs = db.query(PipelineRun).count()
-    
-    # Runs by status
-    status_counts = db.query(
-        PipelineRun.status, func.count(PipelineRun.id)
-    ).group_by(PipelineRun.status).all()
-    runs_by_status = {str(status.value): count for status, count in status_counts}
-    
-    # Average scores
-    avg_accuracy = db.query(func.avg(ValidationRecord.accuracy_score)).scalar()
-    
-    # Pass rate
-    total_validations = db.query(ValidationRecord).count()
-    passed_validations = db.query(ValidationRecord).filter(
-        ValidationRecord.result == ValidationResult.PASSED
-    ).count()
-    pass_rate = (passed_validations / total_validations) if total_validations > 0 else None
-    
-    return PipelineStats(
-        total_datasets=total_datasets,
-        total_records=total_records,
-        total_runs=total_runs,
-        runs_by_status=runs_by_status,
-        avg_validation_score=avg_accuracy,
-        pass_rate=pass_rate
-    )
-
-
-@app.get("/api/pipeline/runs/{run_id}/summary", response_model=ValidationSummary)
-def get_run_summary(run_id: int, db: Session = Depends(get_db)):
-    """Get validation summary for a pipeline run."""
-    validations = db.query(ValidationRecord).filter(ValidationRecord.pipeline_run_id == run_id).all()
-    
-    if not validations:
-        raise HTTPException(status_code=404, detail="No validations found for this run")
-    
-    passed = sum(1 for v in validations if v.result == ValidationResult.PASSED)
-    failed = sum(1 for v in validations if v.result == ValidationResult.FAILED)
-    needs_review = sum(1 for v in validations if v.result == ValidationResult.NEEDS_REVIEW)
-    
-    accuracy_scores = [v.accuracy_score for v in validations if v.accuracy_score is not None]
-    human_scores = [v.human_score for v in validations if v.human_score is not None]
-    
-    return ValidationSummary(
-        pipeline_run_id=run_id,
-        total_validations=len(validations),
-        passed=passed,
-        failed=failed,
-        needs_review=needs_review,
-        avg_accuracy=sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else None,
-        avg_human_score=sum(human_scores) / len(human_scores) if human_scores else None
-    )
-
-
-# --- Background Task ---
-def run_pipeline_async(run_id: int):
-    """Execute pipeline in background."""
+async def transcribe_audio(audio_file_id: int):
+    """Background task to transcribe audio using Whisper API."""
     from backend.database import SessionLocal
+    
     db = SessionLocal()
     try:
-        orchestrator = PipelineOrchestrator(db)
-        orchestrator.execute(run_id)
+        audio_file = db.query(AudioFile).filter(AudioFile.id == audio_file_id).first()
+        if not audio_file:
+            return
+        
+        audio_file.status = TranscriptionStatus.TRANSCRIBING
+        db.commit()
+        
+        # Call Whisper API
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            with open(audio_file.file_path, "rb") as f:
+                response = await client.post(
+                    f"{WHISPER_API_URL}/asr",
+                    files={"audio_file": (audio_file.filename, f)},
+                    params={"output": "json"}
+                )
+            
+            if response.status_code == 200:
+                result = response.json()
+                audio_file.whisper_transcript = result.get("text", "")
+                audio_file.whisper_language = result.get("language")
+                audio_file.status = TranscriptionStatus.TRANSCRIBED
+                audio_file.transcribed_at = datetime.utcnow()
+            else:
+                audio_file.status = TranscriptionStatus.PENDING  # Retry later
+        
+        db.commit()
+    except Exception as e:
+        print(f"Transcription error: {e}")
+        audio_file.status = TranscriptionStatus.PENDING
+        db.commit()
     finally:
         db.close()
+
+
+@app.post("/api/asr/files/{file_id}/transcribe")
+async def manual_transcribe(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Manually trigger transcription for a file."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    background_tasks.add_task(transcribe_audio, file_id)
+    return {"message": "Transcription queued"}
+
+
+@app.get("/api/asr/datasets/{dataset_id}/files")
+def list_audio_files(
+    dataset_id: int,
+    status: Optional[TranscriptionStatus] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """List audio files in a dataset with pagination info."""
+    base_query = db.query(AudioFile).filter(AudioFile.dataset_id == dataset_id)
+    
+    # Get totals
+    total = base_query.count()
+    pending_count = base_query.filter(AudioFile.status == TranscriptionStatus.PENDING).count()
+    completed_count = base_query.filter(AudioFile.status == TranscriptionStatus.COMPLETED).count()
+    
+    # Apply filter
+    query = base_query
+    if status:
+        query = query.filter(AudioFile.status == status)
+    
+    files = query.order_by(AudioFile.created_at).offset(offset).limit(limit).all()
+    
+    return {
+        "files": files,
+        "total": total,
+        "pending": pending_count,
+        "completed": completed_count,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/api/asr/files/{file_id}", response_model=AudioFileResponse)
+def get_audio_file(file_id: int, db: Session = Depends(get_db)):
+    """Get a specific audio file."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    return audio_file
+
+
+@app.get("/api/asr/files/{file_id}/audio")
+def stream_audio(file_id: int, db: Session = Depends(get_db)):
+    """Stream audio file for playback."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not os.path.exists(audio_file.file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+    
+    return FileResponse(
+        audio_file.file_path,
+        media_type="audio/mpeg",
+        filename=audio_file.filename
+    )
+
+
+@app.post("/api/asr/files/{file_id}/annotate")
+def annotate_transcript(
+    file_id: int,
+    data: TranscriptAnnotation,
+    annotator: str = Query("anonymous"),
+    db: Session = Depends(get_db)
+):
+    """Save corrected transcript."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    audio_file.corrected_transcript = data.corrected_transcript
+    audio_file.status = TranscriptionStatus.COMPLETED
+    audio_file.annotated_by = annotator
+    audio_file.annotated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Annotation saved"}
+
+
+@app.post("/api/asr/files/{file_id}/status")
+def update_file_status(
+    file_id: int,
+    status: TranscriptionStatus,
+    db: Session = Depends(get_db)
+):
+    """Update file status."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    audio_file.status = status
+    db.commit()
+    return {"message": f"Status updated to {status}"}
+
+
+@app.get("/api/asr/datasets/{dataset_id}/export")
+def export_asr_dataset(
+    dataset_id: int,
+    format: str = Query("csv", enum=["csv", "jsonl"]),
+    db: Session = Depends(get_db)
+):
+    """Export ASR dataset as CSV or JSONL."""
+    dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    files = db.query(AudioFile).filter(AudioFile.dataset_id == dataset_id).all()
+    
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "filename", "whisper_transcript", "corrected_transcript", "status", "annotated_by"])
+        for f in files:
+            writer.writerow([f.id, f.filename, f.whisper_transcript, f.corrected_transcript, f.status.value, f.annotated_by])
+        
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={dataset.name}_transcripts.csv"}
+        )
+    else:
+        lines = []
+        for f in files:
+            lines.append(json.dumps({
+                "id": f.id,
+                "filename": f.filename,
+                "whisper_transcript": f.whisper_transcript,
+                "corrected_transcript": f.corrected_transcript,
+                "status": f.status.value,
+                "annotated_by": f.annotated_by,
+            }, ensure_ascii=False))
+        
+        return StreamingResponse(
+            iter(["\n".join(lines)]),
+            media_type="application/jsonl",
+            headers={"Content-Disposition": f"attachment; filename={dataset.name}_transcripts.jsonl"}
+        )

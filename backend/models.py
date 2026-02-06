@@ -1,127 +1,134 @@
-"""Database models for the data pipeline."""
+"""Database models for Text and ASR Annotation."""
 from datetime import datetime
-from enum import Enum as PyEnum
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Enum, JSON, Boolean
-from sqlalchemy.orm import relationship
+from typing import Optional
+from sqlalchemy import (
+    Column, Integer, String, Text, Boolean, Float, DateTime, 
+    ForeignKey, JSON, Enum as SQLEnum
+)
+from sqlalchemy.orm import relationship, declarative_base
+import enum
 
-from backend.database import Base
-
-
-class PipelineStatus(PyEnum):
-    """Status of a pipeline run."""
-    PENDING = "pending"
-    COLLECTING = "collecting"
-    PREPROCESSING = "preprocessing"
-    VALIDATING = "validating"
-    HUMAN_REVIEW = "human_review"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ITERATING = "iterating"
+Base = declarative_base()
 
 
-class ValidationResult(PyEnum):
-    """Result of validation."""
-    PENDING = "pending"
-    PASSED = "passed"
-    FAILED = "failed"
-    NEEDS_REVIEW = "needs_review"
+# === Text Annotation Models ===
+
+class TaskType(str, enum.Enum):
+    """Type of annotation task."""
+    BAHASA_ROJAK_IDENTIFICATION = "bahasa_rojak_identification"  # Yes/No
+    BAHASA_ROJAK_CLASSIFICATION = "bahasa_rojak_classification"  # Categories
+    TEXT_MODIFICATION = "text_modification"  # Subject/Context adding
+    QUESTION_GENERATION = "question_generation"  # 3 questions
 
 
-class Dataset(Base):
-    """Represents a dataset in the pipeline."""
-    __tablename__ = "datasets"
+class TextDataset(Base):
+    """Dataset for text annotation."""
+    __tablename__ = "text_datasets"
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    source_type = Column(String(50), nullable=False)  # upload, api, manual
-    file_path = Column(String(500), nullable=True)
-    record_count = Column(Integer, default=0)
+    task_type = Column(SQLEnum(TaskType), nullable=False)
+    column_mapping = Column(JSON, nullable=True)  # Maps original headers to internal fields
+    original_headers = Column(JSON, nullable=True)  # Original CSV/JSON headers
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    pipeline_runs = relationship("PipelineRun", back_populates="dataset")
-    data_records = relationship("DataRecord", back_populates="dataset")
+    records = relationship("TextRecord", back_populates="dataset", cascade="all, delete-orphan")
 
 
-class DataRecord(Base):
-    """Individual data record within a dataset."""
-    __tablename__ = "data_records"
+class TextRecord(Base):
+    """Individual text record for annotation."""
+    __tablename__ = "text_records"
     
     id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
-    input_text = Column(Text, nullable=False)
-    expected_output = Column(Text, nullable=True)
-    record_metadata = Column(JSON, nullable=True)
-    is_preprocessed = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    dataset_id = Column(Integer, ForeignKey("text_datasets.id"), nullable=False)
     
-    # Relationships
-    dataset = relationship("Dataset", back_populates="data_records")
-    model_responses = relationship("ModelResponse", back_populates="data_record")
-
-
-class PipelineRun(Base):
-    """Represents a single run through the pipeline."""
-    __tablename__ = "pipeline_runs"
+    # Original data
+    original_text = Column(Text, nullable=False)
+    raw_data = Column(JSON, nullable=True)  # Store all original columns
     
-    id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
-    status = Column(Enum(PipelineStatus), default=PipelineStatus.PENDING)
-    iteration = Column(Integer, default=1)
-    config = Column(JSON, nullable=True)  # Pipeline configuration
-    started_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-    error_message = Column(Text, nullable=True)
+    # Annotation fields - Bahasa Rojak Identification
+    is_bahasa_rojak = Column(Boolean, nullable=True)  # Yes/No
     
-    # Relationships
-    dataset = relationship("Dataset", back_populates="pipeline_runs")
-    validations = relationship("ValidationRecord", back_populates="pipeline_run")
-
-
-class ModelResponse(Base):
-    """Response from a fine-tuned model."""
-    __tablename__ = "model_responses"
+    # Annotation fields - Classification
+    classification_label = Column(String(255), nullable=True)
     
-    id = Column(Integer, primary_key=True, index=True)
-    data_record_id = Column(Integer, ForeignKey("data_records.id"), nullable=False)
-    pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id"), nullable=False)
-    model_name = Column(String(255), nullable=False)
-    response_text = Column(Text, nullable=False)
-    latency_ms = Column(Float, nullable=True)
-    tokens_used = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # Annotation fields - Text Modification
+    modified_text = Column(Text, nullable=True)
+    subject_added = Column(Text, nullable=True)
+    context_added = Column(Text, nullable=True)
     
-    # Relationships
-    data_record = relationship("DataRecord", back_populates="model_responses")
-    validations = relationship("ValidationRecord", back_populates="model_response")
-
-
-class ValidationRecord(Base):
-    """Validation result for a model response."""
-    __tablename__ = "validation_records"
+    # Annotation fields - Question Generation
+    question_1 = Column(Text, nullable=True)
+    question_2 = Column(Text, nullable=True)
+    question_3 = Column(Text, nullable=True)
     
-    id = Column(Integer, primary_key=True, index=True)
-    model_response_id = Column(Integer, ForeignKey("model_responses.id"), nullable=False)
-    pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id"), nullable=False)
-    
-    # Automated metrics
-    result = Column(Enum(ValidationResult), default=ValidationResult.PENDING)
-    accuracy_score = Column(Float, nullable=True)
-    bleu_score = Column(Float, nullable=True)
-    rouge_score = Column(Float, nullable=True)
-    custom_metrics = Column(JSON, nullable=True)
-    
-    # Human review
-    human_reviewed = Column(Boolean, default=False)
-    human_score = Column(Float, nullable=True)  # 0-1 scale
-    human_feedback = Column(Text, nullable=True)
-    reviewer_id = Column(String(100), nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
+    # Status
+    is_annotated = Column(Boolean, default=False)
+    annotated_by = Column(String(255), nullable=True)
+    annotated_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    model_response = relationship("ModelResponse", back_populates="validations")
-    pipeline_run = relationship("PipelineRun", back_populates="validations")
+    dataset = relationship("TextDataset", back_populates="records")
+
+
+# === ASR Annotation Models ===
+
+class ASRDataset(Base):
+    """Dataset for ASR audio annotation."""
+    __tablename__ = "asr_datasets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    audio_files = relationship("AudioFile", back_populates="dataset", cascade="all, delete-orphan")
+
+
+class TranscriptionStatus(str, enum.Enum):
+    """Status of audio transcription."""
+    PENDING = "pending"  # Not yet transcribed
+    TRANSCRIBING = "transcribing"  # Whisper processing
+    TRANSCRIBED = "transcribed"  # Whisper done, awaiting annotation
+    ANNOTATING = "annotating"  # User is editing
+    COMPLETED = "completed"  # Annotation done
+
+
+class AudioFile(Base):
+    """Audio file for ASR annotation."""
+    __tablename__ = "audio_files"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("asr_datasets.id"), nullable=False)
+    
+    # File info
+    filename = Column(String(512), nullable=False)
+    file_path = Column(String(1024), nullable=False)
+    file_size = Column(Integer, nullable=True)  # bytes
+    duration = Column(Float, nullable=True)  # seconds
+    
+    # Whisper transcription
+    whisper_transcript = Column(Text, nullable=True)
+    whisper_language = Column(String(50), nullable=True)
+    whisper_confidence = Column(Float, nullable=True)
+    transcribed_at = Column(DateTime, nullable=True)
+    
+    # Annotated transcription
+    corrected_transcript = Column(Text, nullable=True)
+    
+    # Status
+    status = Column(SQLEnum(TranscriptionStatus), default=TranscriptionStatus.PENDING)
+    annotated_by = Column(String(255), nullable=True)
+    annotated_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    dataset = relationship("ASRDataset", back_populates="audio_files")

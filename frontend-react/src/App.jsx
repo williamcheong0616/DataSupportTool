@@ -1,59 +1,80 @@
-import { Routes, Route, NavLink } from 'react-router-dom'
-import { Home, Database, Play, CheckCircle, BarChart3 } from 'lucide-react'
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
-import Datasets from './pages/Datasets'
-import Pipeline from './pages/Pipeline'
-import Annotate from './pages/Annotate'
-import Analytics from './pages/Analytics'
+import TextDatasets from './pages/TextDatasets'
+import TextAnnotate from './pages/TextAnnotate'
+import ASRDatasets from './pages/ASRDatasets'
+import ASRAnnotate from './pages/ASRAnnotate'
 
 function App() {
-  const navItems = [
-    { path: '/', icon: Home, label: 'Dashboard' },
-    { path: '/datasets', icon: Database, label: 'Datasets' },
-    { path: '/pipeline', icon: Play, label: 'Pipeline' },
-    { path: '/annotate', icon: CheckCircle, label: 'Annotate' },
-    { path: '/analytics', icon: BarChart3, label: 'Analytics' },
-  ]
-
   return (
-    <div className="flex h-screen">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white">
-        <div className="p-4 border-b border-gray-700">
-          <h1 className="text-xl font-bold">🔄 Data Pipeline</h1>
-          <p className="text-gray-400 text-sm">Annotation Tool</p>
-        </div>
-        <nav className="p-4">
-          {navItems.map(({ path, icon: Icon, label }) => (
-            <NavLink
-              key={path}
-              to={path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800'
-                }`
-              }
-            >
-              <Icon size={20} />
-              {label}
-            </NavLink>
-          ))}
+    <Router>
+      <div className="min-h-screen bg-gray-100">
+        {/* Navigation */}
+        <nav className="bg-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex justify-between h-16">
+              <div className="flex">
+                <div className="flex-shrink-0 flex items-center">
+                  <span className="text-xl font-bold text-indigo-600">
+                    📝 Data Annotation Tool
+                  </span>
+                </div>
+                <div className="hidden sm:ml-8 sm:flex sm:space-x-4">
+                  <NavLink
+                    to="/"
+                    className={({ isActive }) =>
+                      `inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                        isActive
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    Dashboard
+                  </NavLink>
+                  <NavLink
+                    to="/text"
+                    className={({ isActive }) =>
+                      `inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                        isActive
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    Text Annotation
+                  </NavLink>
+                  <NavLink
+                    to="/asr"
+                    className={({ isActive }) =>
+                      `inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                        isActive
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    ASR Annotation
+                  </NavLink>
+                </div>
+              </div>
+            </div>
+          </div>
         </nav>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/datasets" element={<Datasets />} />
-          <Route path="/pipeline" element={<Pipeline />} />
-          <Route path="/annotate" element={<Annotate />} />
-          <Route path="/analytics" element={<Analytics />} />
-        </Routes>
-      </main>
-    </div>
+        {/* Main Content */}
+        <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/text" element={<TextDatasets />} />
+            <Route path="/text/:datasetId/annotate" element={<TextAnnotate />} />
+            <Route path="/asr" element={<ASRDatasets />} />
+            <Route path="/asr/:datasetId/annotate" element={<ASRAnnotate />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
   )
 }
 

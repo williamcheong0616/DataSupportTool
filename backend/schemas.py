@@ -1,129 +1,155 @@
 """Pydantic schemas for API validation."""
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from enum import Enum
 
-from backend.models import PipelineStatus, ValidationResult
+
+# === Enums ===
+
+class TaskType(str, Enum):
+    BAHASA_ROJAK_IDENTIFICATION = "bahasa_rojak_identification"
+    BAHASA_ROJAK_CLASSIFICATION = "bahasa_rojak_classification"
+    TEXT_MODIFICATION = "text_modification"
+    QUESTION_GENERATION = "question_generation"
 
 
-# --- Dataset Schemas ---
-class DatasetCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
+class TranscriptionStatus(str, Enum):
+    PENDING = "pending"
+    TRANSCRIBING = "transcribing"
+    TRANSCRIBED = "transcribed"
+    ANNOTATING = "annotating"
+    COMPLETED = "completed"
+
+
+# === Text Dataset Schemas ===
+
+class TextDatasetCreate(BaseModel):
+    name: str
     description: Optional[str] = None
-    source_type: str = Field(..., pattern="^(upload|api|manual)$")
+    task_type: TaskType
 
 
-class DatasetResponse(BaseModel):
+class TextDatasetUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    column_mapping: Optional[Dict[str, str]] = None
+
+
+class TextDatasetResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    source_type: str
-    record_count: int
+    task_type: TaskType
+    column_mapping: Optional[Dict[str, str]]
+    original_headers: Optional[List[str]]
+    record_count: int = 0
+    annotated_count: int = 0
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
-# --- Data Record Schemas ---
-class DataRecordCreate(BaseModel):
-    input_text: str
-    expected_output: Optional[str] = None
-    record_metadata: Optional[Dict[str, Any]] = None
+# === Text Record Schemas ===
 
-
-class DataRecordBulkCreate(BaseModel):
-    records: List[DataRecordCreate]
-
-
-class DataRecordResponse(BaseModel):
+class TextRecordResponse(BaseModel):
     id: int
     dataset_id: int
-    input_text: str
-    expected_output: Optional[str]
-    is_preprocessed: bool
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-# --- Pipeline Schemas ---
-class PipelineConfig(BaseModel):
-    model_config = {"protected_namespaces": ()}
-    
-    model_name: str = "default-model"
-    validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
-    enable_human_review: bool = True
-    preprocessing_steps: List[str] = ["clean", "normalize"]
-    metrics: List[str] = ["accuracy", "bleu", "rouge"]
-
-
-class PipelineRunCreate(BaseModel):
-    dataset_id: int
-    config: Optional[PipelineConfig] = None
-
-
-class PipelineRunResponse(BaseModel):
-    id: int
-    dataset_id: int
-    status: PipelineStatus
-    iteration: int
-    config: Optional[Dict[str, Any]]
-    started_at: datetime
-    completed_at: Optional[datetime]
-    error_message: Optional[str]
-    
-    class Config:
-        from_attributes = True
-
-
-# --- Validation Schemas ---
-class ValidationMetrics(BaseModel):
-    accuracy_score: Optional[float] = None
-    bleu_score: Optional[float] = None
-    rouge_score: Optional[float] = None
-    custom_metrics: Optional[Dict[str, float]] = None
-
-
-class HumanReviewSubmit(BaseModel):
-    human_score: float = Field(..., ge=0.0, le=1.0)
-    human_feedback: Optional[str] = None
-    reviewer_id: str
-
-
-class ValidationResponse(BaseModel):
-    model_config = {"protected_namespaces": (), "from_attributes": True}
-    
-    id: int
-    model_response_id: int
-    pipeline_run_id: int
-    result: ValidationResult
-    accuracy_score: Optional[float]
-    bleu_score: Optional[float]
-    rouge_score: Optional[float]
-    human_reviewed: bool
-    human_score: Optional[float]
-    human_feedback: Optional[str]
+    original_text: str
+    raw_data: Optional[Dict[str, Any]]
+    is_bahasa_rojak: Optional[bool]
+    classification_label: Optional[str]
+    modified_text: Optional[str]
+    subject_added: Optional[str]
+    context_added: Optional[str]
+    question_1: Optional[str]
+    question_2: Optional[str]
+    question_3: Optional[str]
+    is_annotated: bool
+    annotated_by: Optional[str]
+    annotated_at: Optional[datetime]
     created_at: datetime
 
-
-# --- Dashboard/Stats Schemas ---
-class PipelineStats(BaseModel):
-    total_datasets: int
-    total_records: int
-    total_runs: int
-    runs_by_status: Dict[str, int]
-    avg_validation_score: Optional[float]
-    pass_rate: Optional[float]
+    class Config:
+        from_attributes = True
 
 
-class ValidationSummary(BaseModel):
-    pipeline_run_id: int
-    total_validations: int
-    passed: int
-    failed: int
-    needs_review: int
-    avg_accuracy: Optional[float]
-    avg_human_score: Optional[float]
+class BahasaRojakAnnotation(BaseModel):
+    is_bahasa_rojak: bool
+
+
+class ClassificationAnnotation(BaseModel):
+    classification_label: str
+
+
+class TextModificationAnnotation(BaseModel):
+    modified_text: Optional[str] = None
+    subject_added: Optional[str] = None
+    context_added: Optional[str] = None
+
+
+class QuestionGenerationAnnotation(BaseModel):
+    question_1: str
+    question_2: str
+    question_3: str
+
+
+# === ASR Dataset Schemas ===
+
+class ASRDatasetCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class ASRDatasetResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    file_count: int = 0
+    pending_count: int = 0
+    completed_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# === Audio File Schemas ===
+
+class AudioFileResponse(BaseModel):
+    id: int
+    dataset_id: int
+    filename: str
+    file_path: str
+    file_size: Optional[int]
+    duration: Optional[float]
+    whisper_transcript: Optional[str]
+    whisper_language: Optional[str]
+    whisper_confidence: Optional[float]
+    transcribed_at: Optional[datetime]
+    corrected_transcript: Optional[str]
+    status: TranscriptionStatus
+    annotated_by: Optional[str]
+    annotated_at: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TranscriptAnnotation(BaseModel):
+    corrected_transcript: str
+
+
+# === Stats ===
+
+class AnnotationStats(BaseModel):
+    text_datasets: int
+    text_records: int
+    text_annotated: int
+    asr_datasets: int
+    audio_files: int
+    asr_completed: int

@@ -4,40 +4,99 @@ const API_BASE = '/api'
 
 const api = axios.create({
   baseURL: API_BASE,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Datasets
-export const getDatasets = () => api.get('/datasets')
-export const createDataset = (data) => api.post('/datasets', data)
-export const deleteDataset = (id) => api.delete(`/datasets/${id}`)
-export const uploadDataFile = (datasetId, file, autoConvert = true) => {
+// Stats
+export const getStats = () => api.get('/stats')
+
+// === TEXT ANNOTATION ===
+
+// Text Datasets
+export const getTextDatasets = () => api.get('/text/datasets')
+export const createTextDataset = (data) => api.post('/text/datasets', data)
+export const getTextDataset = (id) => api.get(`/text/datasets/${id}`)
+export const updateTextDataset = (id, data) => api.put(`/text/datasets/${id}`, data)
+export const deleteTextDataset = (id) => api.delete(`/text/datasets/${id}`)
+
+export const uploadTextData = (datasetId, file, textColumn = null) => {
   const formData = new FormData()
   formData.append('file', file)
-  return api.post(`/datasets/${datasetId}/upload?auto_convert=${autoConvert}`, formData, {
+  const params = textColumn ? `?text_column=${textColumn}` : ''
+  return api.post(`/text/datasets/${datasetId}/upload${params}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
 
-// Records
-export const getRecords = (datasetId, limit = 50) => 
-  api.get(`/datasets/${datasetId}/records`, { params: { limit } })
-export const getRecord = (id) => api.get(`/records/${id}`)
-export const updateRecord = (id, data) => api.put(`/records/${id}`, data)
-export const deleteRecord = (id) => api.delete(`/records/${id}`)
+export const exportTextDataset = (datasetId, format = 'csv') => {
+  return api.get(`/text/datasets/${datasetId}/export?format=${format}`, {
+    responseType: 'blob'
+  })
+}
 
-// Pipeline
-export const runPipeline = (datasetId) => api.post('/pipeline/run', { dataset_id: datasetId })
-export const getPipelineRuns = (status = null, limit = 50) => 
-  api.get('/pipeline/runs', { params: { status, limit } })
+// Text Records
+export const getTextRecords = (datasetId, annotated = null, limit = 50, offset = 0) => {
+  const params = new URLSearchParams({ limit, offset })
+  if (annotated !== null) params.append('annotated', annotated)
+  return api.get(`/text/datasets/${datasetId}/records?${params}`)
+}
 
-// Validation / Human Review
-export const getPendingReviews = (limit = 50) => api.get('/validation/pending', { params: { limit } })
-export const submitReview = (validationId, data) => api.post(`/validation/${validationId}/review`, data)
+export const getTextRecord = (id) => api.get(`/text/records/${id}`)
+export const deleteTextRecord = (id) => api.delete(`/text/records/${id}`)
 
-// Stats
-export const getStats = () => api.get('/stats')
+// Annotations
+export const annotateBahasaRojak = (recordId, isBahasaRojak, annotator = 'anonymous') =>
+  api.post(`/text/records/${recordId}/annotate/bahasa-rojak?annotator=${annotator}`, {
+    is_bahasa_rojak: isBahasaRojak
+  })
+
+export const annotateClassification = (recordId, label, annotator = 'anonymous') =>
+  api.post(`/text/records/${recordId}/annotate/classification?annotator=${annotator}`, {
+    classification_label: label
+  })
+
+export const annotateModification = (recordId, data, annotator = 'anonymous') =>
+  api.post(`/text/records/${recordId}/annotate/modification?annotator=${annotator}`, data)
+
+export const annotateQuestions = (recordId, questions, annotator = 'anonymous') =>
+  api.post(`/text/records/${recordId}/annotate/questions?annotator=${annotator}`, questions)
+
+
+// === ASR ANNOTATION ===
+
+// ASR Datasets
+export const getASRDatasets = () => api.get('/asr/datasets')
+export const createASRDataset = (data) => api.post('/asr/datasets', data)
+export const deleteASRDataset = (id) => api.delete(`/asr/datasets/${id}`)
+
+export const uploadAudioFiles = (datasetId, files) => {
+  const formData = new FormData()
+  files.forEach(file => formData.append('files', file))
+  return api.post(`/asr/datasets/${datasetId}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const exportASRDataset = (datasetId, format = 'csv') => {
+  return api.get(`/asr/datasets/${datasetId}/export?format=${format}`, {
+    responseType: 'blob'
+  })
+}
+
+// Audio Files
+export const getAudioFiles = (datasetId, status = null, limit = 50, offset = 0) => {
+  const params = new URLSearchParams({ limit, offset })
+  if (status) params.append('status', status)
+  return api.get(`/asr/datasets/${datasetId}/files?${params}`)
+}
+
+export const getAudioFile = (id) => api.get(`/asr/files/${id}`)
+export const getAudioUrl = (id) => `${API_BASE}/asr/files/${id}/audio`
+export const transcribeAudio = (id) => api.post(`/asr/files/${id}/transcribe`)
+export const annotateTranscript = (id, transcript, annotator = 'anonymous') =>
+  api.post(`/asr/files/${id}/annotate?annotator=${annotator}`, {
+    corrected_transcript: transcript
+  })
+export const updateFileStatus = (id, status) => api.post(`/asr/files/${id}/status?status=${status}`)
 
 export default api

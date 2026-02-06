@@ -26,6 +26,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))
 
+# Whisper API
+WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://localhost:9000")
+
 # Model endpoint
 MODEL_ENDPOINT = os.getenv("MODEL_ENDPOINT", "http://localhost:8080/v1/completions")
 

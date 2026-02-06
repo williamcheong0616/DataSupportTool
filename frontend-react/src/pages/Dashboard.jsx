@@ -1,120 +1,153 @@
-import { useState, useEffect } from 'react'
-import { getStats, getPipelineRuns } from '../api'
-import { Database, FileText, Play, CheckCircle } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { getStats } from '../api'
 
 function Dashboard() {
   const [stats, setStats] = useState(null)
-  const [recentRuns, setRecentRuns] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadData()
+    fetchStats()
   }, [])
 
-  const loadData = async () => {
+  const fetchStats = async () => {
     try {
-      const [statsRes, runsRes] = await Promise.all([
-        getStats(),
-        getPipelineRuns(null, 5)
-      ])
-      setStats(statsRes.data)
-      setRecentRuns(runsRes.data)
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error)
+      const res = await getStats()
+      setStats(res.data)
+    } catch (err) {
+      console.error('Failed to fetch stats:', err)
     } finally {
       setLoading(false)
     }
   }
 
   if (loading) {
-    return <div className="p-8">Loading...</div>
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    )
   }
 
   const statCards = [
-    { label: 'Datasets', value: stats?.total_datasets || 0, icon: Database, color: 'bg-blue-500' },
-    { label: 'Records', value: stats?.total_records || 0, icon: FileText, color: 'bg-green-500' },
-    { label: 'Pipeline Runs', value: stats?.total_runs || 0, icon: Play, color: 'bg-purple-500' },
-    { label: 'Pass Rate', value: stats?.pass_rate ? `${(stats.pass_rate * 100).toFixed(1)}%` : 'N/A', icon: CheckCircle, color: 'bg-orange-500' },
+    {
+      title: 'Text Datasets',
+      value: stats?.text_datasets || 0,
+      icon: '📁',
+      color: 'bg-blue-500',
+    },
+    {
+      title: 'Text Records',
+      value: stats?.text_records || 0,
+      icon: '📝',
+      color: 'bg-green-500',
+    },
+    {
+      title: 'Text Annotated',
+      value: stats?.text_annotated || 0,
+      icon: '✅',
+      color: 'bg-emerald-500',
+    },
+    {
+      title: 'ASR Datasets',
+      value: stats?.asr_datasets || 0,
+      icon: '🎵',
+      color: 'bg-purple-500',
+    },
+    {
+      title: 'Audio Files',
+      value: stats?.audio_files || 0,
+      icon: '🎧',
+      color: 'bg-pink-500',
+    },
+    {
+      title: 'ASR Completed',
+      value: stats?.asr_completed || 0,
+      icon: '🎯',
+      color: 'bg-orange-500',
+    },
   ]
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+    <div>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm">{label}</p>
-                <p className="text-2xl font-bold">{value}</p>
-              </div>
-              <div className={`${color} p-3 rounded-lg`}>
-                <Icon className="text-white" size={24} />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {statCards.map((card, index) => (
+          <div
+            key={index}
+            className="bg-white rounded-lg shadow-md overflow-hidden"
+          >
+            <div className={`${card.color} h-2`}></div>
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">{card.title}</p>
+                  <p className="text-3xl font-bold text-gray-900">{card.value}</p>
+                </div>
+                <span className="text-4xl">{card.icon}</span>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Pipeline Flow */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">Pipeline Flow</h2>
-        <div className="flex items-center justify-between">
-          {['Collection', 'Preprocess', 'Inference', 'Validate', 'Iterate'].map((step, i) => (
-            <div key={step} className="flex items-center">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold mb-2">
-                  {i + 1}
-                </div>
-                <p className="text-sm">{step}</p>
-              </div>
-              {i < 4 && <div className="w-16 h-0.5 bg-gray-300 mx-2" />}
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <a
+            href="/text"
+            className="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
+          >
+            <span className="text-3xl mr-4">📝</span>
+            <div>
+              <h3 className="font-semibold text-blue-900">Text Annotation</h3>
+              <p className="text-sm text-blue-700">
+                Annotate Bahasa Rojak, classify text, or generate questions
+              </p>
             </div>
-          ))}
+          </a>
+          <a
+            href="/asr"
+            className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition"
+          >
+            <span className="text-3xl mr-4">🎧</span>
+            <div>
+              <h3 className="font-semibold text-purple-900">ASR Annotation</h3>
+              <p className="text-sm text-purple-700">
+                Transcribe and correct audio files using Whisper
+              </p>
+            </div>
+          </a>
         </div>
       </div>
 
-      {/* Recent Runs */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Recent Pipeline Runs</h2>
-        {recentRuns.length === 0 ? (
-          <p className="text-gray-500">No pipeline runs yet</p>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-gray-500 text-sm">
-                <th className="pb-2">ID</th>
-                <th className="pb-2">Dataset</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2">Iteration</th>
-                <th className="pb-2">Started</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRuns.map((run) => (
-                <tr key={run.id} className="border-t">
-                  <td className="py-2">#{run.id}</td>
-                  <td className="py-2">Dataset #{run.dataset_id}</td>
-                  <td className="py-2">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      run.status === 'completed' ? 'bg-green-100 text-green-700' :
-                      run.status === 'failed' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {run.status}
-                    </span>
-                  </td>
-                  <td className="py-2">{run.iteration}</td>
-                  <td className="py-2 text-sm text-gray-500">
-                    {new Date(run.started_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* Instructions */}
+      <div className="mt-8 bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Getting Started</h2>
+        <div className="space-y-4 text-gray-600">
+          <div>
+            <h3 className="font-medium text-gray-900">1. Text Annotation Workflow</h3>
+            <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
+              <li>Create a dataset and choose the task type (Bahasa Rojak ID, Classification, Modification, Questions)</li>
+              <li>Upload your JSON or CSV file with text data</li>
+              <li>Select the column containing the text to annotate</li>
+              <li>Annotate each record based on the task type</li>
+              <li>Export annotated data as CSV or JSONL</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-medium text-gray-900">2. ASR Annotation Workflow</h3>
+            <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
+              <li>Create an ASR dataset</li>
+              <li>Upload audio files in batch (supports MP3, WAV, etc.)</li>
+              <li>Run Whisper transcription on each file</li>
+              <li>Listen to audio and correct the transcript</li>
+              <li>Mark as complete and export results</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   )
