@@ -1,5 +1,4 @@
-# Web Framework
-streamlit>=1.31.0
+# Web Framework (API only - frontend is React)
 fastapi
 uvicorn>=0.27.0
 
@@ -15,7 +14,6 @@ pydantic>=2.6.0
 
 # ML & Evaluation
 scikit-learn>=1.4.0
-datasets>=2.16.1
 
 # Task Queue (Celery + Redis)
 celery>=5.3.6
@@ -28,14 +26,7 @@ prefect>=3.0.0
 # ML Tracking (MLflow)
 mlflow>=2.10.0
 
-# Human Annotation (Argilla)
-argilla
-
 # Utilities
 python-dotenv>=1.0.1
 httpx>=0.26.0
 python-multipart>=0.0.9
-
-# Visualization
-plotly>=5.18.0
-altair>=5.2.0
