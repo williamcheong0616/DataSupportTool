@@ -265,8 +265,8 @@ function ASRAnnotate() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-12 h-12 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
       </div>
     )
   }
@@ -274,11 +274,11 @@ function ASRAnnotate() {
   return (
     <div>
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <button
             onClick={() => navigate('/asr')}
-            className="text-indigo-600 hover:text-indigo-800 mb-2"
+            className="mb-2 text-indigo-600 hover:text-indigo-800"
           >
             ← Back to Datasets
           </button>
@@ -290,7 +290,7 @@ function ASRAnnotate() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2"
+            className="px-3 py-2 border border-gray-300 rounded-lg"
           >
             <option value="all">All Files</option>
             <option value="pending">Pending</option>
@@ -302,15 +302,15 @@ function ASRAnnotate() {
       </div>
 
       {files.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
-          <p className="text-xl mb-4">No files found</p>
+        <div className="p-8 text-center text-gray-500 bg-white rounded-lg shadow-md">
+          <p className="mb-4 text-xl">No files found</p>
           <p>Upload audio files or change the filter to see files.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* File List */}
           <div className="bg-white rounded-lg shadow-md p-4 h-fit lg:max-h-[600px] overflow-y-auto">
-            <h2 className="font-semibold text-gray-900 mb-3">
+            <h2 className="mb-3 font-semibold text-gray-900">
               Files ({files.length})
             </h2>
             <div className="space-y-2">
@@ -324,8 +324,8 @@ function ASRAnnotate() {
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium truncate flex-1">
+                  <div className="flex items-start justify-between">
+                    <span className="flex-1 text-sm font-medium truncate">
                       {file.filename}
                     </span>
                     <span
@@ -347,12 +347,12 @@ function ASRAnnotate() {
           </div>
 
           {/* Annotation Area */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="space-y-4 lg:col-span-2">
             {currentFile && (
               <>
                 {/* Audio Player with Waveform */}
-                <div className="bg-white rounded-lg shadow-md p-4">
-                  <div className="flex justify-between items-center mb-3">
+                <div className="p-4 bg-white rounded-lg shadow-md">
+                  <div className="flex items-center justify-between mb-3">
                     <h2 className="font-semibold text-gray-900">
                       {currentFile.filename}
                     </h2>
@@ -369,7 +369,7 @@ function ASRAnnotate() {
                   <div className="mb-4">
                     <div 
                       ref={waveformRef} 
-                      className="w-full bg-gray-50 rounded-lg"
+                      className="w-full rounded-lg bg-gray-50"
                       style={{ minHeight: '100px' }}
                     />
                     {!waveformReady && !waveformError && (
@@ -379,7 +379,7 @@ function ASRAnnotate() {
                     )}
                     {waveformError && (
                       <div className="mt-2">
-                        <div className="text-red-500 text-sm mb-2">{waveformError}</div>
+                        <div className="mb-2 text-sm text-red-500">{waveformError}</div>
                         <audio
                           controls
                           className="w-full"
@@ -392,17 +392,17 @@ function ASRAnnotate() {
                   </div>
 
                   {/* Time Display */}
-                  <div className="flex justify-between text-sm text-gray-500 mb-3">
+                  <div className="flex justify-between mb-3 text-sm text-gray-500">
                     <span>{formatTime(currentTime)}</span>
                     <span>{formatTime(duration)}</span>
                   </div>
 
                   {/* Playback Controls */}
-                  <div className="flex items-center justify-center space-x-4 mb-4">
+                  <div className="flex items-center justify-center mb-4 space-x-4">
                     <button
                       onClick={() => handleSkip(-5)}
                       disabled={!waveformReady}
-                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50"
                       title="Rewind 5s"
                     >
                       ⏪ -5s
@@ -410,14 +410,14 @@ function ASRAnnotate() {
                     <button
                       onClick={handlePlayPause}
                       disabled={!waveformReady}
-                      className="p-4 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 text-xl"
+                      className="p-4 text-xl text-white bg-indigo-600 rounded-full hover:bg-indigo-700 disabled:opacity-50"
                     >
                       {isPlaying ? '⏸️' : '▶️'}
                     </button>
                     <button
                       onClick={handleStop}
                       disabled={!waveformReady}
-                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50"
                       title="Stop"
                     >
                       ⏹️
@@ -425,7 +425,7 @@ function ASRAnnotate() {
                     <button
                       onClick={() => handleSkip(5)}
                       disabled={!waveformReady}
-                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50"
                       title="Forward 5s"
                     >
                       +5s ⏩
@@ -452,20 +452,20 @@ function ASRAnnotate() {
                     </div>
                   </div>
 
-                  <div className="mt-3 text-center text-xs text-gray-400">
+                  <div className="mt-3 text-xs text-center text-gray-400">
                     Press <kbd className="px-1 py-0.5 bg-gray-100 rounded">Space</kbd> to play/pause (when not typing)
                   </div>
                 </div>
 
                 {/* Transcription */}
-                <div className="bg-white rounded-lg shadow-md p-4">
-                  <div className="flex justify-between items-center mb-3">
+                <div className="p-4 bg-white rounded-lg shadow-md">
+                  <div className="flex items-center justify-between mb-3">
                     <h2 className="font-semibold text-gray-900">Transcript</h2>
                     {(!currentFile.whisper_transcript && currentFile.status === 'pending') && (
                       <button
                         onClick={handleTranscribe}
                         disabled={transcribing}
-                        className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50"
+                        className="px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 disabled:opacity-50"
                       >
                         {transcribing ? 'Transcribing...' : '🎤 Run Whisper'}
                       </button>
@@ -473,8 +473,8 @@ function ASRAnnotate() {
                   </div>
 
                   {currentFile.whisper_transcript && (
-                    <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <div className="p-3 mb-3 text-sm rounded-lg bg-gray-50">
+                      <label className="block mb-1 text-xs font-medium text-gray-500">
                         Whisper Output (Original)
                       </label>
                       <p className="text-gray-700">{currentFile.whisper_transcript}</p>
@@ -482,7 +482,7 @@ function ASRAnnotate() {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
                       Corrected Transcript
                     </label>
                     <textarea
@@ -491,16 +491,16 @@ function ASRAnnotate() {
                       onKeyDown={handleKeyDown}
                       rows={6}
                       placeholder="Edit the transcript here..."
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
 
-                  <div className="flex justify-between items-center mt-4">
+                  <div className="flex items-center justify-between mt-4">
                     <div className="text-sm text-gray-500">
                       <kbd className="px-2 py-1 bg-gray-100 rounded">Ctrl</kbd> + 
-                      <kbd className="px-2 py-1 bg-gray-100 rounded ml-1">S</kbd> to save,
-                      <kbd className="px-2 py-1 bg-gray-100 rounded ml-2">Ctrl</kbd> + 
-                      <kbd className="px-2 py-1 bg-gray-100 rounded ml-1">Enter</kbd> to complete
+                      <kbd className="px-2 py-1 ml-1 bg-gray-100 rounded">S</kbd> to save,
+                      <kbd className="px-2 py-1 ml-2 bg-gray-100 rounded">Ctrl</kbd> + 
+                      <kbd className="px-2 py-1 ml-1 bg-gray-100 rounded">Enter</kbd> to complete
                     </div>
                     <div className="flex space-x-2">
                       <button
@@ -513,7 +513,7 @@ function ASRAnnotate() {
                       <button
                         onClick={handleMarkComplete}
                         disabled={saving}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                        className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
                       >
                         ✓ Mark Complete
                       </button>
@@ -530,7 +530,7 @@ function ASRAnnotate() {
                   >
                     ← Previous
                   </button>
-                  <span className="text-gray-600 py-2">
+                  <span className="py-2 text-gray-600">
                     {currentIndex + 1} of {files.length}
                   </span>
                   <button
