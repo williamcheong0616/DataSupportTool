@@ -104,7 +104,7 @@ services:
       postgres:
         condition: service_healthy
 
-  # Celery Worker
+  # Celery Worker for Transcription
   celery-worker:
     build:
       context: .
@@ -113,14 +113,15 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/data_pipeline
       REDIS_URL: redis://redis:6379/0
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      ARGILLA_API_URL: http://argilla:6900
-    command: celery -A pipeline.celery_app worker --loglevel=info -Q pipeline,preprocessing,validation
+      WHISPER_API_URL: http://whisper:9000
+    command: celery -A backend.celery_app worker --loglevel=info -Q celery,transcription --concurrency=2
     depends_on:
       - postgres
       - redis
+      - whisper
     volumes:
       - .:/app
+      - audio_data:/app/audio_files
 
   # Celery Beat (Scheduler)
   celery-beat:
@@ -131,7 +132,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/data_pipeline
       REDIS_URL: redis://redis:6379/0
-    command: celery -A pipeline.celery_app beat --loglevel=info
+    command: celery -A backend.celery_app beat --loglevel=info
     depends_on:
       - postgres
       - redis
@@ -140,15 +141,18 @@ services:
 
   # Flower (Celery Monitoring)
   flower:
-    image: mher/flower:0.9.7
+    image: mher/flower:2.0
     container_name: data_pipeline_flower
     ports:
       - "5555:5555"
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
-    command: celery flower --broker=redis://redis:6379/0
+      FLOWER_PORT: 5555
+      FLOWER_BASIC_AUTH: admin:admin
+    command: celery --broker=redis://redis:6379/0 flower --port=5555
     depends_on:
       - redis
+      - celery-worker
 
   # FastAPI Backend
   api:

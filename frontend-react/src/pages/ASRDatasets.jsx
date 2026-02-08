@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   getASRDatasets,
@@ -8,6 +8,8 @@ import {
   exportASRDataset,
   getAudioFiles,
   transcribeAudio,
+  batchTranscribe,
+  getTaskStatus,
 } from '../api'
 
 function ASRDatasets() {
@@ -20,6 +22,7 @@ function ASRDatasets() {
   const [uploadFiles, setUploadFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [transcribing, setTranscribing] = useState({})
+  const [taskStatus, setTaskStatus] = useState({}) // { datasetId: { taskId, status, progress } }
 
   useEffect(() => {
     fetchDatasets()
@@ -80,24 +83,64 @@ function ASRDatasets() {
   const handleTranscribeAll = async (datasetId) => {
     setTranscribing({ ...transcribing, [datasetId]: true })
     try {
-      const res = await getAudioFiles(datasetId, 'pending', 100)
-      const files = res.data.files || []
+      // Use Celery batch transcription
+      const res = await batchTranscribe(datasetId)
+      const taskId = res.data.task_id
       
-      for (const file of files) {
-        try {
-          await transcribeAudio(file.id)
-        } catch (err) {
-          console.error(`Failed to transcribe ${file.filename}:`, err)
-        }
-      }
+      setTaskStatus(prev => ({
+        ...prev,
+        [datasetId]: { taskId, status: 'PENDING', message: res.data.message }
+      }))
       
-      fetchDatasets()
+      // Poll for task status
+      pollTaskStatus(datasetId, taskId)
+      
     } catch (err) {
       alert('Failed to start transcription: ' + (err.response?.data?.detail || err.message))
-    } finally {
       setTranscribing({ ...transcribing, [datasetId]: false })
     }
   }
+
+  const pollTaskStatus = useCallback(async (datasetId, taskId) => {
+    const checkStatus = async () => {
+      try {
+        const res = await getTaskStatus(taskId)
+        const { status, ready, result } = res.data
+        
+        setTaskStatus(prev => ({
+          ...prev,
+          [datasetId]: { 
+            taskId, 
+            status, 
+            ready,
+            result,
+            message: result?.message || `Status: ${status}`
+          }
+        }))
+        
+        if (ready) {
+          // Task completed
+          setTranscribing(prev => ({ ...prev, [datasetId]: false }))
+          fetchDatasets() // Refresh to show updated counts
+          
+          if (result?.status === 'queued') {
+            // Batch task queued individual tasks, keep polling for a bit
+            setTimeout(() => {
+              fetchDatasets()
+            }, 5000)
+          }
+        } else {
+          // Keep polling
+          setTimeout(checkStatus, 2000)
+        }
+      } catch (err) {
+        console.error('Failed to check task status:', err)
+        setTranscribing(prev => ({ ...prev, [datasetId]: false }))
+      }
+    }
+    
+    checkStatus()
+  }, [])
 
   const handleExport = async (id, format) => {
     try {
@@ -286,7 +329,7 @@ function ASRDatasets() {
                             disabled={transcribing[dataset.id]}
                             className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50"
                           >
-                            {transcribing[dataset.id] ? 'Transcribing...' : 'Transcribe All'}
+                            {transcribing[dataset.id] ? '⏳ Processing...' : '🎤 Transcribe All'}
                           </button>
                           <button
                             onClick={() => navigate(`/asr/${dataset.id}/annotate`)}
@@ -297,6 +340,26 @@ function ASRDatasets() {
                         </>
                       )}
                     </div>
+                    
+                    {/* Task Status */}
+                    {taskStatus[dataset.id] && (
+                      <div className={`text-xs px-2 py-1 rounded ${
+                        taskStatus[dataset.id].status === 'SUCCESS' 
+                          ? 'bg-green-50 text-green-700'
+                          : taskStatus[dataset.id].status === 'FAILURE'
+                          ? 'bg-red-50 text-red-700'
+                          : 'bg-yellow-50 text-yellow-700'
+                      }`}>
+                        <span className="font-medium">Task: </span>
+                        {taskStatus[dataset.id].message || taskStatus[dataset.id].status}
+                        {taskStatus[dataset.id].result?.count && (
+                          <span className="ml-2">
+                            ({taskStatus[dataset.id].result.count} files queued)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    
                     <div className="flex space-x-2">
                       {dataset.file_count > 0 && (
                         <>

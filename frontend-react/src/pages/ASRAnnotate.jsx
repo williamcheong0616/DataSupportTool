@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import WaveSurfer from 'wavesurfer.js'
 import {
   getASRDatasets,
   getAudioFiles,
@@ -20,7 +21,8 @@ const STATUS_COLORS = {
 function ASRAnnotate() {
   const { datasetId } = useParams()
   const navigate = useNavigate()
-  const audioRef = useRef(null)
+  const waveformRef = useRef(null)
+  const wavesurferRef = useRef(null)
   
   const [dataset, setDataset] = useState(null)
   const [files, setFiles] = useState([])
@@ -31,6 +33,74 @@ function ASRAnnotate() {
   const [transcript, setTranscript] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [waveformReady, setWaveformReady] = useState(false)
+  const [waveformError, setWaveformError] = useState(null)
+
+  const currentFile = files[currentIndex]
+
+  // Initialize WaveSurfer when currentFile changes
+  useEffect(() => {
+    // Cleanup previous instance
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy()
+      wavesurferRef.current = null
+    }
+
+    if (!waveformRef.current || !currentFile) return
+
+    setWaveformReady(false)
+    setWaveformError(null)
+    setCurrentTime(0)
+    setDuration(0)
+
+    const ws = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: '#c7d2fe',
+      progressColor: '#6366f1',
+      cursorColor: '#4f46e5',
+      cursorWidth: 2,
+      barWidth: 2,
+      barGap: 1,
+      barRadius: 2,
+      height: 100,
+      normalize: true,
+      url: getAudioUrl(currentFile.id),
+    })
+
+    wavesurferRef.current = ws
+
+    ws.on('ready', () => {
+      setWaveformReady(true)
+      setDuration(ws.getDuration())
+    })
+
+    ws.on('timeupdate', (time) => {
+      setCurrentTime(time)
+    })
+
+    ws.on('play', () => setIsPlaying(true))
+    ws.on('pause', () => setIsPlaying(false))
+    ws.on('finish', () => setIsPlaying(false))
+
+    ws.on('error', (err) => {
+      console.error('WaveSurfer error:', err)
+      setWaveformError('Failed to load audio waveform')
+    })
+
+    return () => {
+      ws.destroy()
+    }
+  }, [currentFile?.id])
+
+  // Update playback rate
+  useEffect(() => {
+    if (wavesurferRef.current && waveformReady) {
+      wavesurferRef.current.setPlaybackRate(playbackRate)
+    }
+  }, [playbackRate, waveformReady])
 
   useEffect(() => {
     fetchDataset()
@@ -51,12 +121,6 @@ function ASRAnnotate() {
       )
     }
   }, [currentIndex, files])
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackRate
-    }
-  }, [playbackRate])
 
   const fetchDataset = async () => {
     try {
@@ -87,7 +151,31 @@ function ASRAnnotate() {
     }
   }
 
-  const currentFile = files[currentIndex]
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const handlePlayPause = () => {
+    if (wavesurferRef.current) {
+      wavesurferRef.current.playPause()
+    }
+  }
+
+  const handleStop = () => {
+    if (wavesurferRef.current) {
+      wavesurferRef.current.stop()
+      setCurrentTime(0)
+    }
+  }
+
+  const handleSkip = (seconds) => {
+    if (wavesurferRef.current && duration > 0) {
+      const newTime = Math.max(0, Math.min(duration, currentTime + seconds))
+      wavesurferRef.current.seekTo(newTime / duration)
+    }
+  }
 
   const handleTranscribe = async () => {
     if (!currentFile) return
@@ -149,6 +237,31 @@ function ASRAnnotate() {
       handleSave()
     }
   }
+
+  // Keyboard shortcuts for audio control
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Only if not typing in textarea
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return
+      
+      if (e.code === 'Space' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        handlePlayPause()
+      }
+      // Arrow left/right to skip
+      if (e.code === 'ArrowLeft') {
+        e.preventDefault()
+        handleSkip(-5)
+      }
+      if (e.code === 'ArrowRight') {
+        e.preventDefault()
+        handleSkip(5)
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [waveformReady, duration, currentTime])
 
   if (loading) {
     return (
@@ -237,7 +350,7 @@ function ASRAnnotate() {
           <div className="lg:col-span-2 space-y-4">
             {currentFile && (
               <>
-                {/* Audio Player */}
+                {/* Audio Player with Waveform */}
                 <div className="bg-white rounded-lg shadow-md p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h2 className="font-semibold text-gray-900">
@@ -252,15 +365,76 @@ function ASRAnnotate() {
                     </span>
                   </div>
                   
-                  <audio
-                    ref={audioRef}
-                    controls
-                    className="w-full mb-3"
-                    src={getAudioUrl(currentFile.id)}
-                  />
+                  {/* Waveform */}
+                  <div className="mb-4">
+                    <div 
+                      ref={waveformRef} 
+                      className="w-full bg-gray-50 rounded-lg"
+                      style={{ minHeight: '100px' }}
+                    />
+                    {!waveformReady && !waveformError && (
+                      <div className="flex items-center justify-center h-24 text-gray-400">
+                        <div className="animate-pulse">Loading waveform...</div>
+                      </div>
+                    )}
+                    {waveformError && (
+                      <div className="mt-2">
+                        <div className="text-red-500 text-sm mb-2">{waveformError}</div>
+                        <audio
+                          controls
+                          className="w-full"
+                          src={getAudioUrl(currentFile.id)}
+                          onLoadedMetadata={(e) => setDuration(e.target.duration)}
+                          onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Time Display */}
+                  <div className="flex justify-between text-sm text-gray-500 mb-3">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+
+                  {/* Playback Controls */}
+                  <div className="flex items-center justify-center space-x-4 mb-4">
+                    <button
+                      onClick={() => handleSkip(-5)}
+                      disabled={!waveformReady}
+                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                      title="Rewind 5s"
+                    >
+                      ⏪ -5s
+                    </button>
+                    <button
+                      onClick={handlePlayPause}
+                      disabled={!waveformReady}
+                      className="p-4 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 text-xl"
+                    >
+                      {isPlaying ? '⏸️' : '▶️'}
+                    </button>
+                    <button
+                      onClick={handleStop}
+                      disabled={!waveformReady}
+                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                      title="Stop"
+                    >
+                      ⏹️
+                    </button>
+                    <button
+                      onClick={() => handleSkip(5)}
+                      disabled={!waveformReady}
+                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                      title="Forward 5s"
+                    >
+                      +5s ⏩
+                    </button>
+                  </div>
                   
-                  <div className="flex items-center space-x-4">
-                    <label className="text-sm text-gray-600">Playback Speed:</label>
+                  {/* Playback Speed */}
+                  <div className="flex items-center justify-center space-x-4">
+                    <label className="text-sm text-gray-600">Speed:</label>
                     <div className="flex space-x-2">
                       {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
                         <button
@@ -276,6 +450,10 @@ function ASRAnnotate() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  <div className="mt-3 text-center text-xs text-gray-400">
+                    Press <kbd className="px-1 py-0.5 bg-gray-100 rounded">Space</kbd> to play/pause (when not typing)
                   </div>
                 </div>
 

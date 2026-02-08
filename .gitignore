@@ -9,6 +9,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 .Python
+*.cpython-*
+*.so
+
+# Audio files
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg
+audio_files/
 
 # Node / React
 node_modules/

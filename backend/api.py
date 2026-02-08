@@ -13,6 +13,7 @@ import os
 import io
 import csv
 import httpx
+import math
 
 from backend.database import get_db, init_db
 from backend.models import (
@@ -26,6 +27,23 @@ from backend.schemas import (
     ASRDatasetCreate, ASRDatasetResponse, AudioFileResponse,
     TranscriptAnnotation, AnnotationStats
 )
+from backend.tasks import transcribe_audio_task, batch_transcribe_task
+
+
+def clean_nan_values(data):
+    """Clean NaN/Inf values from data for JSON serialization."""
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        return {k: clean_nan_values(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [clean_nan_values(v) for v in data]
+    if isinstance(data, float):
+        if math.isnan(data) or math.isinf(data):
+            return None
+        return data
+    return data
+
 
 app = FastAPI(
     title="Annotation Tool API",
@@ -263,8 +281,30 @@ def list_text_records(
     
     records = query.offset(offset).limit(limit).all()
     
+    # Convert to dicts for JSON serialization
+    records_data = []
+    for r in records:
+        records_data.append({
+            "id": r.id,
+            "dataset_id": r.dataset_id,
+            "original_text": r.original_text,
+            "raw_data": clean_nan_values(r.raw_data),
+            "is_bahasa_rojak": r.is_bahasa_rojak,
+            "classification_label": r.classification_label,
+            "modified_text": r.modified_text,
+            "subject_added": r.subject_added,
+            "context_added": r.context_added,
+            "question_1": r.question_1,
+            "question_2": r.question_2,
+            "question_3": r.question_3,
+            "is_annotated": r.is_annotated,
+            "annotated_by": r.annotated_by,
+            "annotated_at": r.annotated_at.isoformat() if r.annotated_at else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    
     return {
-        "records": records,
+        "records": records_data,
         "total": total,
         "annotated": annotated_count,
         "limit": limit,
@@ -513,7 +553,7 @@ def delete_asr_dataset(dataset_id: int, db: Session = Depends(get_db)):
 async def upload_audio_files(
     dataset_id: int,
     files: List[UploadFile] = File(...),
-    background_tasks: BackgroundTasks = None,
+    auto_transcribe: bool = Query(True, description="Automatically queue transcription"),
     db: Session = Depends(get_db)
 ):
     """Upload audio files to an ASR dataset."""
@@ -525,6 +565,7 @@ async def upload_audio_files(
     os.makedirs(dataset_dir, exist_ok=True)
     
     uploaded = []
+    task_ids = []
     for file in files:
         # Save file
         file_path = os.path.join(dataset_dir, file.filename)
@@ -545,62 +586,65 @@ async def upload_audio_files(
         db.refresh(audio_file)
         uploaded.append(audio_file.id)
         
-        # Queue transcription
-        if background_tasks:
-            background_tasks.add_task(transcribe_audio, audio_file.id)
+        # Queue transcription via Celery
+        if auto_transcribe:
+            task = transcribe_audio_task.delay(audio_file.id)
+            task_ids.append(task.id)
     
-    return {"message": f"Uploaded {len(uploaded)} files", "file_ids": uploaded}
-
-
-async def transcribe_audio(audio_file_id: int):
-    """Background task to transcribe audio using Whisper API."""
-    from backend.database import SessionLocal
-    
-    db = SessionLocal()
-    try:
-        audio_file = db.query(AudioFile).filter(AudioFile.id == audio_file_id).first()
-        if not audio_file:
-            return
-        
-        audio_file.status = TranscriptionStatus.TRANSCRIBING
-        db.commit()
-        
-        # Call Whisper API
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            with open(audio_file.file_path, "rb") as f:
-                response = await client.post(
-                    f"{WHISPER_API_URL}/asr",
-                    files={"audio_file": (audio_file.filename, f)},
-                    params={"output": "json"}
-                )
-            
-            if response.status_code == 200:
-                result = response.json()
-                audio_file.whisper_transcript = result.get("text", "")
-                audio_file.whisper_language = result.get("language")
-                audio_file.status = TranscriptionStatus.TRANSCRIBED
-                audio_file.transcribed_at = datetime.utcnow()
-            else:
-                audio_file.status = TranscriptionStatus.PENDING  # Retry later
-        
-        db.commit()
-    except Exception as e:
-        print(f"Transcription error: {e}")
-        audio_file.status = TranscriptionStatus.PENDING
-        db.commit()
-    finally:
-        db.close()
+    return {
+        "message": f"Uploaded {len(uploaded)} files",
+        "file_ids": uploaded,
+        "transcription_queued": auto_transcribe,
+        "task_ids": task_ids if auto_transcribe else []
+    }
 
 
 @app.post("/api/asr/files/{file_id}/transcribe")
-async def manual_transcribe(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Manually trigger transcription for a file."""
+def manual_transcribe(file_id: int, db: Session = Depends(get_db)):
+    """Manually trigger transcription for a file via Celery."""
     audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
     if not audio_file:
         raise HTTPException(status_code=404, detail="File not found")
     
-    background_tasks.add_task(transcribe_audio, file_id)
-    return {"message": "Transcription queued"}
+    task = transcribe_audio_task.delay(file_id)
+    return {"message": "Transcription queued", "task_id": task.id}
+
+
+@app.post("/api/asr/datasets/{dataset_id}/transcribe-all")
+def batch_transcribe(
+    dataset_id: int,
+    file_ids: Optional[List[int]] = Query(None, description="Specific file IDs to transcribe"),
+    db: Session = Depends(get_db)
+):
+    """Queue all pending files in a dataset for transcription via Celery."""
+    dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    task = batch_transcribe_task.delay(dataset_id, file_ids)
+    return {"message": "Batch transcription queued", "task_id": task.id}
+
+
+@app.get("/api/tasks/{task_id}/status")
+def get_task_status(task_id: str):
+    """Get the status of a Celery task."""
+    from backend.celery_app import celery_app
+    
+    result = celery_app.AsyncResult(task_id)
+    
+    response = {
+        "task_id": task_id,
+        "status": result.status,
+        "ready": result.ready(),
+    }
+    
+    if result.ready():
+        if result.successful():
+            response["result"] = result.result
+        else:
+            response["error"] = str(result.result)
+    
+    return response
 
 
 @app.get("/api/asr/datasets/{dataset_id}/files")
@@ -626,8 +670,29 @@ def list_audio_files(
     
     files = query.order_by(AudioFile.created_at).offset(offset).limit(limit).all()
     
+    # Convert to dicts for JSON serialization
+    files_data = []
+    for f in files:
+        files_data.append({
+            "id": f.id,
+            "dataset_id": f.dataset_id,
+            "filename": f.filename,
+            "file_path": f.file_path,
+            "file_size": f.file_size,
+            "duration": f.duration,
+            "whisper_transcript": f.whisper_transcript,
+            "whisper_language": f.whisper_language,
+            "whisper_confidence": f.whisper_confidence,
+            "transcribed_at": f.transcribed_at.isoformat() if f.transcribed_at else None,
+            "corrected_transcript": f.corrected_transcript,
+            "status": f.status.value,
+            "annotated_by": f.annotated_by,
+            "annotated_at": f.annotated_at.isoformat() if f.annotated_at else None,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+        })
+    
     return {
-        "files": files,
+        "files": files_data,
         "total": total,
         "pending": pending_count,
         "completed": completed_count,

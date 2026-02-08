@@ -99,4 +99,13 @@ export const annotateTranscript = (id, transcript, annotator = 'anonymous') =>
   })
 export const updateFileStatus = (id, status) => api.post(`/asr/files/${id}/status?status=${status}`)
 
+// Batch Transcription with Celery
+export const batchTranscribe = (datasetId, fileIds = null) => {
+  const params = fileIds ? `?file_ids=${fileIds.join(',')}` : ''
+  return api.post(`/asr/datasets/${datasetId}/transcribe-all${params}`)
+}
+
+// Task Status (Celery)
+export const getTaskStatus = (taskId) => api.get(`/tasks/${taskId}/status`)
+
 export default api
