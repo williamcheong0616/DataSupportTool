@@ -237,7 +237,7 @@ function ASRDatasets() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">ASR Datasets</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">ASR Datasets</h1>
         <button
           onClick={() => setShowCreate(true)}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
@@ -248,30 +248,30 @@ function ASRDatasets() {
 
       {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Create ASR Dataset</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Create ASR Dataset</h2>
             <form onSubmit={handleCreate}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Dataset Name
                 </label>
                 <input
                   type="text"
-                  value={newDataset.name}
-                  onChange={(e) => setNewDataset({ ...newDataset, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  value={newDatasetName}
+                  onChange={(e) => setNewDatasetName(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Description (optional)
                 </label>
                 <textarea
                   value={newDataset.description}
                   onChange={(e) => setNewDataset({ ...newDataset, description: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                   rows={2}
                 />
               </div>
@@ -279,7 +279,7 @@ function ASRDatasets() {
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -297,25 +297,25 @@ function ASRDatasets() {
 
       {/* Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
-            <h2 className="text-xl font-semibold mb-4">Add Audio to Dataset</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg">
+            <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Add Audio to Dataset</h2>
             
             {/* Tab-like sections */}
             <div className="space-y-6">
               {/* Upload Files Section */}
-              <div className="border rounded-lg p-4">
-                <h3 className="font-medium text-gray-900 mb-3">📁 Upload Audio Files</h3>
+              <div className="border dark:border-gray-600 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">📁 Upload Audio Files</h3>
                 <div className="mb-3">
                   <input
                     type="file"
                     accept="audio/*"
                     multiple
                     onChange={(e) => setUploadFiles(e.target.files)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
                   />
                   {uploadFiles.length > 0 && (
-                    <p className="mt-2 text-sm text-gray-500">
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                       {uploadFiles.length} file(s) selected
                     </p>
                   )}
@@ -330,15 +330,15 @@ function ASRDatasets() {
               </div>
 
               {/* YouTube Import Section */}
-              <div className="border rounded-lg p-4 bg-red-50 border-red-200">
-                <h3 className="font-medium text-gray-900 mb-3">🎬 Import from YouTube</h3>
+              <div className="border rounded-lg p-4 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">🎬 Import from YouTube</h3>
                 <div className="space-y-3">
                   <input
                     type="text"
                     placeholder="https://www.youtube.com/watch?v=..."
                     value={youtubeUrl}
                     onChange={(e) => setYoutubeUrl(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
                   />
                   
                   <div className="flex items-center space-x-4">
@@ -349,16 +349,16 @@ function ASRDatasets() {
                         onChange={(e) => setYoutubeAutoSegment(e.target.checked)}
                         className="rounded text-red-600"
                       />
-                      <span className="text-sm text-gray-600">Auto-segment</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Auto-segment</span>
                     </label>
                     
                     {youtubeAutoSegment && !useVad && (
                       <label className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">Segment length:</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">Segment length:</span>
                         <select
                           value={youtubeChunkLength}
                           onChange={(e) => setYoutubeChunkLength(Number(e.target.value))}
-                          className="border border-gray-300 rounded px-2 py-1 text-sm"
+                          className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-sm"
                         >
                           <option value={15}>15s</option>
                           <option value={30}>30s</option>
@@ -370,8 +370,8 @@ function ASRDatasets() {
                   </div>
                   
                   {youtubeAutoSegment && (
-                    <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm text-gray-600 font-medium">Segmentation:</span>
+                    <div className="flex items-center space-x-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">Segmentation:</span>
                       <label className="flex items-center space-x-1">
                         <input
                           type="radio"
@@ -380,7 +380,7 @@ function ASRDatasets() {
                           onChange={() => setUseVad(true)}
                           className="text-red-600"
                         />
-                        <span className="text-sm text-gray-600">VAD (natural speech segments)</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">VAD (natural speech segments)</span>
                       </label>
                       <label className="flex items-center space-x-1">
                         <input
@@ -390,7 +390,7 @@ function ASRDatasets() {
                           onChange={() => setUseVad(false)}
                           className="text-red-600"
                         />
-                        <span className="text-sm text-gray-600">Fixed-length (equal intervals)</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">Fixed-length (equal intervals)</span>
                       </label>
                     </div>
                   )}
@@ -420,7 +420,7 @@ function ASRDatasets() {
                   setUploadFiles([])
                   setYoutubeUrl('')
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Close
               </button>
@@ -431,7 +431,7 @@ function ASRDatasets() {
 
       {/* Dataset List */}
       {datasets.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-gray-500 dark:text-gray-400">
           <p className="text-xl mb-4">No ASR datasets yet</p>
           <p>Create a dataset and add audio files (upload or import from YouTube) to get started.</p>
         </div>
@@ -443,14 +443,14 @@ function ASRDatasets() {
               : 0
 
             return (
-              <div key={dataset.id} className="bg-white rounded-lg shadow-md p-6">
+              <div key={dataset.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-gray-900">{dataset.name}</h3>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{dataset.name}</h3>
                     {dataset.description && (
-                      <p className="text-gray-500 mt-1">{dataset.description}</p>
+                      <p className="text-gray-500 dark:text-gray-400 mt-1">{dataset.description}</p>
                     )}
-                    <div className="flex space-x-4 mt-2 text-sm text-gray-600">
+                    <div className="flex space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <span>🎵 {dataset.file_count || 0} files</span>
                       <span>⏳ {dataset.pending_count || 0} pending</span>
                       <span>✅ {dataset.completed_count || 0} completed</span>
@@ -459,11 +459,11 @@ function ASRDatasets() {
                     {/* Progress Bar */}
                     {dataset.file_count > 0 && (
                       <div className="mt-3">
-                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
                           <span>Progress</span>
                           <span>{progress.toFixed(0)}%</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                           <div
                             className="bg-green-500 h-2 rounded-full transition-all"
                             style={{ width: `${progress}%` }}
@@ -476,7 +476,7 @@ function ASRDatasets() {
                     <div className="flex space-x-2">
                       <button
                         onClick={() => setShowUpload(dataset.id)}
-                        className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                        className="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/60"
                       >
                         ➕ Add Audio
                       </button>
@@ -485,7 +485,7 @@ function ASRDatasets() {
                           <button
                             onClick={() => handleSegmentAll(dataset.id)}
                             disabled={segmenting[dataset.id]}
-                            className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                            className="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50"
                             title="Segment audio files using VAD (natural speech boundaries)"
                           >
                             {segmenting[dataset.id] ? '⏳ Segmenting...' : '✂️ Segment'}
@@ -493,13 +493,13 @@ function ASRDatasets() {
                           <button
                             onClick={() => handleTranscribeAll(dataset.id)}
                             disabled={transcribing[dataset.id]}
-                            className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50"
+                            className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/60 disabled:opacity-50"
                           >
                             {transcribing[dataset.id] ? '⏳ Processing...' : '🎤 Transcribe All'}
                           </button>
                           <button
                             onClick={() => navigate(`/asr/${dataset.id}/annotate`)}
-                            className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+                            className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/60"
                           >
                             Annotate
                           </button>
@@ -511,10 +511,10 @@ function ASRDatasets() {
                     {taskStatus[dataset.id] && (
                       <div className={`text-xs px-2 py-1 rounded ${
                         taskStatus[dataset.id].status === 'SUCCESS' 
-                          ? 'bg-green-50 text-green-700'
+                          ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                           : taskStatus[dataset.id].status === 'FAILURE'
-                          ? 'bg-red-50 text-red-700'
-                          : 'bg-yellow-50 text-yellow-700'
+                          ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                          : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
                       }`}>
                         <span className="font-medium">Task: </span>
                         {taskStatus[dataset.id].message || taskStatus[dataset.id].status}
@@ -531,13 +531,13 @@ function ASRDatasets() {
                         <>
                           <button
                             onClick={() => handleExport(dataset.id, 'csv')}
-                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                            className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60"
                           >
                             CSV
                           </button>
                           <button
                             onClick={() => handleExport(dataset.id, 'jsonl')}
-                            className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                            className="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60"
                           >
                             JSONL
                           </button>
@@ -545,7 +545,7 @@ function ASRDatasets() {
                       )}
                       <button
                         onClick={() => handleDelete(dataset.id)}
-                        className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                        className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/60"
                       >
                         Delete
                       </button>
@@ -559,7 +559,7 @@ function ASRDatasets() {
       )}
 
       {/* Info Box */}
-      <div className="mt-6 bg-blue-50 rounded-lg p-4 text-blue-800">
+      <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-blue-800 dark:text-blue-300 border dark:border-blue-800">
         <h3 className="font-semibold mb-2">💡 How ASR Annotation Works</h3>
         <ol className="list-decimal list-inside space-y-1 text-sm">
           <li>Create a dataset and add audio: upload files or <strong>import from YouTube</strong></li>

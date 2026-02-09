@@ -69,21 +69,21 @@ function Dashboard() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">Dashboard</h1>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {statCards.map((card, index) => (
           <div
             key={index}
-            className="bg-white rounded-lg shadow-md overflow-hidden"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden"
           >
             <div className={`${card.color} h-2`}></div>
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-500">{card.title}</p>
-                  <p className="text-3xl font-bold text-gray-900">{card.value}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{card.title}</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{card.value}</p>
                 </div>
                 <span className="text-4xl">{card.icon}</span>
               </div>
@@ -93,29 +93,29 @@ function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <a
             href="/text"
-            className="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
+            className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
           >
             <span className="text-3xl mr-4">📝</span>
             <div>
-              <h3 className="font-semibold text-blue-900">Text Annotation</h3>
-              <p className="text-sm text-blue-700">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-300">Text Annotation</h3>
+              <p className="text-sm text-blue-700 dark:text-blue-400">
                 Annotate Bahasa Rojak, classify text, or generate questions
               </p>
             </div>
           </a>
           <a
             href="/asr"
-            className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition"
+            className="flex items-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition"
           >
             <span className="text-3xl mr-4">🎧</span>
             <div>
-              <h3 className="font-semibold text-purple-900">ASR Annotation</h3>
-              <p className="text-sm text-purple-700">
+              <h3 className="font-semibold text-purple-900 dark:text-purple-300">ASR Annotation</h3>
+              <p className="text-sm text-purple-700 dark:text-purple-400">
                 Transcribe and correct audio files using Whisper
               </p>
             </div>
@@ -124,11 +124,11 @@ function Dashboard() {
       </div>
 
       {/* Instructions */}
-      <div className="mt-8 bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Getting Started</h2>
-        <div className="space-y-4 text-gray-600">
+      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Getting Started</h2>
+        <div className="space-y-4 text-gray-600 dark:text-gray-300">
           <div>
-            <h3 className="font-medium text-gray-900">1. Text Annotation Workflow</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">1. Text Annotation Workflow</h3>
             <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
               <li>Create a dataset and choose the task type (Bahasa Rojak ID, Classification, Modification, Questions)</li>
               <li>Upload your JSON or CSV file with text data</li>
@@ -138,7 +138,7 @@ function Dashboard() {
             </ul>
           </div>
           <div>
-            <h3 className="font-medium text-gray-900">2. ASR Annotation Workflow</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">2. ASR Annotation Workflow</h3>
             <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
               <li>Create an ASR dataset</li>
               <li>Upload audio files in batch (supports MP3, WAV, etc.)</li>

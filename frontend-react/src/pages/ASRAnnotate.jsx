@@ -13,11 +13,11 @@ import {
 } from '../api'
 
 const STATUS_COLORS = {
-  pending: 'bg-gray-100 text-gray-700',
-  transcribing: 'bg-yellow-100 text-yellow-700',
-  transcribed: 'bg-blue-100 text-blue-700',
-  annotating: 'bg-purple-100 text-purple-700',
-  completed: 'bg-green-100 text-green-700',
+  pending: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+  transcribing: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300',
+  transcribed: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
+  annotating: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
+  completed: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
 }
 
 function ASRAnnotate() {
@@ -356,11 +356,11 @@ function ASRAnnotate() {
         <div>
           <button
             onClick={() => navigate('/asr')}
-            className="mb-2 text-indigo-600 hover:text-indigo-800"
+            className="mb-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
           >
             ← Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {dataset?.name || 'ASR Annotation'}
           </h1>
         </div>
@@ -368,7 +368,7 @@ function ASRAnnotate() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg"
           >
             <option value="all">All Files</option>
             <option value="pending">Pending</option>
@@ -380,15 +380,15 @@ function ASRAnnotate() {
       </div>
 
       {files.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 bg-white rounded-lg shadow-md">
+        <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
           <p className="mb-4 text-xl">No files found</p>
           <p>Upload audio files or change the filter to see files.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* File List */}
-          <div className="bg-white rounded-lg shadow-md p-4 h-fit lg:max-h-[600px] overflow-y-auto">
-            <h2 className="mb-3 font-semibold text-gray-900">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-fit lg:max-h-[600px] overflow-y-auto">
+            <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">
               Files ({files.length})
             </h2>
             <div className="space-y-2">
@@ -398,12 +398,12 @@ function ASRAnnotate() {
                   onClick={() => setCurrentIndex(index)}
                   className={`w-full text-left p-3 rounded-lg border transition ${
                     index === currentIndex
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400'
+                      : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   <div className="flex items-start justify-between">
-                    <span className="flex-1 text-sm font-medium truncate">
+                    <span className="flex-1 text-sm font-medium truncate dark:text-gray-100">
                       {file.filename}
                     </span>
                     <span
@@ -415,7 +415,7 @@ function ASRAnnotate() {
                     </span>
                   </div>
                   {file.duration && (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       {Math.floor(file.duration / 60)}:{String(Math.floor(file.duration % 60)).padStart(2, '0')}
                     </span>
                   )}
@@ -429,9 +429,9 @@ function ASRAnnotate() {
             {currentFile && (
               <>
                 {/* Audio Player with Waveform */}
-                <div className="p-4 bg-white rounded-lg shadow-md">
+                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900">
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
                       {currentFile.filename}
                     </h2>
                     <div className="flex items-center space-x-2">
@@ -445,14 +445,14 @@ function ASRAnnotate() {
                       <button
                         onClick={handleRetranscribe}
                         disabled={transcribing}
-                        className="px-2 py-1 text-xs text-blue-600 border border-blue-300 rounded hover:bg-blue-50 disabled:opacity-50"
+                        className="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50"
                         title="Re-transcribe audio"
                       >
                         {transcribing ? '...' : '🔄 Re-transcribe'}
                       </button>
                       <button
                         onClick={handleDelete}
-                        className="px-2 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50"
+                        className="px-2 py-1 text-xs text-red-600 dark:text-red-400 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30"
                         title="Delete this audio file"
                       >
                         🗑️ Delete
@@ -464,7 +464,7 @@ function ASRAnnotate() {
                   <div className="mb-4">
                     <div 
                       ref={waveformRef} 
-                      className="w-full rounded-lg bg-gray-50"
+                      className="w-full rounded-lg bg-gray-50 dark:bg-gray-700"
                       style={{ minHeight: '100px' }}
                     />
                     {!waveformReady && !waveformError && (
@@ -487,7 +487,7 @@ function ASRAnnotate() {
                   </div>
 
                   {/* Time Display */}
-                  <div className="flex justify-between mb-3 text-sm text-gray-500">
+                  <div className="flex justify-between mb-3 text-sm text-gray-500 dark:text-gray-400">
                     <span>{formatTime(currentTime)}</span>
                     <span>{formatTime(duration)}</span>
                   </div>
@@ -497,7 +497,7 @@ function ASRAnnotate() {
                     <button
                       onClick={() => handleSkip(-5)}
                       disabled={!waveformReady}
-                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                      className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                       title="Rewind 5s"
                     >
                       ⏪ -5s
@@ -512,7 +512,7 @@ function ASRAnnotate() {
                     <button
                       onClick={handleStop}
                       disabled={!waveformReady}
-                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                      className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                       title="Stop"
                     >
                       ⏹️
@@ -520,7 +520,7 @@ function ASRAnnotate() {
                     <button
                       onClick={() => handleSkip(5)}
                       disabled={!waveformReady}
-                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                      className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                       title="Forward 5s"
                     >
                       +5s ⏩
@@ -529,7 +529,7 @@ function ASRAnnotate() {
                   
                   {/* Playback Speed */}
                   <div className="flex items-center justify-center space-x-4">
-                    <label className="text-sm text-gray-600">Speed:</label>
+                    <label className="text-sm text-gray-600 dark:text-gray-300">Speed:</label>
                     <div className="flex space-x-2">
                       {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
                         <button
@@ -538,7 +538,7 @@ function ASRAnnotate() {
                           className={`px-2 py-1 text-sm rounded ${
                             playbackRate === rate
                               ? 'bg-indigo-600 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                           }`}
                         >
                           {rate}x
@@ -547,21 +547,21 @@ function ASRAnnotate() {
                     </div>
                   </div>
 
-                  <div className="mt-3 text-xs text-center text-gray-400">
-                    Press <kbd className="px-1 py-0.5 bg-gray-100 rounded">Space</kbd> to play/pause (when not typing)
+                  <div className="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                    Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Space</kbd> to play/pause (when not typing)
                   </div>
                 </div>
 
                 {/* Original Transcription */}
-                <div className="p-4 bg-white rounded-lg shadow-md">
+                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900">
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
                       <span className="mr-2">📝</span>
                       Original Transcription (Whisper)
                     </h2>
                     <div className="flex items-center space-x-2">
                       {currentFile.corrected_transcript && currentFile.corrected_transcript !== currentFile.whisper_transcript && (
-                        <span className="px-2 py-1 text-xs text-green-700 bg-green-100 rounded">
+                        <span className="px-2 py-1 text-xs text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 rounded">
                           ✓ Has correction saved
                         </span>
                       )}
@@ -578,13 +578,13 @@ function ASRAnnotate() {
                   </div>
 
                   {currentFile.whisper_transcript ? (
-                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                      <p className="leading-relaxed text-gray-700 whitespace-pre-wrap">
+                    <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                      <p className="leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                         {currentFile.whisper_transcript}
                       </p>
                     </div>
                   ) : (
-                    <div className="p-4 text-center text-gray-400 border border-gray-300 border-dashed rounded-lg bg-gray-50">
+                    <div className="p-4 text-center text-gray-400 dark:text-gray-500 border border-gray-300 dark:border-gray-600 border-dashed rounded-lg bg-gray-50 dark:bg-gray-700">
                       {currentFile.status === 'transcribing' 
                         ? '⏳ Transcription in progress...'
                         : 'No transcription yet. Click "Run Whisper" to transcribe.'}
@@ -593,20 +593,20 @@ function ASRAnnotate() {
                 </div>
 
                 {/* Corrected/Modified Transcription */}
-                <div className="p-4 bg-white rounded-lg shadow-md">
+                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900">
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
                       <span className="mr-2">✏️</span>
                       Corrected Transcription
                     </h2>
                     <div className="flex items-center space-x-2">
                       {currentFile.corrected_transcript && (
-                        <span className="px-2 py-1 text-xs text-blue-700 bg-blue-100 rounded">
+                        <span className="px-2 py-1 text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded">
                           Saved in DB
                         </span>
                       )}
                       {currentFile.whisper_transcript && transcript !== currentFile.whisper_transcript && transcript !== currentFile.corrected_transcript && (
-                        <span className="px-2 py-1 text-xs text-yellow-700 bg-yellow-100 rounded">
+                        <span className="px-2 py-1 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 rounded">
                           Unsaved changes
                         </span>
                       )}
@@ -620,25 +620,25 @@ function ASRAnnotate() {
                       onKeyDown={handleKeyDown}
                       rows={6}
                       placeholder="Edit the transcript here... The corrected version will be saved for training."
-                      className="w-full px-3 py-2 leading-relaxed border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 leading-relaxed border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
-                    <p className="mt-2 text-xs text-gray-500">
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                       Make corrections to the original transcription above. Your changes will be saved as the ground truth.
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-500">
-                      <kbd className="px-2 py-1 bg-gray-100 rounded">Ctrl</kbd> + 
-                      <kbd className="px-2 py-1 ml-1 bg-gray-100 rounded">S</kbd> to save,
-                      <kbd className="px-2 py-1 ml-2 bg-gray-100 rounded">Ctrl</kbd> + 
-                      <kbd className="px-2 py-1 ml-1 bg-gray-100 rounded">Enter</kbd> to complete
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl</kbd> + 
+                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">S</kbd> to save,
+                      <kbd className="px-2 py-1 ml-2 bg-gray-100 dark:bg-gray-700 rounded">Ctrl</kbd> + 
+                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> to complete
                     </div>
                     <div className="flex space-x-2">
                       <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                       >
                         {saving ? 'Saving...' : 'Save'}
                       </button>
