@@ -109,7 +109,7 @@ function ASRDatasets() {
       
       const data = res.data
       if (data.chunks_created) {
-        alert(`✅ Downloaded "${data.youtube_title}" and segmented into ${data.chunks_created} chunks`)
+        alert(`✅ Downloaded "${data.youtube_title}" and segmented into ${data.chunks_created} segments`)
       } else {
         alert(`✅ Downloaded "${data.youtube_title}" (${Math.round(data.youtube_duration)}s)`)
       }
@@ -153,15 +153,15 @@ function ASRDatasets() {
       
       const result = res.data
       if (result.success_count > 0) {
-        alert(`Segmented ${result.success_count} files into ${result.total_chunks_created} chunks`)
+        alert(`Segmented ${result.success_count} files into ${result.total_chunks_created} segments`)
       } else if (result.files_found === 0) {
-        alert('No files to segment (files may already be chunks)')
+        alert('No files to segment (files may already be segmented)')
       } else {
         alert('Segmentation completed with some errors. Check console for details.')
         console.log('Segmentation results:', result)
       }
       
-      fetchDatasets() // Refresh to show new chunk files
+      fetchDatasets() // Refresh to show new segment files
       
     } catch (err) {
       alert('Failed to segment files: ' + (err.response?.data?.detail || err.message))
@@ -352,9 +352,9 @@ function ASRDatasets() {
                       <span className="text-sm text-gray-600">Auto-segment</span>
                     </label>
                     
-                    {youtubeAutoSegment && (
+                    {youtubeAutoSegment && !useVad && (
                       <label className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">Chunk:</span>
+                        <span className="text-sm text-gray-600">Segment length:</span>
                         <select
                           value={youtubeChunkLength}
                           onChange={(e) => setYoutubeChunkLength(Number(e.target.value))}
@@ -380,7 +380,7 @@ function ASRDatasets() {
                           onChange={() => setUseVad(true)}
                           className="text-red-600"
                         />
-                        <span className="text-sm text-gray-600">VAD (voice only)</span>
+                        <span className="text-sm text-gray-600">VAD (natural speech segments)</span>
                       </label>
                       <label className="flex items-center space-x-1">
                         <input
@@ -390,7 +390,7 @@ function ASRDatasets() {
                           onChange={() => setUseVad(false)}
                           className="text-red-600"
                         />
-                        <span className="text-sm text-gray-600">Fixed-length (keep all audio)</span>
+                        <span className="text-sm text-gray-600">Fixed-length (equal intervals)</span>
                       </label>
                     </div>
                   )}
@@ -405,8 +405,8 @@ function ASRDatasets() {
                   
                   <p className="text-xs text-gray-500">
                     {useVad 
-                      ? 'Downloads audio and segments using voice activity detection (voice-only)'
-                      : 'Downloads audio and segments into fixed-length chunks (keeps all audio)'}
+                      ? 'Downloads audio and segments into natural speech boundaries (preserves full conversations)'
+                      : 'Downloads audio and cuts into equal fixed-length segments (keeps all audio including silence)'}
                   </p>
                 </div>
               </div>
@@ -486,7 +486,7 @@ function ASRDatasets() {
                             onClick={() => handleSegmentAll(dataset.id)}
                             disabled={segmenting[dataset.id]}
                             className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
-                            title="Split long audio files into 30-second chunks using VAD"
+                            title="Segment audio files using VAD (natural speech boundaries)"
                           >
                             {segmenting[dataset.id] ? '⏳ Segmenting...' : '✂️ Segment'}
                           </button>
@@ -563,7 +563,7 @@ function ASRDatasets() {
         <h3 className="font-semibold mb-2">💡 How ASR Annotation Works</h3>
         <ol className="list-decimal list-inside space-y-1 text-sm">
           <li>Create a dataset and add audio: upload files or <strong>import from YouTube</strong></li>
-          <li><strong>Optional:</strong> Click "✂️ Segment" to split long audio into chunks using VAD</li>
+          <li><strong>Optional:</strong> Click "✂️ Segment" to split long audio into speech segments using VAD</li>
           <li>Click "🎤 Transcribe All" to run Whisper v2 on pending files</li>
           <li>Click "Annotate" to review and correct transcriptions</li>
           <li>Export results as CSV or JSONL when done</li>
