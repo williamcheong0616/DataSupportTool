@@ -4,8 +4,8 @@ from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
 from backend.models import (
-    PipelineRun, DataRecord, ModelResponse as ModelResponseDB,
-    ValidationRecord, PipelineStatus, ValidationResult as ValidationResultEnum
+    PipelineRun, DataRecord, ModelResponse,
+    ValidationRecord, PipelineStatus, ValidationResult
 )
 from pipeline.preprocessor import DataPreprocessor, create_preprocessor
 from pipeline.validator import ResponseValidator, create_validator

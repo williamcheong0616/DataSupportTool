@@ -6,6 +6,8 @@ import {
   getAudioFiles,
   getAudioUrl,
   transcribeAudio,
+  retranscribeAudio,
+  deleteAudioFile,
   annotateTranscript,
   updateFileStatus,
 } from '../api'
@@ -137,15 +139,33 @@ function ASRAnnotate() {
     }
   }
 
-  const fetchFiles = async () => {
+  const fetchFiles = async (preserveIndex = false, targetIndex = null) => {
     setLoading(true)
     try {
       const status = statusFilter === 'all' ? null : statusFilter
       const res = await getAudioFiles(datasetId, status, 100)
-      setFiles(res.data.files || [])
-      setCurrentIndex(0)
+      const fetchedFiles = res.data.files || []
+      setFiles(fetchedFiles)
+      
+      if (preserveIndex && targetIndex !== null && targetIndex < fetchedFiles.length) {
+        // Use the target index provided (for navigation after mark complete)
+        setCurrentIndex(targetIndex)
+      } else if (!preserveIndex) {
+        // Find the first file that's not completed to start from
+        let startIndex = 0
+        if (fetchedFiles.length > 0) {
+          const firstIncompleteIndex = fetchedFiles.findIndex(f => f.status !== 'completed')
+          // If found, start there; otherwise start at the beginning
+          startIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0
+        }
+        setCurrentIndex(startIndex)
+      }
+      // If preserveIndex is true but no targetIndex, keep the current index
+      
+      return fetchedFiles
     } catch (err) {
       console.error('Failed to fetch files:', err)
+      return []
     } finally {
       setLoading(false)
     }
@@ -182,12 +202,45 @@ function ASRAnnotate() {
     setTranscribing(true)
     try {
       const res = await transcribeAudio(currentFile.id)
-      setTranscript(res.data.whisper_transcript || '')
-      fetchFiles()
+      // Response contains transcript directly now (synchronous mode)
+      setTranscript(res.data.transcript || res.data.whisper_transcript || '')
+      fetchFiles(true, currentIndex)  // Preserve current index after transcribe
     } catch (err) {
       alert('Failed to transcribe: ' + (err.response?.data?.detail || err.message))
     } finally {
       setTranscribing(false)
+    }
+  }
+
+  const handleRetranscribe = async () => {
+    if (!currentFile) return
+    if (!confirm('This will clear the existing transcription and re-transcribe the audio. Continue?')) return
+    setTranscribing(true)
+    try {
+      const res = await retranscribeAudio(currentFile.id)
+      setTranscript(res.data.transcript || res.data.whisper_transcript || '')
+      fetchFiles(true, currentIndex)
+    } catch (err) {
+      alert('Failed to re-transcribe: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!currentFile) return
+    if (!confirm(`Delete "${currentFile.filename}"? This cannot be undone.`)) return
+    
+    try {
+      await deleteAudioFile(currentFile.id)
+      // Navigate to next file or previous if at end
+      const newIndex = currentIndex >= files.length - 1 ? Math.max(0, currentIndex - 1) : currentIndex
+      await fetchFiles(false)
+      if (files.length > 1) {
+        setCurrentIndex(Math.min(newIndex, files.length - 2))
+      }
+    } catch (err) {
+      alert('Failed to delete: ' + (err.response?.data?.detail || err.message))
     }
   }
 
@@ -196,7 +249,7 @@ function ASRAnnotate() {
     setSaving(true)
     try {
       await annotateTranscript(currentFile.id, transcript)
-      fetchFiles()
+      fetchFiles(true, currentIndex)  // Preserve current index after save
     } catch (err) {
       alert('Failed to save: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -213,11 +266,36 @@ function ASRAnnotate() {
       // Then mark as completed
       await updateFileStatus(currentFile.id, 'completed')
       
-      // Move to next file
-      if (currentIndex < files.length - 1) {
+      // Refresh file list and find next incomplete file
+      const updatedFiles = await fetchFiles(true, null)
+      
+      // Find next incomplete file starting from current position
+      let nextIndex = -1
+      for (let i = currentIndex + 1; i < updatedFiles.length; i++) {
+        if (updatedFiles[i].status !== 'completed') {
+          nextIndex = i
+          break
+        }
+      }
+      
+      // If no incomplete file found after current, check from beginning
+      if (nextIndex === -1) {
+        for (let i = 0; i < currentIndex; i++) {
+          if (updatedFiles[i].status !== 'completed') {
+            nextIndex = i
+            break
+          }
+        }
+      }
+      
+      // Navigate to next incomplete file, or stay at current + 1 if all complete
+      if (nextIndex >= 0) {
+        setCurrentIndex(nextIndex)
+      } else if (currentIndex < updatedFiles.length - 1) {
         setCurrentIndex(currentIndex + 1)
       }
-      fetchFiles()
+      // If we're at the last file and all are complete, stay there
+      
     } catch (err) {
       alert('Failed to complete: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -356,13 +434,30 @@ function ASRAnnotate() {
                     <h2 className="font-semibold text-gray-900">
                       {currentFile.filename}
                     </h2>
-                    <span
-                      className={`text-sm px-3 py-1 rounded ${
-                        STATUS_COLORS[currentFile.status] || STATUS_COLORS.pending
-                      }`}
-                    >
-                      {currentFile.status}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`text-sm px-3 py-1 rounded ${
+                          STATUS_COLORS[currentFile.status] || STATUS_COLORS.pending
+                        }`}
+                      >
+                        {currentFile.status}
+                      </span>
+                      <button
+                        onClick={handleRetranscribe}
+                        disabled={transcribing}
+                        className="px-2 py-1 text-xs text-blue-600 border border-blue-300 rounded hover:bg-blue-50 disabled:opacity-50"
+                        title="Re-transcribe audio"
+                      >
+                        {transcribing ? '...' : '🔄 Re-transcribe'}
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        className="px-2 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50"
+                        title="Delete this audio file"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </div>
                   
                   {/* Waveform */}
@@ -457,42 +552,79 @@ function ASRAnnotate() {
                   </div>
                 </div>
 
-                {/* Transcription */}
+                {/* Original Transcription */}
                 <div className="p-4 bg-white rounded-lg shadow-md">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900">Transcript</h2>
-                    {(!currentFile.whisper_transcript && currentFile.status === 'pending') && (
-                      <button
-                        onClick={handleTranscribe}
-                        disabled={transcribing}
-                        className="px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 disabled:opacity-50"
-                      >
-                        {transcribing ? 'Transcribing...' : '🎤 Run Whisper'}
-                      </button>
-                    )}
+                    <h2 className="font-semibold text-gray-900">
+                      <span className="mr-2">📝</span>
+                      Original Transcription (Whisper)
+                    </h2>
+                    <div className="flex items-center space-x-2">
+                      {currentFile.corrected_transcript && currentFile.corrected_transcript !== currentFile.whisper_transcript && (
+                        <span className="px-2 py-1 text-xs text-green-700 bg-green-100 rounded">
+                          ✓ Has correction saved
+                        </span>
+                      )}
+                      {(!currentFile.whisper_transcript && currentFile.status === 'pending') && (
+                        <button
+                          onClick={handleTranscribe}
+                          disabled={transcribing}
+                          className="px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 disabled:opacity-50"
+                        >
+                          {transcribing ? 'Transcribing...' : '🎤 Run Whisper'}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {currentFile.whisper_transcript && (
-                    <div className="p-3 mb-3 text-sm rounded-lg bg-gray-50">
-                      <label className="block mb-1 text-xs font-medium text-gray-500">
-                        Whisper Output (Original)
-                      </label>
-                      <p className="text-gray-700">{currentFile.whisper_transcript}</p>
+                  {currentFile.whisper_transcript ? (
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <p className="leading-relaxed text-gray-700 whitespace-pre-wrap">
+                        {currentFile.whisper_transcript}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-gray-400 border border-gray-300 border-dashed rounded-lg bg-gray-50">
+                      {currentFile.status === 'transcribing' 
+                        ? '⏳ Transcription in progress...'
+                        : 'No transcription yet. Click "Run Whisper" to transcribe.'}
                     </div>
                   )}
+                </div>
+
+                {/* Corrected/Modified Transcription */}
+                <div className="p-4 bg-white rounded-lg shadow-md">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-semibold text-gray-900">
+                      <span className="mr-2">✏️</span>
+                      Corrected Transcription
+                    </h2>
+                    <div className="flex items-center space-x-2">
+                      {currentFile.corrected_transcript && (
+                        <span className="px-2 py-1 text-xs text-blue-700 bg-blue-100 rounded">
+                          Saved in DB
+                        </span>
+                      )}
+                      {currentFile.whisper_transcript && transcript !== currentFile.whisper_transcript && transcript !== currentFile.corrected_transcript && (
+                        <span className="px-2 py-1 text-xs text-yellow-700 bg-yellow-100 rounded">
+                          Unsaved changes
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
                   <div>
-                    <label className="block mb-1 text-sm font-medium text-gray-700">
-                      Corrected Transcript
-                    </label>
                     <textarea
                       value={transcript}
                       onChange={(e) => setTranscript(e.target.value)}
                       onKeyDown={handleKeyDown}
                       rows={6}
-                      placeholder="Edit the transcript here..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Edit the transcript here... The corrected version will be saved for training."
+                      className="w-full px-3 py-2 leading-relaxed border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Make corrections to the original transcription above. Your changes will be saved as the ground truth.
+                    </p>
                   </div>
 
                   <div className="flex items-center justify-between mt-4">

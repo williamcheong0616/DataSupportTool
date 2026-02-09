@@ -132,3 +132,150 @@ class AudioFile(Base):
     
     # Relationships
     dataset = relationship("ASRDataset", back_populates="audio_files")
+
+
+# === Pipeline Models (for orchestration) ===
+
+class PipelineStatus(str, enum.Enum):
+    """Status of a pipeline run."""
+    PENDING = "pending"
+    COLLECTING = "collecting"
+    PREPROCESSING = "preprocessing"
+    PROCESSING = "processing"
+    VALIDATING = "validating"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    AWAITING_REVIEW = "awaiting_review"
+
+
+class ValidationResult(str, enum.Enum):
+    """Result of validation."""
+    PASSED = "passed"
+    FAILED = "failed"
+    NEEDS_REVIEW = "needs_review"
+
+
+class Dataset(Base):
+    """Generic dataset for pipeline processing."""
+    __tablename__ = "pipeline_datasets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    source_type = Column(String(100), nullable=True)  # text, asr, etc.
+    config = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    records = relationship("DataRecord", back_populates="dataset", cascade="all, delete-orphan")
+    pipeline_runs = relationship("PipelineRun", back_populates="dataset", cascade="all, delete-orphan")
+
+
+class DataRecord(Base):
+    """Generic data record for pipeline processing."""
+    __tablename__ = "pipeline_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("pipeline_datasets.id"), nullable=False)
+    
+    # Input/Output
+    input_text = Column(Text, nullable=False)
+    expected_output = Column(Text, nullable=True)
+    
+    # Processing state
+    is_preprocessed = Column(Boolean, default=False)
+    preprocessed_text = Column(Text, nullable=True)
+    
+    # Extra data
+    record_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    dataset = relationship("Dataset", back_populates="records")
+    model_responses = relationship("ModelResponse", back_populates="record", cascade="all, delete-orphan")
+    validation_records = relationship("ValidationRecord", back_populates="record", cascade="all, delete-orphan")
+
+
+class PipelineRun(Base):
+    """Tracks a single pipeline execution."""
+    __tablename__ = "pipeline_runs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("pipeline_datasets.id"), nullable=False)
+    
+    # Status tracking
+    status = Column(SQLEnum(PipelineStatus), default=PipelineStatus.PENDING)
+    current_iteration = Column(Integer, default=0)
+    max_iterations = Column(Integer, default=3)
+    
+    # Configuration
+    config = Column(JSON, nullable=True)
+    
+    # Results
+    metrics = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # Timestamps
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    dataset = relationship("Dataset", back_populates="pipeline_runs")
+    model_responses = relationship("ModelResponse", back_populates="pipeline_run", cascade="all, delete-orphan")
+
+
+class ModelResponse(Base):
+    """Stores model-generated responses."""
+    __tablename__ = "model_responses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    record_id = Column(Integer, ForeignKey("pipeline_records.id"), nullable=False)
+    pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id"), nullable=False)
+    
+    # Response data
+    response_text = Column(Text, nullable=False)
+    model_name = Column(String(255), nullable=True)
+    iteration = Column(Integer, default=1)
+    
+    # Metadata
+    latency_ms = Column(Integer, nullable=True)
+    token_count = Column(Integer, nullable=True)
+    raw_response = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    record = relationship("DataRecord", back_populates="model_responses")
+    pipeline_run = relationship("PipelineRun", back_populates="model_responses")
+    validation_records = relationship("ValidationRecord", back_populates="model_response", cascade="all, delete-orphan")
+
+
+class ValidationRecord(Base):
+    """Stores validation results for responses."""
+    __tablename__ = "validation_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    record_id = Column(Integer, ForeignKey("pipeline_records.id"), nullable=False)
+    model_response_id = Column(Integer, ForeignKey("model_responses.id"), nullable=False)
+    
+    # Validation outcome
+    result = Column(SQLEnum(ValidationResult), nullable=False)
+    score = Column(Float, nullable=True)
+    
+    # Details
+    metrics = Column(JSON, nullable=True)
+    failure_reasons = Column(JSON, nullable=True)
+    
+    # Human review
+    human_reviewed = Column(Boolean, default=False)
+    human_decision = Column(String(50), nullable=True)
+    reviewer = Column(String(255), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    record = relationship("DataRecord", back_populates="validation_records")
+    model_response = relationship("ModelResponse", back_populates="validation_records")

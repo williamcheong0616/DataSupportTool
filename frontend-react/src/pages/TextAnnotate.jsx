@@ -26,7 +26,6 @@ function TextAnnotate() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [showAnnotated, setShowAnnotated] = useState(false)
   const [totalRecords, setTotalRecords] = useState(0)
   const [annotatedCount, setAnnotatedCount] = useState(0)
 
@@ -46,7 +45,7 @@ function TextAnnotate() {
     if (dataset) {
       fetchRecords()
     }
-  }, [dataset, showAnnotated])
+  }, [dataset])
 
   const fetchDataset = async () => {
     try {
@@ -61,13 +60,23 @@ function TextAnnotate() {
   const fetchRecords = async () => {
     setLoading(true)
     try {
-      const res = await getTextRecords(datasetId, showAnnotated ? null : false, 100)
-      setRecords(res.data.records || [])
+      // Always load ALL records (pass null for is_annotated filter)
+      const res = await getTextRecords(datasetId, null, 1000)
+      const fetchedRecords = res.data.records || []
+      setRecords(fetchedRecords)
       setTotalRecords(res.data.total || 0)
       setAnnotatedCount(res.data.annotated || 0)
-      setCurrentIndex(0)
-      if (res.data.records?.length > 0) {
-        initializeAnnotation(res.data.records[0])
+      
+      // Find the first unannotated record to start from
+      let startIndex = 0
+      if (fetchedRecords.length > 0) {
+        const firstUnannotatedIndex = fetchedRecords.findIndex(r => !r.is_annotated)
+        // If found, start there; otherwise start at the beginning
+        startIndex = firstUnannotatedIndex >= 0 ? firstUnannotatedIndex : 0
+      }
+      setCurrentIndex(startIndex)
+      if (fetchedRecords.length > 0) {
+        initializeAnnotation(fetchedRecords[startIndex])
       }
     } catch (err) {
       console.error('Failed to fetch records:', err)
@@ -99,7 +108,7 @@ function TextAnnotate() {
     setSaving(true)
     try {
       await annotateBahasaRojak(currentRecord.id, isBahasaRojak)
-      moveToNext()
+      moveToNextAfterSave()
     } catch (err) {
       alert('Failed to save: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -112,7 +121,7 @@ function TextAnnotate() {
     setSaving(true)
     try {
       await annotateClassification(currentRecord.id, label)
-      moveToNext()
+      moveToNextAfterSave()
     } catch (err) {
       alert('Failed to save: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -129,7 +138,7 @@ function TextAnnotate() {
         subject_added: subjectAdded,
         context_added: contextAdded,
       })
-      moveToNext()
+      moveToNextAfterSave()
     } catch (err) {
       alert('Failed to save: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -150,7 +159,7 @@ function TextAnnotate() {
         question_2: question2,
         question_3: question3,
       })
-      moveToNext()
+      moveToNextAfterSave()
     } catch (err) {
       alert('Failed to save: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -159,13 +168,22 @@ function TextAnnotate() {
   }
 
   const moveToNext = () => {
-    setAnnotatedCount((prev) => prev + 1)
     if (currentIndex < records.length - 1) {
       setCurrentIndex(currentIndex + 1)
     } else {
       // Reload to get more unannotated records
       fetchRecords()
     }
+  }
+
+  const moveToNextAfterSave = () => {
+    // Only increment count when actually saving an annotation
+    // The count is fetched from the server on fetchRecords, so we refresh
+    if (currentIndex < records.length - 1) {
+      setCurrentIndex(currentIndex + 1)
+    }
+    // Refresh to get updated counts from database
+    fetchRecords()
   }
 
   const moveToPrev = () => {
@@ -205,15 +223,7 @@ function TextAnnotate() {
           </p>
         </div>
         <div className="flex items-center space-x-4">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={showAnnotated}
-              onChange={(e) => setShowAnnotated(e.target.checked)}
-              className="rounded text-indigo-600"
-            />
-            <span className="text-sm text-gray-600">Show annotated</span>
-          </label>
+          <span className="text-sm text-gray-500">Navigate to review previous annotations</span>
         </div>
       </div>
 
@@ -235,7 +245,7 @@ function TextAnnotate() {
       {records.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
           <p className="text-xl mb-4">
-            {showAnnotated ? 'No records found' : '🎉 All records have been annotated!'}
+            No records found in this dataset
           </p>
           <button
             onClick={() => navigate('/text')}
@@ -255,9 +265,16 @@ function TextAnnotate() {
             >
               ← Previous
             </button>
-            <span className="text-gray-600">
-              Record {currentIndex + 1} of {records.length}
-            </span>
+            <div className="text-center">
+              <span className="text-gray-600">
+                Record {currentIndex + 1} of {records.length}
+              </span>
+              {currentRecord?.is_annotated && (
+                <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+                  ✓ Annotated
+                </span>
+              )}
+            </div>
             <button
               onClick={moveToNext}
               disabled={currentIndex >= records.length - 1}

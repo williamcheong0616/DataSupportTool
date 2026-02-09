@@ -9,6 +9,8 @@ import {
   getAudioFiles,
   transcribeAudio,
   batchTranscribe,
+  segmentAllFiles,
+  importYoutubeAudio,
   getTaskStatus,
 } from '../api'
 
@@ -22,7 +24,15 @@ function ASRDatasets() {
   const [uploadFiles, setUploadFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [transcribing, setTranscribing] = useState({})
+  const [segmenting, setSegmenting] = useState({})
   const [taskStatus, setTaskStatus] = useState({}) // { datasetId: { taskId, status, progress } }
+  
+  // YouTube import state
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [youtubeImporting, setYoutubeImporting] = useState(false)
+  const [youtubeAutoSegment, setYoutubeAutoSegment] = useState(true)
+  const [youtubeChunkLength, setYoutubeChunkLength] = useState(30)
+  const [useVad, setUseVad] = useState(true) // true = Silero VAD, false = fixed-length
 
   useEffect(() => {
     fetchDatasets()
@@ -80,6 +90,40 @@ function ASRDatasets() {
     }
   }
 
+  const handleYoutubeImport = async (datasetId) => {
+    if (!youtubeUrl.trim()) {
+      alert('Please enter a YouTube URL')
+      return
+    }
+
+    setYoutubeImporting(true)
+    try {
+      const res = await importYoutubeAudio(
+        datasetId,
+        youtubeUrl,
+        youtubeAutoSegment,
+        youtubeChunkLength,
+        false, // auto_transcribe
+        useVad
+      )
+      
+      const data = res.data
+      if (data.chunks_created) {
+        alert(`✅ Downloaded "${data.youtube_title}" and segmented into ${data.chunks_created} chunks`)
+      } else {
+        alert(`✅ Downloaded "${data.youtube_title}" (${Math.round(data.youtube_duration)}s)`)
+      }
+      
+      setYoutubeUrl('')
+      setShowUpload(null)
+      fetchDatasets()
+    } catch (err) {
+      alert('Failed to import: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setYoutubeImporting(false)
+    }
+  }
+
   const handleTranscribeAll = async (datasetId) => {
     setTranscribing({ ...transcribing, [datasetId]: true })
     try {
@@ -98,6 +142,31 @@ function ASRDatasets() {
     } catch (err) {
       alert('Failed to start transcription: ' + (err.response?.data?.detail || err.message))
       setTranscribing({ ...transcribing, [datasetId]: false })
+    }
+  }
+
+  const handleSegmentAll = async (datasetId, chunkLength = 30) => {
+    setSegmenting({ ...segmenting, [datasetId]: true })
+    try {
+      // Use synchronous segmentation (Celery optional if Redis available)
+      const res = await segmentAllFiles(datasetId, chunkLength, false)
+      
+      const result = res.data
+      if (result.success_count > 0) {
+        alert(`Segmented ${result.success_count} files into ${result.total_chunks_created} chunks`)
+      } else if (result.files_found === 0) {
+        alert('No files to segment (files may already be chunks)')
+      } else {
+        alert('Segmentation completed with some errors. Check console for details.')
+        console.log('Segmentation results:', result)
+      }
+      
+      fetchDatasets() // Refresh to show new chunk files
+      
+    } catch (err) {
+      alert('Failed to segment files: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setSegmenting({ ...segmenting, [datasetId]: false })
     }
   }
 
@@ -229,42 +298,131 @@ function ASRDatasets() {
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Upload Audio Files</h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Audio Files (MP3, WAV, etc.)
-              </label>
-              <input
-                type="file"
-                accept="audio/*"
-                multiple
-                onChange={(e) => setUploadFiles(e.target.files)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              />
-              {uploadFiles.length > 0 && (
-                <p className="mt-2 text-sm text-gray-500">
-                  {uploadFiles.length} file(s) selected
-                </p>
-              )}
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <h2 className="text-xl font-semibold mb-4">Add Audio to Dataset</h2>
+            
+            {/* Tab-like sections */}
+            <div className="space-y-6">
+              {/* Upload Files Section */}
+              <div className="border rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-3">📁 Upload Audio Files</h3>
+                <div className="mb-3">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    multiple
+                    onChange={(e) => setUploadFiles(e.target.files)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                  {uploadFiles.length > 0 && (
+                    <p className="mt-2 text-sm text-gray-500">
+                      {uploadFiles.length} file(s) selected
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading || !uploadFiles.length}
+                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {uploading ? 'Uploading...' : 'Upload Files'}
+                </button>
+              </div>
+
+              {/* YouTube Import Section */}
+              <div className="border rounded-lg p-4 bg-red-50 border-red-200">
+                <h3 className="font-medium text-gray-900 mb-3">🎬 Import from YouTube</h3>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                  
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={youtubeAutoSegment}
+                        onChange={(e) => setYoutubeAutoSegment(e.target.checked)}
+                        className="rounded text-red-600"
+                      />
+                      <span className="text-sm text-gray-600">Auto-segment</span>
+                    </label>
+                    
+                    {youtubeAutoSegment && (
+                      <label className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-600">Chunk:</span>
+                        <select
+                          value={youtubeChunkLength}
+                          onChange={(e) => setYoutubeChunkLength(Number(e.target.value))}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value={15}>15s</option>
+                          <option value={30}>30s</option>
+                          <option value={60}>60s</option>
+                          <option value={120}>120s</option>
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  
+                  {youtubeAutoSegment && (
+                    <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                      <span className="text-sm text-gray-600 font-medium">Segmentation:</span>
+                      <label className="flex items-center space-x-1">
+                        <input
+                          type="radio"
+                          name="vadMode"
+                          checked={useVad}
+                          onChange={() => setUseVad(true)}
+                          className="text-red-600"
+                        />
+                        <span className="text-sm text-gray-600">VAD (voice only)</span>
+                      </label>
+                      <label className="flex items-center space-x-1">
+                        <input
+                          type="radio"
+                          name="vadMode"
+                          checked={!useVad}
+                          onChange={() => setUseVad(false)}
+                          className="text-red-600"
+                        />
+                        <span className="text-sm text-gray-600">Fixed-length (keep all audio)</span>
+                      </label>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => handleYoutubeImport(showUpload)}
+                    disabled={youtubeImporting || !youtubeUrl.trim()}
+                    className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {youtubeImporting ? '⏳ Importing...' : '📥 Import from YouTube'}
+                  </button>
+                  
+                  <p className="text-xs text-gray-500">
+                    {useVad 
+                      ? 'Downloads audio and segments using voice activity detection (voice-only)'
+                      : 'Downloads audio and segments into fixed-length chunks (keeps all audio)'}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-end space-x-2">
+            
+            <div className="flex justify-end mt-4">
               <button
                 type="button"
                 onClick={() => {
                   setShowUpload(null)
                   setUploadFiles([])
+                  setYoutubeUrl('')
                 }}
                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploading || !uploadFiles.length}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {uploading ? 'Uploading...' : 'Upload'}
+                Close
               </button>
             </div>
           </div>
@@ -275,7 +433,7 @@ function ASRDatasets() {
       {datasets.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
           <p className="text-xl mb-4">No ASR datasets yet</p>
-          <p>Create a dataset and upload audio files to get started.</p>
+          <p>Create a dataset and add audio files (upload or import from YouTube) to get started.</p>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -320,10 +478,18 @@ function ASRDatasets() {
                         onClick={() => setShowUpload(dataset.id)}
                         className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
                       >
-                        Upload Audio
+                        ➕ Add Audio
                       </button>
                       {dataset.file_count > 0 && (
                         <>
+                          <button
+                            onClick={() => handleSegmentAll(dataset.id)}
+                            disabled={segmenting[dataset.id]}
+                            className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                            title="Split long audio files into 30-second chunks using VAD"
+                          >
+                            {segmenting[dataset.id] ? '⏳ Segmenting...' : '✂️ Segment'}
+                          </button>
                           <button
                             onClick={() => handleTranscribeAll(dataset.id)}
                             disabled={transcribing[dataset.id]}
@@ -396,8 +562,9 @@ function ASRDatasets() {
       <div className="mt-6 bg-blue-50 rounded-lg p-4 text-blue-800">
         <h3 className="font-semibold mb-2">💡 How ASR Annotation Works</h3>
         <ol className="list-decimal list-inside space-y-1 text-sm">
-          <li>Create a dataset and upload audio files in batch</li>
-          <li>Click "Transcribe All" to run Whisper v2 on pending files</li>
+          <li>Create a dataset and add audio: upload files or <strong>import from YouTube</strong></li>
+          <li><strong>Optional:</strong> Click "✂️ Segment" to split long audio into chunks using VAD</li>
+          <li>Click "🎤 Transcribe All" to run Whisper v2 on pending files</li>
           <li>Click "Annotate" to review and correct transcriptions</li>
           <li>Export results as CSV or JSONL when done</li>
         </ol>

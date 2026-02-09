@@ -1,6 +1,8 @@
+# type: ignore
 """FastAPI application for Text and ASR Annotation."""
+
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any, TYPE_CHECKING
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -599,30 +601,258 @@ async def upload_audio_files(
     }
 
 
+@app.post("/api/asr/datasets/{dataset_id}/youtube")
+def import_youtube_audio(
+    dataset_id: int,
+    youtube_url: str = Query(..., description="YouTube video URL"),
+    auto_segment: bool = Query(True, description="Automatically segment into chunks"),
+    chunk_length: int = Query(30, ge=5, le=120, description="Max chunk length in seconds"),
+    use_vad: bool = Query(True, description="Use VAD (voice-only) or fixed-length cutting"),
+    auto_transcribe: bool = Query(False, description="Automatically transcribe after segmentation"),
+    db: Session = Depends(get_db)
+):
+    """
+    Import audio from a YouTube video into an ASR dataset.
+    
+    Downloads the audio, optionally segments it into chunks,
+    and adds the files to the dataset.
+    
+    Set use_vad=True to use Silero VAD (captures voice segments only).
+    Set use_vad=False for fixed-length cuts (preserves all audio including music).
+    """
+    from backend.youtube_service import download_youtube_audio, extract_video_id
+    from backend.audio_segment import segment_audio
+    
+    dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Validate URL
+    video_id = extract_video_id(youtube_url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    
+    dataset_dir = os.path.join(AUDIO_DIR, str(dataset_id))
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    # Download YouTube audio
+    download_result = download_youtube_audio(youtube_url, dataset_dir, format="wav")
+    
+    if not download_result.success:
+        raise HTTPException(status_code=500, detail=f"Download failed: {download_result.error}")
+    
+    created_files = []
+    task_ids = []
+    
+    if auto_segment and download_result.duration > chunk_length:
+        # Segment the audio
+        try:
+            segment_result = segment_audio(
+                download_result.file_path,
+                chunk_length=chunk_length,
+                output_base=dataset_dir,
+                use_vad=use_vad
+            )
+            
+            # Create AudioFile records for each chunk
+            for chunk_path in segment_result.chunks:
+                chunk_filename = os.path.basename(chunk_path)
+                chunk_size = os.path.getsize(chunk_path) if os.path.exists(chunk_path) else 0
+                
+                audio_file = AudioFile(
+                    dataset_id=dataset_id,
+                    filename=chunk_filename,
+                    file_path=chunk_path,
+                    file_size=chunk_size,
+                    status=TranscriptionStatus.PENDING,
+                )
+                db.add(audio_file)
+                db.flush()
+                created_files.append(audio_file.id)
+                
+                if auto_transcribe:
+                    task = transcribe_audio_task.delay(audio_file.id)
+                    task_ids.append(task.id)
+            
+            db.commit()
+            
+            return {
+                "message": f"Downloaded and segmented into {segment_result.total_chunks} chunks",
+                "youtube_title": download_result.title,
+                "youtube_duration": download_result.duration,
+                "source_file": download_result.file_path,
+                "chunks_created": segment_result.total_chunks,
+                "file_ids": created_files,
+                "transcription_queued": auto_transcribe,
+                "task_ids": task_ids
+            }
+            
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Segmentation failed: {str(e)}")
+    
+    else:
+        # Just add the downloaded file without segmentation
+        file_size = os.path.getsize(download_result.file_path) if os.path.exists(download_result.file_path) else 0
+        
+        audio_file = AudioFile(
+            dataset_id=dataset_id,
+            filename=os.path.basename(download_result.file_path),
+            file_path=download_result.file_path,
+            file_size=file_size,
+            duration=download_result.duration,
+            status=TranscriptionStatus.PENDING,
+        )
+        db.add(audio_file)
+        db.commit()
+        db.refresh(audio_file)
+        created_files.append(audio_file.id)
+        
+        if auto_transcribe:
+            task = transcribe_audio_task.delay(audio_file.id)
+            task_ids.append(task.id)
+        
+        return {
+            "message": "Downloaded YouTube audio",
+            "youtube_title": download_result.title,
+            "youtube_duration": download_result.duration,
+            "file_id": audio_file.id,
+            "file_ids": created_files,
+            "transcription_queued": auto_transcribe,
+            "task_ids": task_ids
+        }
+
+
 @app.post("/api/asr/files/{file_id}/transcribe")
-def manual_transcribe(file_id: int, db: Session = Depends(get_db)):
-    """Manually trigger transcription for a file via Celery."""
+def manual_transcribe(
+    file_id: int,
+    use_celery: bool = Query(False, description="Use Celery for async transcription (requires Redis)"),
+    db: Session = Depends(get_db)
+):
+    """Trigger transcription for a file. Runs synchronously by default, or via Celery if use_celery=true."""
     audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
     if not audio_file:
         raise HTTPException(status_code=404, detail="File not found")
     
-    task = transcribe_audio_task.delay(file_id)
-    return {"message": "Transcription queued", "task_id": task.id}
+    if use_celery:
+        # Async via Celery (requires Redis)
+        task = transcribe_audio_task.delay(file_id)
+        return {"message": "Transcription queued", "task_id": task.id}
+    else:
+        # Synchronous transcription
+        from backend.whisper import transcribe_audio_simple
+        
+        if not os.path.exists(str(audio_file.file_path)):
+            raise HTTPException(status_code=404, detail="Audio file not found on disk")
+        
+        audio_file.status = TranscriptionStatus.TRANSCRIBING
+        db.commit()
+        
+        try:
+            result = transcribe_audio_simple(audio_file.file_path)
+            
+            audio_file.whisper_transcript = result.get("text", "")
+            audio_file.whisper_language = result.get("language")
+            audio_file.whisper_confidence = result.get("confidence")
+            audio_file.status = TranscriptionStatus.TRANSCRIBED
+            audio_file.transcribed_at = datetime.utcnow()
+            db.commit()
+            
+            return {
+                "status": "success",
+                "file_id": file_id,
+                "filename": audio_file.filename,
+                "transcript": audio_file.whisper_transcript,
+                "language": audio_file.whisper_language,
+                "confidence": audio_file.whisper_confidence,
+                "backend": result.get("backend")
+            }
+        except Exception as e:
+            audio_file.status = TranscriptionStatus.PENDING
+            db.commit()
+            raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
 @app.post("/api/asr/datasets/{dataset_id}/transcribe-all")
 def batch_transcribe(
     dataset_id: int,
     file_ids: Optional[List[int]] = Query(None, description="Specific file IDs to transcribe"),
+    use_celery: bool = Query(False, description="Use Celery for async transcription (requires Redis)"),
     db: Session = Depends(get_db)
 ):
-    """Queue all pending files in a dataset for transcription via Celery."""
+    """Transcribe all pending files in a dataset. Runs synchronously by default."""
     dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    task = batch_transcribe_task.delay(dataset_id, file_ids)
-    return {"message": "Batch transcription queued", "task_id": task.id}
+    if use_celery:
+        # Async via Celery (requires Redis)
+        task = batch_transcribe_task.delay(dataset_id, file_ids)
+        return {"message": "Batch transcription queued", "task_id": task.id}
+    else:
+        # Synchronous batch transcription
+        from backend.whisper import transcribe_audio_simple
+        
+        # Get files to transcribe
+        query = db.query(AudioFile).filter(
+            AudioFile.dataset_id == dataset_id,
+            AudioFile.status == TranscriptionStatus.PENDING
+        )
+        if file_ids:
+            query = query.filter(AudioFile.id.in_(file_ids))
+        
+        audio_files = query.all()
+        
+        if not audio_files:
+            return {
+                "status": "completed",
+                "message": "No pending files to transcribe",
+                "files_processed": 0
+            }
+        
+        results = []
+        success_count = 0
+        error_count = 0
+        
+        for audio_file in audio_files:
+            try:
+                if not os.path.exists(str(audio_file.file_path)):
+                    results.append({"file_id": audio_file.id, "status": "error", "message": "File not found"})
+                    error_count += 1
+                    continue
+                
+                audio_file.status = TranscriptionStatus.TRANSCRIBING
+                db.commit()
+                
+                result = transcribe_audio_simple(audio_file.file_path)
+                
+                audio_file.whisper_transcript = result.get("text", "")
+                audio_file.whisper_language = result.get("language")
+                audio_file.whisper_confidence = result.get("confidence")
+                audio_file.status = TranscriptionStatus.TRANSCRIBED
+                audio_file.transcribed_at = datetime.utcnow()
+                db.commit()
+                
+                results.append({
+                    "file_id": audio_file.id,
+                    "status": "success",
+                    "language": audio_file.whisper_language
+                })
+                success_count += 1
+                
+            except Exception as e:
+                audio_file.status = TranscriptionStatus.PENDING
+                db.commit()
+                results.append({"file_id": audio_file.id, "status": "error", "message": str(e)})
+                error_count += 1
+        
+        return {
+            "status": "completed",
+            "files_processed": len(audio_files),
+            "success_count": success_count,
+            "error_count": error_count,
+            "results": results
+        }
 
 
 @app.get("/api/tasks/{task_id}/status")
@@ -717,7 +947,7 @@ def stream_audio(file_id: int, db: Session = Depends(get_db)):
     if not audio_file:
         raise HTTPException(status_code=404, detail="File not found")
     
-    if not os.path.exists(audio_file.file_path):
+    if not os.path.exists(str(audio_file.file_path)):
         raise HTTPException(status_code=404, detail="Audio file not found on disk")
     
     return FileResponse(
@@ -763,6 +993,82 @@ def update_file_status(
     return {"message": f"Status updated to {status}"}
 
 
+@app.delete("/api/asr/files/{file_id}")
+def delete_audio_file(file_id: int, db: Session = Depends(get_db)):
+    """Delete an audio file and its physical file from disk."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Delete physical file if it exists
+    if audio_file.file_path and os.path.exists(str(audio_file.file_path)):
+        try:
+            os.remove(audio_file.file_path)
+        except OSError as e:
+            # Log but don't fail if file deletion fails
+            print(f"Warning: Could not delete file {audio_file.file_path}: {e}")
+    
+    # Delete from database
+    db.delete(audio_file)
+    db.commit()
+    return {"message": "Audio file deleted"}
+
+
+@app.post("/api/asr/files/{file_id}/retranscribe")
+def retranscribe_audio(
+    file_id: int,
+    use_celery: bool = Query(False, description="Use Celery for async transcription (requires Redis)"),
+    db: Session = Depends(get_db)
+):
+    """Clear existing transcription and re-transcribe an audio file."""
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not os.path.exists(str(audio_file.file_path)):
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+    
+    # Clear existing transcription
+    audio_file.whisper_transcript = None
+    audio_file.corrected_transcript = None
+    audio_file.whisper_language = None
+    audio_file.whisper_confidence = None
+    audio_file.status = TranscriptionStatus.TRANSCRIBING
+    db.commit()
+    
+    if use_celery:
+        # Async via Celery (requires Redis)
+        task = transcribe_audio_task.delay(file_id)
+        return {"message": "Re-transcription queued", "task_id": task.id}
+    else:
+        # Synchronous transcription
+        from backend.whisper import transcribe_audio_simple
+        
+        try:
+            result = transcribe_audio_simple(audio_file.file_path)
+            
+            audio_file.whisper_transcript = result.get("text", "")
+            audio_file.whisper_language = result.get("language")
+            audio_file.whisper_confidence = result.get("confidence")
+            audio_file.status = TranscriptionStatus.TRANSCRIBED
+            audio_file.transcribed_at = datetime.utcnow()
+            db.commit()
+            
+            return {
+                "status": "success",
+                "file_id": file_id,
+                "filename": audio_file.filename,
+                "transcript": audio_file.whisper_transcript,
+                "language": audio_file.whisper_language,
+                "confidence": audio_file.whisper_confidence,
+                "backend": result.get("backend")
+            }
+        except Exception as e:
+            audio_file.status = TranscriptionStatus.PENDING
+            db.commit()
+            raise HTTPException(status_code=500, detail=f"Re-transcription failed: {str(e)}")
+
+
 @app.get("/api/asr/datasets/{dataset_id}/export")
 def export_asr_dataset(
     dataset_id: int,
@@ -806,3 +1112,198 @@ def export_asr_dataset(
             media_type="application/jsonl",
             headers={"Content-Disposition": f"attachment; filename={dataset.name}_transcripts.jsonl"}
         )
+
+
+# === Audio Segmentation Endpoints ===
+
+@app.post("/api/asr/files/{file_id}/segment")
+def segment_single_file(
+    file_id: int,
+    chunk_length: int = Query(30, ge=5, le=120, description="Max chunk length in seconds"),
+    use_vad: bool = Query(True, description="Use VAD (voice-only) or fixed-length cutting"),
+    use_celery: bool = Query(False, description="Run segmentation in background via Celery"),
+    db: Session = Depends(get_db)
+):
+    """
+    Segment a single audio file.
+    
+    Set use_vad=True to use Silero VAD (voice segments only, max chunk_length each).
+    Set use_vad=False for fixed-length cuts (preserves all audio including music).
+    """
+    from backend.audio_segment import segment_audio
+    from backend.tasks import segment_audio_task
+    
+    audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+    if not audio_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not os.path.exists(str(audio_file.file_path)):
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+    
+    if use_celery:
+        # Queue task for background processing
+        task = segment_audio_task.delay(file_id, chunk_length, use_vad)
+        return {
+            "message": "Segmentation queued",
+            "task_id": task.id,
+            "file_id": file_id,
+            "chunk_length": chunk_length,
+            "use_vad": use_vad
+        }
+    
+    # Run segmentation synchronously
+    try:
+        result = segment_audio(
+            audio_file.file_path,
+            chunk_length=chunk_length,
+            output_base=os.path.dirname(audio_file.file_path),
+            use_vad=use_vad
+        )
+        
+        # Create new AudioFile records for each chunk
+        chunk_ids = []
+        for chunk_path in result.chunks:
+            chunk_filename = os.path.basename(chunk_path)
+            chunk_size = os.path.getsize(chunk_path) if os.path.exists(chunk_path) else 0
+            
+            chunk_file = AudioFile(
+                dataset_id=audio_file.dataset_id,
+                filename=chunk_filename,
+                file_path=chunk_path,
+                file_size=chunk_size,
+                status=TranscriptionStatus.PENDING,
+            )
+            db.add(chunk_file)
+            db.flush()
+            chunk_ids.append(chunk_file.id)
+        
+        db.commit()
+        
+        return {
+            "message": f"Segmented into {result.total_chunks} chunks",
+            "file_id": file_id,
+            "source_filename": audio_file.filename,
+            "output_folder": result.output_folder,
+            "chunks_created": result.total_chunks,
+            "chunk_ids": chunk_ids
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Segmentation failed: {str(e)}")
+
+
+@app.post("/api/asr/datasets/{dataset_id}/segment-all")
+def segment_all_files(
+    dataset_id: int,
+    chunk_length: int = Query(30, ge=5, le=120, description="Max chunk length in seconds"),
+    use_vad: bool = Query(True, description="Use VAD (voice-only) or fixed-length cutting"),
+    use_celery: bool = Query(True, description="Run segmentation in background via Celery"),
+    db: Session = Depends(get_db)
+):
+    """
+    Segment all audio files in a dataset.
+    
+    Files that are already chunks (contain '_chunk' in filename) will be skipped.
+    Set use_vad=True for Silero VAD, use_vad=False for fixed-length cuts.
+    """
+    from backend.audio_segment import segment_audio
+    from backend.tasks import segment_audio_task, batch_segment_task
+    
+    dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Get files that are not already chunks
+    audio_files = db.query(AudioFile).filter(
+        AudioFile.dataset_id == dataset_id,
+        ~AudioFile.filename.like("%_chunk%")
+    ).all()
+    
+    if not audio_files:
+        return {
+            "message": "No files to segment (all may already be chunks)",
+            "dataset_id": dataset_id,
+            "files_found": 0
+        }
+    
+    if use_celery:
+        # Queue batch task
+        task = batch_segment_task.delay(dataset_id, chunk_length, use_vad)
+        return {
+            "message": f"Batch segmentation queued for {len(audio_files)} files",
+            "task_id": task.id,
+            "dataset_id": dataset_id,
+            "files_queued": len(audio_files),
+            "chunk_length": chunk_length,
+            "use_vad": use_vad
+        }
+    
+    # Run synchronously for each file
+    results = []
+    total_chunks = 0
+    
+    for audio_file in audio_files:
+        if not os.path.exists(str(audio_file.file_path)):
+            results.append({
+                "file_id": audio_file.id,
+                "filename": audio_file.filename,
+                "status": "error",
+                "message": "File not found on disk"
+            })
+            continue
+        
+        try:
+            result = segment_audio(
+                audio_file.file_path,
+                chunk_length=chunk_length,
+                output_base=os.path.dirname(audio_file.file_path),
+                use_vad=use_vad
+            )
+            
+            # Create chunk records
+            chunk_ids = []
+            for chunk_path in result.chunks:
+                chunk_filename = os.path.basename(chunk_path)
+                chunk_size = os.path.getsize(chunk_path) if os.path.exists(chunk_path) else 0
+                
+                chunk_file = AudioFile(
+                    dataset_id=audio_file.dataset_id,
+                    filename=chunk_filename,
+                    file_path=chunk_path,
+                    file_size=chunk_size,
+                    status=TranscriptionStatus.PENDING,
+                )
+                db.add(chunk_file)
+                db.flush()
+                chunk_ids.append(chunk_file.id)
+            
+            total_chunks += result.total_chunks
+            results.append({
+                "file_id": audio_file.id,
+                "filename": audio_file.filename,
+                "status": "success",
+                "chunks_created": result.total_chunks,
+                "chunk_ids": chunk_ids
+            })
+            
+        except Exception as e:
+            results.append({
+                "file_id": audio_file.id,
+                "filename": audio_file.filename,
+                "status": "error",
+                "message": str(e)
+            })
+    
+    db.commit()
+    
+    success_count = sum(1 for r in results if r["status"] == "success")
+    
+    return {
+        "message": f"Segmented {success_count}/{len(audio_files)} files into {total_chunks} total chunks",
+        "dataset_id": dataset_id,
+        "files_processed": len(audio_files),
+        "success_count": success_count,
+        "total_chunks_created": total_chunks,
+        "results": results
+    }

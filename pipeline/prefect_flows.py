@@ -8,8 +8,8 @@ from prefect.server.schemas.schedules import CronSchedule
 
 from backend.database import SessionLocal
 from backend.models import (
-    PipelineRun, Dataset, DataRecord, ModelResponse as ModelResponseDB,
-    ValidationRecord, PipelineStatus, ValidationResult as ValidationResultEnum
+    PipelineRun, Dataset, DataRecord, ModelResponse,
+    ValidationRecord, PipelineStatus, ValidationResult
 )
 from pipeline.preprocessor import create_preprocessor
 from pipeline.validator import create_validator
