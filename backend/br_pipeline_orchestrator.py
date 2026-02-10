@@ -26,8 +26,8 @@ class BRPipelineOrchestrator:
     def __init__(self, db: Session):
         self.db = db
     
-    async def start_pipeline(self, dataset_id: int) -> BRPipelineRun:
-        """Start the automated pipeline for a dataset."""
+    def create_pipeline(self, dataset_id: int) -> BRPipelineRun:
+        """Create a pipeline run (sync) - returns immediately."""
         # Get dataset and records
         dataset = self.db.query(TextDataset).filter(TextDataset.id == dataset_id).first()
         if not dataset:
@@ -42,7 +42,7 @@ class BRPipelineOrchestrator:
             processed_records=0,
             pending_validation=0,
             current_stage=BRPipelineStage.BR_DETECTION,
-            status="running",
+            status="pending",  # Will be set to running by background task
             started_at=datetime.utcnow()
         )
         self.db.add(pipeline_run)
@@ -60,11 +60,14 @@ class BRPipelineOrchestrator:
         
         self.db.commit()
         
-        logger.info(f"Started pipeline {pipeline_run.id} for dataset {dataset_id} with {len(records)} records")
+        logger.info(f"Created pipeline {pipeline_run.id} for dataset {dataset_id} with {len(records)} records")
         
-        # Execute pipeline stages asynchronously
+        return pipeline_run
+    
+    async def start_pipeline(self, dataset_id: int) -> BRPipelineRun:
+        """Start the automated pipeline for a dataset (legacy - blocks until done)."""
+        pipeline_run = self.create_pipeline(dataset_id)
         await self._execute_pipeline(pipeline_run.id)
-        
         return pipeline_run
     
     async def _execute_pipeline(self, pipeline_run_id: int):

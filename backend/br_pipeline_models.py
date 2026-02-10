@@ -61,6 +61,7 @@ class BRRecordStage(Base):
     # Stage 1: BR Detection
     is_bahasa_rojak = Column(Boolean, nullable=True)
     br_confidence = Column(Float, nullable=True)
+    detected_language = Column(String(100), nullable=True)  # Detected language(s) in text
     br_detected_at = Column(DateTime, nullable=True)
     
     # Stage 2: Text Restructuring

@@ -2,14 +2,19 @@
 BR Pipeline API Endpoints
 Handles automated Bahasa Rojak detection and question generation pipeline
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
+import asyncio
+import logging
 
-from backend.database import get_db
+from backend.database import get_db, SessionLocal
 from backend.br_pipeline_orchestrator import BRPipelineOrchestrator
+
+logger = logging.getLogger(__name__)
 from backend.br_pipeline_models import BRPipelineRun, BRRecordStage, BRPipelineStage, ModelConfig
+from backend.models import TextRecord
 
 
 router = APIRouter(prefix="/api/br-pipeline", tags=["BR Pipeline"])
@@ -40,6 +45,7 @@ class RecordStageResponse(BaseModel):
     current_stage: str
     is_bahasa_rojak: Optional[bool]
     br_confidence: Optional[float]
+    detected_language: Optional[str]
     restructured_text: Optional[str]
     generated_questions: Optional[List[str]]
     selected_question_index: Optional[int]
@@ -63,15 +69,148 @@ class ModelConfigCreate(BaseModel):
     is_active: bool = True
 
 
+class ClassificationUpdateRequest(BaseModel):
+    is_bahasa_rojak: Optional[bool] = None
+    detected_language: Optional[str] = None
+
+
+class ClassificationRecordResponse(BaseModel):
+    id: int
+    text_record_id: int
+    original_text: str
+    is_bahasa_rojak: Optional[bool]
+    detected_language: Optional[str]
+    br_confidence: Optional[float]
+    current_stage: str
+
+
+class ClassificationListResponse(BaseModel):
+    records: List[ClassificationRecordResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+    classified_count: int
+
+
+# Stage 2: Restructure Schemas
+class RestructureRecordResponse(BaseModel):
+    id: int
+    text_record_id: int
+    original_text: str
+    restructured_text: Optional[str]
+    was_restructured: bool
+
+
+class RestructureListResponse(BaseModel):
+    records: List[RestructureRecordResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+    restructured_count: int
+
+
+class RestructureUpdateRequest(BaseModel):
+    restructured_text: str
+
+
+# Stage 3: Question Schemas
+class QuestionRecordResponse(BaseModel):
+    id: int
+    text_record_id: int
+    restructured_text: Optional[str]
+    generated_questions: Optional[List[str]]
+    selected_question_index: Optional[int]
+    selected_question: Optional[str]
+
+
+class QuestionListResponse(BaseModel):
+    records: List[QuestionRecordResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+    validated_count: int
+
+
+class QuestionSelectRequest(BaseModel):
+    question_index: int
+    validated_by: str
+
+
+# Stage 4: Response Schemas
+class ResponseRecordResponse(BaseModel):
+    id: int
+    text_record_id: int
+    selected_question: Optional[str]
+    model_responses: Optional[dict]
+    completed: bool
+
+
+class ResponseListResponse(BaseModel):
+    records: List[ResponseRecordResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+    completed_count: int
+
+
 # ===== API Endpoints =====
 
+async def run_pipeline_in_background(pipeline_run_id: int):
+    """Background task to execute pipeline stages."""
+    # Create a new database session for the background task
+    db = SessionLocal()
+    try:
+        # Update status to running
+        from backend.br_pipeline_models import BRPipelineRun
+        pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+        if pipeline_run:
+            pipeline_run.status = "running"
+            db.commit()
+        
+        orchestrator = BRPipelineOrchestrator(db)
+        await orchestrator._execute_pipeline(pipeline_run_id)
+        logger.info(f"Pipeline {pipeline_run_id} background execution completed")
+    except Exception as e:
+        logger.error(f"Pipeline {pipeline_run_id} background execution failed: {e}")
+        # Mark as failed
+        from backend.br_pipeline_models import BRPipelineRun
+        pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+        if pipeline_run:
+            pipeline_run.status = "failed"
+            pipeline_run.error_message = str(e)
+            db.commit()
+    finally:
+        db.close()
+
+
+def start_background_pipeline(pipeline_run_id: int):
+    """Wrapper to run async pipeline in background thread."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If already in async context, create task
+            asyncio.create_task(run_pipeline_in_background(pipeline_run_id))
+        else:
+            loop.run_until_complete(run_pipeline_in_background(pipeline_run_id))
+    except RuntimeError:
+        # No event loop exists, create one
+        asyncio.run(run_pipeline_in_background(pipeline_run_id))
+
+
 @router.post("/start", response_model=PipelineRunResponse)
-async def start_pipeline(
+def start_pipeline(
     request: PipelineStartRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Start the automated BR pipeline for a text dataset.
+    Returns immediately - pipeline runs in background.
     
     Pipeline stages:
     1. BR Detection (automated)
@@ -83,7 +222,11 @@ async def start_pipeline(
     orchestrator = BRPipelineOrchestrator(db)
     
     try:
-        pipeline_run = await orchestrator.start_pipeline(request.dataset_id)
+        # Create pipeline (sync, fast)
+        pipeline_run = orchestrator.create_pipeline(request.dataset_id)
+        
+        # Schedule background execution (non-blocking)
+        background_tasks.add_task(start_background_pipeline, pipeline_run.id)
         
         return PipelineRunResponse(
             id=pipeline_run.id,
@@ -92,7 +235,7 @@ async def start_pipeline(
             processed_records=pipeline_run.processed_records,
             pending_validation=pipeline_run.pending_validation,
             current_stage=pipeline_run.current_stage.value,
-            status=pipeline_run.status,
+            status="pending",  # Will change to running in background
             error_message=pipeline_run.error_message,
             started_at=pipeline_run.started_at.isoformat() if pipeline_run.started_at else None,
             completed_at=pipeline_run.completed_at.isoformat() if pipeline_run.completed_at else None
@@ -152,6 +295,7 @@ def get_pending_validation_records(
             current_stage=rs.current_stage.value,
             is_bahasa_rojak=rs.is_bahasa_rojak,
             br_confidence=rs.br_confidence,
+            detected_language=rs.detected_language,
             restructured_text=rs.restructured_text,
             generated_questions=rs.generated_questions,
             selected_question_index=rs.selected_question_index,
@@ -206,6 +350,7 @@ def get_record_stage(
         current_stage=record_stage.current_stage.value,
         is_bahasa_rojak=record_stage.is_bahasa_rojak,
         br_confidence=record_stage.br_confidence,
+        detected_language=record_stage.detected_language,
         restructured_text=record_stage.restructured_text,
         generated_questions=record_stage.generated_questions,
         selected_question_index=record_stage.selected_question_index,
@@ -316,3 +461,490 @@ def toggle_model_active(
     db.commit()
     
     return {"id": model.id, "name": model.name, "is_active": model.is_active}
+
+
+# ===== BR Classification Endpoints =====
+
+@router.get("/classification/{pipeline_run_id}", response_model=ClassificationListResponse)
+def get_classification_records(
+    pipeline_run_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(15, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Get BR classification records with pagination for review/editing.
+    Returns 15 records per page by default.
+    """
+    # Check pipeline exists
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    # Get total count
+    total = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).count()
+    
+    # Count classified (those with is_bahasa_rojak set)
+    classified_count = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak != None
+    ).count()
+    
+    # Get paginated records with text
+    offset = (page - 1) * per_page
+    record_stages = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).offset(offset).limit(per_page).all()
+    
+    # Get original texts for these records
+    text_record_ids = [rs.text_record_id for rs in record_stages]
+    text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
+    text_map = {tr.id: tr.original_text for tr in text_records}
+    
+    records = [
+        ClassificationRecordResponse(
+            id=rs.id,
+            text_record_id=rs.text_record_id,
+            original_text=text_map.get(rs.text_record_id, ""),
+            is_bahasa_rojak=rs.is_bahasa_rojak,
+            detected_language=rs.detected_language,
+            br_confidence=rs.br_confidence,
+            current_stage=rs.current_stage.value
+        )
+        for rs in record_stages
+    ]
+    
+    total_pages = (total + per_page - 1) // per_page
+    
+    return ClassificationListResponse(
+        records=records,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        classified_count=classified_count
+    )
+
+
+@router.patch("/classification/{record_stage_id}")
+def update_classification(
+    record_stage_id: int,
+    request: ClassificationUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update BR classification and/or detected language for a record.
+    """
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    if request.is_bahasa_rojak is not None:
+        record_stage.is_bahasa_rojak = request.is_bahasa_rojak
+    
+    if request.detected_language is not None:
+        record_stage.detected_language = request.detected_language
+    
+    db.commit()
+    db.refresh(record_stage)
+    
+    return {
+        "id": record_stage.id,
+        "is_bahasa_rojak": record_stage.is_bahasa_rojak,
+        "detected_language": record_stage.detected_language,
+        "message": "Classification updated"
+    }
+
+
+@router.get("/pipelines")
+def list_pipeline_runs(
+    dataset_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """List all pipeline runs, optionally filtered by dataset."""
+    from backend.models import TextDataset
+    
+    query = db.query(BRPipelineRun)
+    
+    if dataset_id:
+        query = query.filter(BRPipelineRun.dataset_id == dataset_id)
+    
+    pipeline_runs = query.order_by(BRPipelineRun.created_at.desc()).all()
+    
+    result = []
+    for pr in pipeline_runs:
+        # Get dataset name
+        dataset = db.query(TextDataset).filter(TextDataset.id == pr.dataset_id).first()
+        dataset_name = dataset.name if dataset else f"Dataset #{pr.dataset_id}"
+        
+        # Calculate stage progress
+        records = db.query(BRRecordStage).filter(BRRecordStage.pipeline_run_id == pr.id).all()
+        
+        # Count records at each stage
+        stage_1_done = sum(1 for r in records if r.is_bahasa_rojak is not None)  # Classification done
+        stage_2_done = sum(1 for r in records if r.restructured_text is not None)  # Restructure done
+        stage_3_done = sum(1 for r in records if r.selected_question is not None)  # Question selected
+        stage_4_done = sum(1 for r in records if r.model_responses is not None)  # Responses generated
+        
+        # Determine current stage (1-4) based on progress
+        total = pr.total_records or len(records) or 1
+        if stage_4_done == total:
+            current_stage_num = 4  # All done
+        elif stage_3_done > 0 or stage_2_done == total:
+            current_stage_num = 3 if stage_2_done == total else 2
+        elif stage_2_done > 0 or stage_1_done == total:
+            current_stage_num = 2 if stage_1_done == total else 1
+        else:
+            current_stage_num = 1
+        
+        result.append({
+            "id": pr.id,
+            "dataset_id": pr.dataset_id,
+            "dataset_name": dataset_name,
+            "total_records": pr.total_records,
+            "processed_records": pr.processed_records,
+            "pending_validation": pr.pending_validation,
+            "current_stage": pr.current_stage.value,
+            "current_stage_num": current_stage_num,
+            "status": pr.status,
+            "created_at": pr.created_at.isoformat() if pr.created_at else None,
+            "stage_progress": {
+                "stage_1": {"done": stage_1_done, "total": total, "label": "Classification"},
+                "stage_2": {"done": stage_2_done, "total": total, "label": "Restructure"},
+                "stage_3": {"done": stage_3_done, "total": total, "label": "Questions"},
+                "stage_4": {"done": stage_4_done, "total": total, "label": "Responses"}
+            }
+        })
+    
+    return {"pipelines": result}
+
+
+# ===== Stage 2: Restructure Endpoints =====
+
+@router.get("/restructure/{pipeline_run_id}", response_model=RestructureListResponse)
+def get_restructure_records(
+    pipeline_run_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get records for text restructuring with pagination."""
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    total = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).count()
+    
+    restructured_count = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.restructured_text != None
+    ).count()
+    
+    offset = (page - 1) * per_page
+    record_stages = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).offset(offset).limit(per_page).all()
+    
+    text_record_ids = [rs.text_record_id for rs in record_stages]
+    text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
+    text_map = {tr.id: tr.original_text for tr in text_records}
+    
+    records = [
+        RestructureRecordResponse(
+            id=rs.id,
+            text_record_id=rs.text_record_id,
+            original_text=text_map.get(rs.text_record_id, ""),
+            restructured_text=rs.restructured_text,
+            was_restructured=rs.restructured_text is not None
+        )
+        for rs in record_stages
+    ]
+    
+    total_pages = (total + per_page - 1) // per_page
+    
+    return RestructureListResponse(
+        records=records,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        restructured_count=restructured_count
+    )
+
+
+@router.patch("/restructure/{record_stage_id}")
+def update_restructured_text(
+    record_stage_id: int,
+    request: RestructureUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """Update the restructured text for a record."""
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    from datetime import datetime
+    record_stage.restructured_text = request.restructured_text
+    record_stage.restructured_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {"id": record_stage.id, "message": "Restructured text saved"}
+
+
+@router.post("/restructure/{record_stage_id}/auto")
+async def auto_restructure_text(
+    record_stage_id: int,
+    db: Session = Depends(get_db)
+):
+    """Auto-restructure text using LLM (placeholder - returns mock data)."""
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    # Get original text
+    text_record = db.query(TextRecord).filter(TextRecord.id == record_stage.text_record_id).first()
+    if not text_record:
+        raise HTTPException(status_code=404, detail="Text record not found")
+    
+    # TODO: Call LLM to restructure text
+    # For now, return a placeholder
+    restructured = f"[Restructured] {text_record.original_text}"
+    
+    from datetime import datetime
+    record_stage.restructured_text = restructured
+    record_stage.restructured_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {"id": record_stage.id, "restructured_text": restructured}
+
+
+# ===== Stage 3: Question Generation Endpoints =====
+
+@router.get("/questions/{pipeline_run_id}", response_model=QuestionListResponse)
+def get_question_records(
+    pipeline_run_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get records for question validation with pagination."""
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    total = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).count()
+    
+    validated_count = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.selected_question_index != None
+    ).count()
+    
+    offset = (page - 1) * per_page
+    record_stages = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).offset(offset).limit(per_page).all()
+    
+    records = [
+        QuestionRecordResponse(
+            id=rs.id,
+            text_record_id=rs.text_record_id,
+            restructured_text=rs.restructured_text,
+            generated_questions=rs.generated_questions,
+            selected_question_index=rs.selected_question_index,
+            selected_question=rs.selected_question
+        )
+        for rs in record_stages
+    ]
+    
+    total_pages = (total + per_page - 1) // per_page
+    
+    return QuestionListResponse(
+        records=records,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        validated_count=validated_count
+    )
+
+
+@router.post("/questions/{record_stage_id}/generate")
+async def generate_questions(
+    record_stage_id: int,
+    db: Session = Depends(get_db)
+):
+    """Generate 3 questions for a record (placeholder - returns mock data)."""
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    if not record_stage.restructured_text:
+        raise HTTPException(status_code=400, detail="Text must be restructured first")
+    
+    # TODO: Call LLM to generate questions
+    # For now, return placeholder questions
+    questions = [
+        f"What is the main topic discussed in this text?",
+        f"Can you explain the key points mentioned?",
+        f"What conclusions can be drawn from this content?"
+    ]
+    
+    from datetime import datetime
+    record_stage.generated_questions = questions
+    record_stage.questions_generated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {"id": record_stage.id, "questions": questions}
+
+
+@router.post("/questions/{record_stage_id}/select")
+def select_question(
+    record_stage_id: int,
+    request: QuestionSelectRequest,
+    db: Session = Depends(get_db)
+):
+    """Human selects one of the 3 generated questions."""
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    if not record_stage.generated_questions or len(record_stage.generated_questions) == 0:
+        raise HTTPException(status_code=400, detail="No questions generated yet")
+    
+    if request.question_index < 0 or request.question_index >= len(record_stage.generated_questions):
+        raise HTTPException(status_code=400, detail="Invalid question index")
+    
+    from datetime import datetime
+    record_stage.selected_question_index = request.question_index
+    record_stage.selected_question = record_stage.generated_questions[request.question_index]
+    record_stage.validated_by = request.validated_by
+    record_stage.validated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {
+        "id": record_stage.id,
+        "selected_question_index": record_stage.selected_question_index,
+        "selected_question": record_stage.selected_question,
+        "message": "Question selected"
+    }
+
+
+# ===== Stage 4: Model Response Endpoints =====
+
+@router.get("/responses/{pipeline_run_id}", response_model=ResponseListResponse)
+def get_response_records(
+    pipeline_run_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get records with selected questions for response generation."""
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    # Only show records with selected questions
+    base_query = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.selected_question != None
+    )
+    
+    total = base_query.count()
+    
+    completed_count = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.selected_question != None,
+        BRRecordStage.model_responses != None
+    ).count()
+    
+    offset = (page - 1) * per_page
+    record_stages = base_query.offset(offset).limit(per_page).all()
+    
+    records = [
+        ResponseRecordResponse(
+            id=rs.id,
+            text_record_id=rs.text_record_id,
+            selected_question=rs.selected_question,
+            model_responses=rs.model_responses,
+            completed=rs.model_responses is not None
+        )
+        for rs in record_stages
+    ]
+    
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    
+    return ResponseListResponse(
+        records=records,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        completed_count=completed_count
+    )
+
+
+@router.post("/responses/{record_stage_id}/generate")
+async def generate_model_responses(
+    record_stage_id: int,
+    db: Session = Depends(get_db)
+):
+    """Generate responses from 3 base models (placeholder - returns mock data)."""
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    if not record_stage.selected_question:
+        raise HTTPException(status_code=400, detail="No question selected yet")
+    
+    # Get active models
+    models = db.query(ModelConfig).filter(ModelConfig.is_active == True).limit(3).all()
+    
+    # TODO: Call actual models to generate responses
+    # For now, return placeholder responses
+    responses = {}
+    
+    if len(models) == 0:
+        # Create mock model responses if no models configured
+        mock_models = [
+            ("Model-A", "model-a-v1"),
+            ("Model-B", "model-b-v1"),
+            ("Model-C", "model-c-v1")
+        ]
+        for model_name, model_id in mock_models:
+            responses[model_name] = {
+                "model_id": model_id,
+                "response": f"[Mock response from {model_name}] This is a placeholder response to the question: {record_stage.selected_question}",
+                "problems": []
+            }
+    else:
+        for model in models:
+            responses[model.name] = {
+                "model_id": model.model_id,
+                "response": f"[Mock response from {model.name}] This is a placeholder response to the question: {record_stage.selected_question}",
+                "problems": []
+            }
+    
+    from datetime import datetime
+    record_stage.model_responses = responses
+    record_stage.responses_generated_at = datetime.utcnow()
+    record_stage.completed = True
+    
+    db.commit()
+    
+    return {"id": record_stage.id, "responses": responses}

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import {
   getTextDatasets,
   createTextDataset,
   deleteTextDataset,
   uploadTextData,
   exportTextDataset,
+  startBRPipeline,
+  listBRPipelines,
 } from '../api'
 
 const TASK_TYPES = [
@@ -13,6 +15,13 @@ const TASK_TYPES = [
   { value: 'bahasa_rojak_classification', label: 'Bahasa Rojak Classification' },
   { value: 'text_modification', label: 'Text Modification (Subject/Context)' },
   { value: 'question_generation', label: 'Question Generation (3 Questions)' },
+]
+
+const PIPELINE_STAGES = [
+  { num: 1, key: 'stage_1', path: 'classification', label: 'Classification', icon: '🏷️' },
+  { num: 2, key: 'stage_2', path: 'restructure', label: 'Restructure', icon: '📝' },
+  { num: 3, key: 'stage_3', path: 'questions', label: 'Questions', icon: '❓' },
+  { num: 4, key: 'stage_4', path: 'responses', label: 'Responses', icon: '💬' },
 ]
 
 function TextDatasets() {
@@ -26,9 +35,14 @@ function TextDatasets() {
   const [headers, setHeaders] = useState([])
   const [selectedColumn, setSelectedColumn] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [pipelines, setPipelines] = useState({}) // Map of dataset_id -> pipeline info
+  const [pipelineList, setPipelineList] = useState([]) // Full list for sidebar
+  const [startingPipeline, setStartingPipeline] = useState(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     fetchDatasets()
+    fetchPipelines()
   }, [])
 
   const fetchDatasets = async () => {
@@ -39,6 +53,40 @@ function TextDatasets() {
       console.error('Failed to fetch datasets:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchPipelines = async () => {
+    try {
+      const res = await listBRPipelines()
+      // Store full list for sidebar
+      setPipelineList(res.data.pipelines || [])
+      // Create a map of dataset_id -> latest pipeline
+      const pipelineMap = {}
+      res.data.pipelines.forEach(p => {
+        if (!pipelineMap[p.dataset_id] || p.id > pipelineMap[p.dataset_id].id) {
+          pipelineMap[p.dataset_id] = p
+        }
+      })
+      setPipelines(pipelineMap)
+    } catch (err) {
+      console.error('Failed to fetch pipelines:', err)
+    }
+  }
+
+  const handleStartPipeline = async (datasetId) => {
+    if (!confirm('Start BR Pipeline for this dataset? This will run automated classification.')) return
+    setStartingPipeline(datasetId)
+    try {
+      const res = await startBRPipeline(datasetId)
+      alert(`Pipeline #${res.data.id} started! ${res.data.total_records} records will be processed.`)
+      fetchPipelines()
+      // Navigate to classification page
+      navigate(`/br-pipeline/classification/${res.data.id}`)
+    } catch (err) {
+      alert('Failed to start pipeline: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setStartingPipeline(null)
     }
   }
 
@@ -132,6 +180,56 @@ function TextDatasets() {
     return TASK_TYPES.find(t => t.value === taskType)?.label || taskType
   }
 
+  // Helper to render stage progress bar
+  const renderStageProgress = (pipeline) => {
+    const currentStage = pipeline.current_stage_num || 1
+    
+    return (
+      <div className="mt-2">
+        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-1">
+          <span>Stage {currentStage} of 4</span>
+        </div>
+        <div className="flex gap-1">
+          {PIPELINE_STAGES.map((stage) => {
+            const progress = pipeline.stage_progress?.[stage.key]
+            const pct = progress ? Math.round((progress.done / progress.total) * 100) : 0
+            const isActive = stage.num === currentStage
+            const isComplete = stage.num < currentStage || pct === 100
+            
+            return (
+              <Link
+                key={stage.key}
+                to={`/br-pipeline/${stage.path}/${pipeline.id}`}
+                className={`flex-1 group relative`}
+                title={`${stage.label}: ${progress?.done || 0}/${progress?.total || 0}`}
+              >
+                <div className={`h-2 rounded-full overflow-hidden ${
+                  isActive ? 'bg-amber-200 dark:bg-amber-900/40' : 
+                  isComplete ? 'bg-green-200 dark:bg-green-900/40' : 
+                  'bg-gray-200 dark:bg-gray-700'
+                }`}>
+                  <div 
+                    className={`h-full transition-all ${
+                      isComplete ? 'bg-green-500' : isActive ? 'bg-amber-500' : 'bg-gray-400'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className={`block text-center mt-0.5 text-[10px] ${
+                  isActive ? 'text-amber-600 dark:text-amber-400 font-medium' : 
+                  isComplete ? 'text-green-600 dark:text-green-400' : 
+                  'text-gray-400 dark:text-gray-500'
+                } group-hover:underline`}>
+                  {stage.icon}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -141,16 +239,62 @@ function TextDatasets() {
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Text Datasets</h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
-        >
-          + Create Dataset
-        </button>
+    <div className="flex gap-6">
+      {/* Sidebar - BR Pipeline Progress */}
+      <div className={`${sidebarCollapsed ? 'w-12' : 'w-72'} flex-shrink-0 transition-all duration-200`}>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden sticky top-4">
+          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+            {!sidebarCollapsed && (
+              <h3 className="font-semibold text-sm">🔄 BR Pipelines</h3>
+            )}
+            <button 
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1 hover:bg-white/20 rounded"
+              title={sidebarCollapsed ? 'Expand' : 'Collapse'}
+            >
+              {sidebarCollapsed ? '»' : '«'}
+            </button>
+          </div>
+          
+          {!sidebarCollapsed && (
+            <div className="max-h-[70vh] overflow-y-auto">
+              {pipelineList.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 p-4">
+                  No pipelines started yet. Start one from a dataset.
+                </p>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {pipelineList.map((pipeline) => (
+                    <div key={pipeline.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {pipeline.dataset_name}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          #{pipeline.id}
+                        </span>
+                      </div>
+                      {renderStageProgress(pipeline)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Main Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Text Datasets</h1>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
+          >
+            + Create Dataset
+          </button>
+        </div>
 
       {/* Create Modal */}
       {showCreate && (
@@ -292,6 +436,23 @@ function TextDatasets() {
                       <span>📊 Columns: {dataset.original_headers.join(', ')}</span>
                     )}
                   </div>
+                  {/* Pipeline Status */}
+                  {pipelines[dataset.id] && (
+                    <div className="flex items-center gap-2 mt-2 text-sm">
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        pipelines[dataset.id].status === 'completed' 
+                          ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                          : pipelines[dataset.id].status === 'running'
+                          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        Pipeline: {pipelines[dataset.id].status}
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400">
+                        ({pipelines[dataset.id].processed_records}/{pipelines[dataset.id].total_records} classified)
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex space-x-2">
                   {(!dataset.record_count || dataset.record_count === 0) ? (
@@ -309,6 +470,23 @@ function TextDatasets() {
                       >
                         Annotate
                       </button>
+                      {/* BR Pipeline buttons */}
+                      {pipelines[dataset.id] ? (
+                        <button
+                          onClick={() => navigate(`/br-pipeline/classification/${pipelines[dataset.id].id}`)}
+                          className="px-3 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-900/60"
+                        >
+                          View Classification
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStartPipeline(dataset.id)}
+                          disabled={startingPipeline === dataset.id}
+                          className="px-3 py-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded hover:bg-orange-200 dark:hover:bg-orange-900/60 disabled:opacity-50"
+                        >
+                          {startingPipeline === dataset.id ? 'Starting...' : 'Start BR Pipeline'}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleExport(dataset.id, 'csv')}
                         className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60"
@@ -335,6 +513,7 @@ function TextDatasets() {
           ))}
         </div>
       )}
+      </div> {/* End Main Content */}
     </div>
   )
 }

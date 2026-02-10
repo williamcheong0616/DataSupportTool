@@ -134,4 +134,46 @@ export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, ch
 // Task Status (Celery)
 export const getTaskStatus = (taskId) => api.get(`/tasks/${taskId}/status`)
 
+
+// === BR PIPELINE ===
+
+// Start BR Pipeline
+export const startBRPipeline = (datasetId) => 
+  api.post('/br-pipeline/start', { dataset_id: datasetId })
+
+// Get pipeline status
+export const getBRPipelineStatus = (pipelineId) => 
+  api.get(`/br-pipeline/status/${pipelineId}`)
+
+// List all pipelines (optionally by dataset)
+export const listBRPipelines = (datasetId = null) => {
+  const params = datasetId ? `?dataset_id=${datasetId}` : ''
+  return api.get(`/br-pipeline/pipelines${params}`)
+}
+
+// Get classification records with pagination
+export const getBRClassificationRecords = (pipelineId, page = 1, perPage = 15) =>
+  api.get(`/br-pipeline/classification/${pipelineId}?page=${page}&per_page=${perPage}`)
+
+// Update classification (is_bahasa_rojak and/or detected_language)
+export const updateBRClassification = (recordStageId, data) =>
+  api.patch(`/br-pipeline/classification/${recordStageId}`, data)
+
+// Get pending validation records
+export const getBRPendingValidation = (pipelineId = null) => {
+  const params = pipelineId ? `?pipeline_run_id=${pipelineId}` : ''
+  return api.get(`/br-pipeline/pending-validation${params}`)
+}
+
+// Submit question validation
+export const validateBRQuestion = (recordStageId, questionIndex, validatedBy) =>
+  api.post(`/br-pipeline/validate/${recordStageId}`, {
+    question_index: questionIndex,
+    validated_by: validatedBy
+  })
+
+// Get pipeline results
+export const getBRPipelineResults = (pipelineId) =>
+  api.get(`/br-pipeline/results/${pipelineId}`)
+
 export default api

@@ -128,8 +128,49 @@ def migrate_add_br_pipeline_tables():
     finally:
         conn.close()
 
+
+def migrate_add_detected_language():
+    """Add detected_language column to br_record_stages table."""
+    if not os.path.exists(DB_PATH):
+        print(f"Database not found: {DB_PATH}")
+        return
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        print("Adding detected_language column to br_record_stages...")
+        
+        # Check if column already exists
+        cursor.execute("PRAGMA table_info(br_record_stages)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'detected_language' in columns:
+            print("✓ detected_language column already exists")
+        else:
+            cursor.execute("""
+                ALTER TABLE br_record_stages 
+                ADD COLUMN detected_language VARCHAR(100)
+            """)
+            print("✓ Added detected_language column")
+        
+        conn.commit()
+        print("\n✓ Migration complete")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"\n✗ Migration failed: {e}")
+        raise
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("BR Pipeline Database Migration")
     print("=" * 60)
     migrate_add_br_pipeline_tables()
+    print("\n" + "=" * 60)
+    print("Adding detected_language column")
+    print("=" * 60)
+    migrate_add_detected_language()
