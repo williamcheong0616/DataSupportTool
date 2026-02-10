@@ -201,7 +201,7 @@ function TextAnnotate() {
   }
 
   if (!dataset) {
-    return <div>Dataset not found</div>
+    return <div className="text-gray-900 dark:text-gray-100">Dataset not found</div>
   }
 
   const progress = totalRecords > 0 ? (annotatedCount / totalRecords) * 100 : 0
@@ -213,27 +213,27 @@ function TextAnnotate() {
         <div>
           <button
             onClick={() => navigate('/text')}
-            className="text-indigo-600 hover:text-indigo-800 mb-2"
+            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-2"
           >
             ← Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">{dataset.name}</h1>
-          <p className="text-gray-500">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{dataset.name}</h1>
+          <p className="text-gray-500 dark:text-gray-400">
             {dataset.task_type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
           </p>
         </div>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500">Navigate to review previous annotations</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">Navigate to review previous annotations</span>
         </div>
       </div>
 
       {/* Progress */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-        <div className="flex justify-between text-sm text-gray-600 mb-2">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
           <span>Progress: {annotatedCount} / {totalRecords} annotated</span>
           <span>{progress.toFixed(1)}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
           <div
             className="bg-indigo-600 h-2 rounded-full transition-all"
             style={{ width: `${progress}%` }}
@@ -243,7 +243,7 @@ function TextAnnotate() {
 
       {/* Annotation Area */}
       {records.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-gray-500 dark:text-gray-400">
           <p className="text-xl mb-4">
             No records found in this dataset
           </p>
@@ -255,22 +255,22 @@ function TextAnnotate() {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           {/* Navigation */}
           <div className="flex justify-between items-center mb-4">
             <button
               onClick={moveToPrev}
               disabled={currentIndex === 0}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
             >
               ← Previous
             </button>
             <div className="text-center">
-              <span className="text-gray-600">
+              <span className="text-gray-600 dark:text-gray-400">
                 Record {currentIndex + 1} of {records.length}
               </span>
               {currentRecord?.is_annotated && (
-                <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+                <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
                   ✓ Annotated
                 </span>
               )}
@@ -278,7 +278,7 @@ function TextAnnotate() {
             <button
               onClick={moveToNext}
               disabled={currentIndex >= records.length - 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
             >
               Next →
             </button>
@@ -286,18 +286,18 @@ function TextAnnotate() {
 
           {/* Original Text Display */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Original Text
             </label>
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-lg">
+            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-lg dark:text-gray-100">
               {currentRecord?.original_text || 'No text'}
             </div>
             {currentRecord?.raw_data && Object.keys(currentRecord.raw_data).length > 1 && (
               <details className="mt-2">
-                <summary className="text-sm text-gray-500 cursor-pointer">
+                <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer">
                   Show all columns
                 </summary>
-                <pre className="mt-2 p-2 bg-gray-100 rounded text-sm overflow-x-auto">
+                <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded text-sm overflow-x-auto">
                   {JSON.stringify(currentRecord.raw_data, null, 2)}
                 </pre>
               </details>
@@ -307,19 +307,19 @@ function TextAnnotate() {
           {/* Task-specific UI */}
           {dataset.task_type === 'bahasa_rojak_identification' && (
             <div className="space-y-4">
-              <p className="text-gray-700 font-medium">Is this Bahasa Rojak?</p>
+              <p className="text-gray-700 dark:text-gray-300 font-medium">Is this Bahasa Rojak?</p>
               <div className="flex space-x-4">
                 <button
                   onClick={() => handleBahasaRojak(true)}
                   disabled={saving}
-                  className="flex-1 py-4 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-semibold text-lg disabled:opacity-50"
+                  className="flex-1 py-4 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/60 font-semibold text-lg disabled:opacity-50"
                 >
                   ✓ Yes, Bahasa Rojak
                 </button>
                 <button
                   onClick={() => handleBahasaRojak(false)}
                   disabled={saving}
-                  className="flex-1 py-4 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold text-lg disabled:opacity-50"
+                  className="flex-1 py-4 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/60 font-semibold text-lg disabled:opacity-50"
                 >
                   ✗ No, Not Bahasa Rojak
                 </button>
@@ -329,14 +329,14 @@ function TextAnnotate() {
 
           {dataset.task_type === 'bahasa_rojak_classification' && (
             <div className="space-y-4">
-              <p className="text-gray-700 font-medium">Classify this text:</p>
+              <p className="text-gray-700 dark:text-gray-300 font-medium">Classify this text:</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {CLASSIFICATION_OPTIONS.map((option) => (
                   <button
                     key={option}
                     onClick={() => handleClassification(option)}
                     disabled={saving}
-                    className="py-3 px-4 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium disabled:opacity-50"
+                    className="py-3 px-4 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/60 font-medium disabled:opacity-50"
                   >
                     {option}
                   </button>
@@ -348,18 +348,18 @@ function TextAnnotate() {
           {dataset.task_type === 'text_modification' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Modified Text
                 </label>
                 <textarea
                   value={modifiedText}
                   onChange={(e) => setModifiedText(e.target.value)}
                   rows={3}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Subject Added
                 </label>
                 <input
@@ -367,11 +367,11 @@ function TextAnnotate() {
                   value={subjectAdded}
                   onChange={(e) => setSubjectAdded(e.target.value)}
                   placeholder="What subject was added?"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Context Added
                 </label>
                 <input
@@ -379,7 +379,7 @@ function TextAnnotate() {
                   value={contextAdded}
                   onChange={(e) => setContextAdded(e.target.value)}
                   placeholder="What context was added?"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <button
@@ -394,11 +394,11 @@ function TextAnnotate() {
 
           {dataset.task_type === 'question_generation' && (
             <div className="space-y-4">
-              <p className="text-gray-700 font-medium">
+              <p className="text-gray-700 dark:text-gray-300 font-medium">
                 Generate 3 questions based on this text:
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Question 1
                 </label>
                 <input
@@ -406,11 +406,11 @@ function TextAnnotate() {
                   value={question1}
                   onChange={(e) => setQuestion1(e.target.value)}
                   placeholder="Enter first question..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Question 2
                 </label>
                 <input
@@ -418,11 +418,11 @@ function TextAnnotate() {
                   value={question2}
                   onChange={(e) => setQuestion2(e.target.value)}
                   placeholder="Enter second question..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Question 3
                 </label>
                 <input
@@ -430,7 +430,7 @@ function TextAnnotate() {
                   value={question3}
                   onChange={(e) => setQuestion3(e.target.value)}
                   placeholder="Enter third question..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <button
@@ -445,7 +445,7 @@ function TextAnnotate() {
 
           {/* Annotation Status */}
           {currentRecord?.is_annotated && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
+            <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-green-700 dark:text-green-300">
               ✓ This record has been annotated
               {currentRecord.annotated_at && (
                 <span className="ml-2 text-sm">
@@ -460,7 +460,7 @@ function TextAnnotate() {
       {/* Keyboard Shortcuts Help */}
       {(dataset.task_type === 'bahasa_rojak_identification' || 
         dataset.task_type === 'bahasa_rojak_classification') && (
-        <div className="mt-4 text-sm text-gray-500 text-center">
+        <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-center">
           Tip: Use keyboard shortcuts for faster annotation
         </div>
       )}

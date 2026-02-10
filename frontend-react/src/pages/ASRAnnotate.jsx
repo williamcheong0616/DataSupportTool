@@ -199,12 +199,28 @@ function ASRAnnotate() {
 
   const handleTranscribe = async () => {
     if (!currentFile) return
+    const currentFileId = currentFile.id
     setTranscribing(true)
     try {
       const res = await transcribeAudio(currentFile.id)
       // Response contains transcript directly now (synchronous mode)
       setTranscript(res.data.transcript || res.data.whisper_transcript || '')
-      fetchFiles(true, currentIndex)  // Preserve current index after transcribe
+      // Update the current file in the list without changing position
+      setFiles(prevFiles => {
+        const updatedFiles = [...prevFiles]
+        const fileIndex = updatedFiles.findIndex(f => f.id === currentFileId)
+        if (fileIndex >= 0) {
+          updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            whisper_transcript: res.data.transcript || res.data.whisper_transcript,
+            whisper_language: res.data.language || res.data.whisper_language,
+            whisper_confidence: res.data.confidence || res.data.whisper_confidence,
+            status: 'transcribed',
+            transcribed_at: new Date().toISOString(),
+          }
+        }
+        return updatedFiles
+      })
     } catch (err) {
       alert('Failed to transcribe: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -215,11 +231,27 @@ function ASRAnnotate() {
   const handleRetranscribe = async () => {
     if (!currentFile) return
     if (!confirm('This will clear the existing transcription and re-transcribe the audio. Continue?')) return
+    const currentFileId = currentFile.id
     setTranscribing(true)
     try {
       const res = await retranscribeAudio(currentFile.id)
       setTranscript(res.data.transcript || res.data.whisper_transcript || '')
-      fetchFiles(true, currentIndex)
+      // Update the current file in the list without changing position
+      setFiles(prevFiles => {
+        const updatedFiles = [...prevFiles]
+        const fileIndex = updatedFiles.findIndex(f => f.id === currentFileId)
+        if (fileIndex >= 0) {
+          updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            whisper_transcript: res.data.transcript || res.data.whisper_transcript,
+            whisper_language: res.data.language || res.data.whisper_language,
+            whisper_confidence: res.data.confidence || res.data.whisper_confidence,
+            status: 'transcribed',
+            transcribed_at: new Date().toISOString(),
+          }
+        }
+        return updatedFiles
+      })
     } catch (err) {
       alert('Failed to re-transcribe: ' + (err.response?.data?.detail || err.message))
     } finally {
@@ -246,10 +278,22 @@ function ASRAnnotate() {
 
   const handleSave = async () => {
     if (!currentFile) return
+    const currentFileId = currentFile.id
     setSaving(true)
     try {
       await annotateTranscript(currentFile.id, transcript)
-      fetchFiles(true, currentIndex)  // Preserve current index after save
+      // Update the current file in the list without changing position
+      setFiles(prevFiles => {
+        const updatedFiles = [...prevFiles]
+        const fileIndex = updatedFiles.findIndex(f => f.id === currentFileId)
+        if (fileIndex >= 0) {
+          updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            corrected_transcript: transcript,
+          }
+        }
+        return updatedFiles
+      })
     } catch (err) {
       alert('Failed to save: ' + (err.response?.data?.detail || err.message))
     } finally {

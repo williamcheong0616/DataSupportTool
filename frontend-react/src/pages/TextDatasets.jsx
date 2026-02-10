@@ -143,7 +143,7 @@ function TextDatasets() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Text Datasets</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Text Datasets</h1>
         <button
           onClick={() => setShowCreate(true)}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
@@ -154,30 +154,30 @@ function TextDatasets() {
 
       {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Create Text Dataset</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Create Text Dataset</h2>
             <form onSubmit={handleCreate}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Dataset Name
                 </label>
                 <input
                   type="text"
                   value={newDataset.name}
                   onChange={(e) => setNewDataset({ ...newDataset, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Task Type
                 </label>
                 <select
                   value={newDataset.task_type}
                   onChange={(e) => setNewDataset({ ...newDataset, task_type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 >
                   {TASK_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
@@ -190,7 +190,7 @@ function TextDatasets() {
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -208,29 +208,29 @@ function TextDatasets() {
 
       {/* Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Upload Data File</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Upload Data File</h2>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Select JSON or CSV File
               </label>
               <input
                 type="file"
                 accept=".json,.csv"
                 onChange={handleFileSelect}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
               />
             </div>
             {headers.length > 0 && (
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Select Text Column
                 </label>
                 <select
                   value={selectedColumn}
                   onChange={(e) => setSelectedColumn(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">-- Choose column --</option>
                   {headers.map((header) => (
@@ -239,7 +239,7 @@ function TextDatasets() {
                     </option>
                   ))}
                 </select>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Detected columns: {headers.join(', ')}
                 </p>
               </div>
@@ -253,7 +253,7 @@ function TextDatasets() {
                   setHeaders([])
                   setSelectedColumn('')
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -271,21 +271,21 @@ function TextDatasets() {
 
       {/* Dataset List */}
       {datasets.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-gray-500 dark:text-gray-400">
           <p className="text-xl mb-4">No datasets yet</p>
           <p>Create a dataset and upload your JSON or CSV file to get started.</p>
         </div>
       ) : (
         <div className="grid gap-4">
           {datasets.map((dataset) => (
-            <div key={dataset.id} className="bg-white rounded-lg shadow-md p-6">
+            <div key={dataset.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">{dataset.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{dataset.name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     Task: {getTaskLabel(dataset.task_type)}
                   </p>
-                  <div className="flex space-x-4 mt-2 text-sm text-gray-600">
+                  <div className="flex space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                     <span>📝 {dataset.record_count || 0} records</span>
                     <span>✅ {dataset.annotated_count || 0} annotated</span>
                     {dataset.original_headers && (
@@ -297,7 +297,7 @@ function TextDatasets() {
                   {(!dataset.record_count || dataset.record_count === 0) ? (
                     <button
                       onClick={() => setShowUpload(dataset.id)}
-                      className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                      className="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/60"
                     >
                       Upload Data
                     </button>
@@ -305,19 +305,19 @@ function TextDatasets() {
                     <>
                       <button
                         onClick={() => navigate(`/text/${dataset.id}/annotate`)}
-                        className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+                        className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/60"
                       >
                         Annotate
                       </button>
                       <button
                         onClick={() => handleExport(dataset.id, 'csv')}
-                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60"
                       >
                         CSV
                       </button>
                       <button
                         onClick={() => handleExport(dataset.id, 'jsonl')}
-                        className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                        className="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60"
                       >
                         JSONL
                       </button>
@@ -325,7 +325,7 @@ function TextDatasets() {
                   )}
                   <button
                     onClick={() => handleDelete(dataset.id)}
-                    className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/60"
                   >
                     Delete
                   </button>
