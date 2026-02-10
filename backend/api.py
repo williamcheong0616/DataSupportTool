@@ -62,6 +62,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include BR Pipeline routes
+try:
+    from backend.br_pipeline_routes import router as br_pipeline_router
+    app.include_router(br_pipeline_router)
+except ImportError:
+    pass  # BR pipeline not installed yet
+
 # Audio files directory
 AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)

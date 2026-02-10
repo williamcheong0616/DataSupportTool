@@ -5,6 +5,8 @@ import TextDatasets from './pages/TextDatasets'
 import TextAnnotate from './pages/TextAnnotate'
 import ASRDatasets from './pages/ASRDatasets'
 import ASRAnnotate from './pages/ASRAnnotate'
+import BRPipelineValidation from './pages/BRPipelineValidation'
+import BRPipelineResults from './pages/BRPipelineResults'
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -104,6 +106,8 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/text" element={<TextDatasets />} />
             <Route path="/text/:datasetId/annotate" element={<TextAnnotate />} />
+            <Route path="/br-pipeline/validate" element={<BRPipelineValidation />} />
+            <Route path="/br-pipeline/results/:pipelineId" element={<BRPipelineResults />} />
             <Route path="/asr" element={<ASRDatasets />} />
             <Route path="/asr/:datasetId/annotate" element={<ASRAnnotate />} />
           </Routes>
