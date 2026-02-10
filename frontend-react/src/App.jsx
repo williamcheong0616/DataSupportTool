@@ -29,11 +29,11 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         {/* Navigation */}
-        <nav className="bg-white dark:bg-gray-800 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4">
+        <nav className="bg-white shadow-lg dark:bg-gray-800">
+          <div className="px-4 mx-auto max-w-7xl">
             <div className="flex justify-between h-16">
               <div className="flex">
-                <div className="flex-shrink-0 flex items-center">
+                <div className="flex items-center flex-shrink-0">
                   <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
                     📝 Data Annotation Tool
                   </span>
@@ -80,7 +80,7 @@ function App() {
               <div className="flex items-center">
                 <button
                   onClick={toggleDarkMode}
-                  className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="p-2 transition-colors bg-gray-100 rounded-lg dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
                   title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
                 >
                   {darkMode ? (
@@ -99,7 +99,7 @@ function App() {
         </nav>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <main className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/text" element={<TextDatasets />} />
