@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { RequestLogger } from './utils/logger'
 
 const API_BASE = '/api'
 
@@ -6,6 +7,68 @@ const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 })
+
+// ==================== REQUEST/RESPONSE INTERCEPTORS ====================
+
+/**
+ * Request interceptor - logs all outgoing requests
+ */
+api.interceptors.request.use(
+  (config) => {
+    // Create request logger and store in config for use in response
+    const operation = `${config.method.toUpperCase()} ${config.url}`
+    const requestLogger = new RequestLogger(operation, {
+      params: config.params,
+      data: config.data,
+    })
+    
+    // Start logging
+    requestLogger.start()
+    
+    // Store logger in config for response interceptor
+    config.metadata = { startTime: Date.now(), requestLogger }
+    
+    return config
+  },
+  (error) => {
+    // Log request setup errors
+    const reqLogger = new RequestLogger('REQUEST_SETUP_ERROR')
+    reqLogger.start()
+    reqLogger.error(error)
+    return Promise.reject(error)
+  }
+)
+
+/**
+ * Response interceptor - logs all responses and errors
+ */
+api.interceptors.response.use(
+  (response) => {
+    // Log successful response
+    const { requestLogger } = response.config.metadata || {}
+    if (requestLogger) {
+      requestLogger.success(response, {
+        status: response.status,
+        request_id: response.headers['x-request-id'],
+      })
+    }
+    return response
+  },
+  (error) => {
+    // Log error response
+    const { requestLogger } = error.config?.metadata || {}
+    if (requestLogger) {
+      requestLogger.error(error, {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message,
+        request_id: error.response?.headers['x-request-id'],
+      })
+    }
+    return Promise.reject(error)
+  }
+)
+
+// =============================================================================
 
 // Stats
 export const getStats = () => api.get('/stats')
@@ -97,6 +160,12 @@ export const transcribeAudio = (id, useCelery = false) =>
 export const retranscribeAudio = (id, useCelery = false) => 
   api.post(`/asr/files/${id}/retranscribe?use_celery=${useCelery}`)
 export const deleteAudioFile = (id) => api.delete(`/asr/files/${id}`)
+export const fuseAudioFiles = (fileIds, outputFilename = null) => {
+  const params = new URLSearchParams()
+  fileIds.forEach(id => params.append('file_ids', id))
+  if (outputFilename) params.append('output_filename', outputFilename)
+  return api.post(`/asr/files/fuse?${params}`)
+}
 export const annotateTranscript = (id, transcript, annotator = 'anonymous') =>
   api.post(`/asr/files/${id}/annotate?annotator=${annotator}`, {
     corrected_transcript: transcript
@@ -120,13 +189,14 @@ export const segmentAllFiles = (datasetId, chunkLength = 30, useCelery = true, u
 }
 
 // YouTube Import
-export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, chunkLength = 30, autoTranscribe = false, useVad = true) => {
+export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, chunkLength = 30, autoTranscribe = false, useVad = true, minSpeechDuration = 500) => {
   const params = new URLSearchParams({
     youtube_url: youtubeUrl,
     auto_segment: autoSegment,
     chunk_length: chunkLength,
     auto_transcribe: autoTranscribe,
-    use_vad: useVad
+    use_vad: useVad,
+    min_speech_duration_ms: minSpeechDuration
   })
   return api.post(`/asr/datasets/${datasetId}/youtube?${params}`)
 }
@@ -200,7 +270,7 @@ export const runBRStage3 = (pipelineId, recordIds = null, forceRerun = false) =>
   })
 
 // Merge/concatenate records
-export const mergeBRRecords = (recordIds, separator = '\n\n') =>
+export const mergeBRRecords = (recordIds, separator = ' ') =>
   api.post('/br-pipeline/restructure/merge', {
     record_ids: recordIds,
     separator: separator

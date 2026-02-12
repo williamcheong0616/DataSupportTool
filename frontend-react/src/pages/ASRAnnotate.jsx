@@ -8,6 +8,7 @@ import {
   transcribeAudio,
   retranscribeAudio,
   deleteAudioFile,
+  fuseAudioFiles,
   annotateTranscript,
   updateFileStatus,
 } from '../api'
@@ -40,6 +41,11 @@ function ASRAnnotate() {
   const [duration, setDuration] = useState(0)
   const [waveformReady, setWaveformReady] = useState(false)
   const [waveformError, setWaveformError] = useState(null)
+  
+  // Audio fusing states
+  const [fuseMode, setFuseMode] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState([])
+  const [fusing, setFusing] = useState(false)
 
   const currentFile = files[currentIndex]
 
@@ -276,6 +282,41 @@ function ASRAnnotate() {
     }
   }
 
+  const toggleFuseMode = () => {
+    setFuseMode(!fuseMode)
+    setSelectedFiles([])
+  }
+
+  const toggleFileSelection = (fileId) => {
+    setSelectedFiles(prev => 
+      prev.includes(fileId) 
+        ? prev.filter(id => id !== fileId)
+        : [...prev, fileId]
+    )
+  }
+
+  const handleFuseSelected = async () => {
+    if (selectedFiles.length < 2) {
+      alert('Please select at least 2 files to fuse')
+      return
+    }
+    
+    if (!confirm(`Fuse ${selectedFiles.length} selected audio files into one?\n\nFiles will be concatenated in the order they were selected.`)) return
+    
+    setFusing(true)
+    try {
+      const res = await fuseAudioFiles(selectedFiles)
+      alert(`✓ Successfully fused ${selectedFiles.length} files!\n\nNew file: ${res.data.filename}\nDuration: ${Math.round(res.data.duration)}s`)
+      setFuseMode(false)
+      setSelectedFiles([])
+      await fetchFiles(false)
+    } catch (err) {
+      alert('Failed to fuse files: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setFusing(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!currentFile) return
     const currentFileId = currentFile.id
@@ -409,6 +450,25 @@ function ASRAnnotate() {
           </h1>
         </div>
         <div className="flex items-center space-x-4">
+          <button
+            onClick={toggleFuseMode}
+            className={`px-4 py-2 rounded-lg border transition ${
+              fuseMode
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            {fuseMode ? '✓ Fuse Mode Active' : '🔗 Fuse Audio'}
+          </button>
+          {fuseMode && selectedFiles.length >= 2 && (
+            <button
+              onClick={handleFuseSelected}
+              disabled={fusing}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {fusing ? '⏳ Fusing...' : `⚡ Fuse ${selectedFiles.length} Selected`}
+            </button>
+          )}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -429,41 +489,83 @@ function ASRAnnotate() {
           <p>Upload audio files or change the filter to see files.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <>
+          {fuseMode && (
+            <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🔗</span>
+                <div className="flex-1">
+                  <h3 className="font-medium text-indigo-900 dark:text-indigo-200">Audio Fuse Mode Active</h3>
+                  <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
+                    Select 2 or more audio files from the list using checkboxes. They will be concatenated in the
+                    order selected. The fused file will be added to this dataset.
+                  </p>
+                </div>
+                <button
+                  onClick={toggleFuseMode}
+                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* File List */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-fit lg:max-h-[600px] overflow-y-auto">
             <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">
               Files ({files.length})
+              {fuseMode && selectedFiles.length > 0 && (
+                <span className="ml-2 text-sm text-indigo-600 dark:text-indigo-400">
+                  ({selectedFiles.length} selected)
+                </span>
+              )}
             </h2>
             <div className="space-y-2">
               {files.map((file, index) => (
-                <button
+                <div
                   key={file.id}
-                  onClick={() => setCurrentIndex(index)}
-                  className={`w-full text-left p-3 rounded-lg border transition ${
+                  className={`relative w-full text-left p-3 rounded-lg border transition ${
                     index === currentIndex
                       ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400'
                       : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <span className="flex-1 text-sm font-medium truncate dark:text-gray-100">
-                      {file.filename}
-                    </span>
-                    <span
-                      className={`text-xs px-2 py-1 rounded ml-2 ${
-                        STATUS_COLORS[file.status] || STATUS_COLORS.pending
-                      }`}
-                    >
-                      {file.status}
-                    </span>
-                  </div>
-                  {file.duration && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {Math.floor(file.duration / 60)}:{String(Math.floor(file.duration % 60)).padStart(2, '0')}
-                    </span>
+                  {fuseMode && (
+                    <div className="absolute left-2 top-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedFiles.includes(file.id)}
+                        onChange={() => toggleFileSelection(file.id)}
+                        className="w-4 h-4 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
                   )}
-                </button>
+                  <button
+                    onClick={() => !fuseMode && setCurrentIndex(index)}
+                    className="w-full text-left"
+                    style={{ paddingLeft: fuseMode ? '24px' : '0px' }}
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="flex-1 text-sm font-medium truncate dark:text-gray-100">
+                        {file.filename}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-1 rounded ml-2 ${
+                          STATUS_COLORS[file.status] || STATUS_COLORS.pending
+                        }`}
+                      >
+                        {file.status}
+                      </span>
+                    </div>
+                    {file.duration && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {Math.floor(file.duration / 60)}:{String(Math.floor(file.duration % 60)).padStart(2, '0')}
+                      </span>
+                    )}
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -721,6 +823,7 @@ function ASRAnnotate() {
             )}
           </div>
         </div>
+        </>
       )}
     </div>
   )

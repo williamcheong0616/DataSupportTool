@@ -41,7 +41,8 @@ def _load_vad_model():
 def segment_audio_file(
     file_path: str,
     chunk_length: int = 30,
-    output_base: Optional[str] = None
+    output_base: Optional[str] = None,
+    min_speech_duration_ms: int = 500
 ) -> SegmentResult:
     """
     Segment a single audio file using Silero VAD into chunks of max chunk_length seconds.
@@ -50,6 +51,7 @@ def segment_audio_file(
         file_path: Path to the audio file
         chunk_length: Maximum length of each chunk in seconds (default: 30)
         output_base: Base directory for output (default: same as input file)
+        min_speech_duration_ms: Minimum speech duration in milliseconds to keep (default: 500ms)
         
     Returns:
         SegmentResult with paths to generated chunks
@@ -77,7 +79,12 @@ def segment_audio_file(
         wav = torch.mean(wav, dim=0, keepdim=True)
     
     # Get speech timestamps from VAD
-    speech_timestamps = get_speech_timestamps(wav.squeeze(), model, sampling_rate=sr)
+    speech_timestamps = get_speech_timestamps(
+        wav.squeeze(), 
+        model, 
+        sampling_rate=sr,
+        min_speech_duration_ms=min_speech_duration_ms
+    )
     
     if not speech_timestamps:
         logger.warning(f"No speech detected in {audio_path.name}")
@@ -253,7 +260,8 @@ def segment_audio(
     file_path: str,
     chunk_length: int = 30,
     output_base: Optional[str] = None,
-    use_vad: bool = True
+    use_vad: bool = True,
+    min_speech_duration_ms: int = 500
 ) -> SegmentResult:
     """
     Segment audio file with choice of VAD or fixed-length cutting.
@@ -264,11 +272,12 @@ def segment_audio(
         output_base: Base directory for output (default: same as input file)
         use_vad: If True, use Silero VAD to detect speech segments (voice only).
                  If False, cut into fixed-length chunks (preserves all audio).
+        min_speech_duration_ms: Minimum speech duration in ms when using VAD (default: 500ms)
         
     Returns:
         SegmentResult with paths to generated chunks
     """
     if use_vad:
-        return segment_audio_file(file_path, chunk_length, output_base)
+        return segment_audio_file(file_path, chunk_length, output_base, min_speech_duration_ms)
     else:
         return segment_audio_fixed(file_path, chunk_length, output_base)

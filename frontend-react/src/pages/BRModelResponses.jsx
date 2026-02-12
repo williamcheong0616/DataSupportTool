@@ -203,25 +203,39 @@ function BRModelResponses() {
           {records.map((record, idx) => (
             <div key={record.id} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
               {/* Record Header */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                 <div className="flex items-start justify-between">
-                  <div>
+                  <div className="flex-1">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Record #{(page - 1) * perPage + idx + 1}
                     </span>
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mt-1">
-                      Question: {record.selected_question || <span className="text-gray-400 italic">No question selected</span>}
+                    <h3 className="text-lg font-medium mt-1">
+                      <span className="text-gray-600 dark:text-gray-400">Question:</span>{' '}
+                      <span className="text-gray-900 dark:text-gray-100">
+                        {record.selected_question || <span className="text-gray-400 italic">No question selected</span>}
+                      </span>
                     </h3>
                   </div>
-                  {!record.model_responses && record.selected_question && (
-                    <button
-                      onClick={() => handleGenerateResponses(record.id)}
-                      disabled={generating[record.id]}
-                      className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                    >
-                      {generating[record.id] ? '⏳ Generating...' : '🤖 Generate Responses'}
-                    </button>
-                  )}
+                  <div className="flex gap-2">
+                    {record.model_responses && (
+                      <button
+                        onClick={() => handleGenerateResponses(record.id)}
+                        disabled={generating[record.id]}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {generating[record.id] ? '⏳ Regenerating...' : '🔄 Regenerate All'}
+                      </button>
+                    )}
+                    {!record.model_responses && record.selected_question && (
+                      <button
+                        onClick={() => handleGenerateResponses(record.id)}
+                        disabled={generating[record.id]}
+                        className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        {generating[record.id] ? '⏳ Generating...' : '🤖 Generate Responses'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -244,7 +258,7 @@ function BRModelResponses() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                       {Object.entries(record.model_responses).map(([modelName, data]) => (
-                        <tr key={modelName} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <tr key={modelName} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                           <td className="px-4 py-4 text-sm">
                             <div className="font-medium text-gray-900 dark:text-white">{modelName}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">{data.model_id}</div>

@@ -291,15 +291,26 @@ function BRQuestionValidation() {
                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Generated Questions
                       </label>
-                      {(!record.generated_questions || record.generated_questions.length === 0) && (
-                        <button
-                          onClick={() => handleGenerateQuestions(record.id)}
-                          disabled={generating[record.id] || !record.restructured_text}
-                          className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                        >
-                          {generating[record.id] ? 'Generating...' : '🤖 Generate 3 Questions'}
-                        </button>
-                      )}
+                      <div className="flex gap-2">
+                        {(record.generated_questions && record.generated_questions.length > 0) && (
+                          <button
+                            onClick={() => handleGenerateQuestions(record.id)}
+                            disabled={generating[record.id]}
+                            className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {generating[record.id] ? '⏳ Regenerating...' : '🔄 Regenerate'}
+                          </button>
+                        )}
+                        {(!record.generated_questions || record.generated_questions.length === 0) && (
+                          <button
+                            onClick={() => handleGenerateQuestions(record.id)}
+                            disabled={generating[record.id] || !record.restructured_text}
+                            className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                          >
+                            {generating[record.id] ? 'Generating...' : '🤖 Generate 3 Questions'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     
                     {record.generated_questions && record.generated_questions.length > 0 ? (

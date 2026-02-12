@@ -33,6 +33,7 @@ function ASRDatasets() {
   const [youtubeAutoSegment, setYoutubeAutoSegment] = useState(true)
   const [youtubeChunkLength, setYoutubeChunkLength] = useState(30)
   const [useVad, setUseVad] = useState(true) // true = Silero VAD, false = fixed-length
+  const [minSpeechDuration, setMinSpeechDuration] = useState(500) // VAD min speech duration in ms
 
   useEffect(() => {
     fetchDatasets()
@@ -104,7 +105,8 @@ function ASRDatasets() {
         youtubeAutoSegment,
         youtubeChunkLength,
         false, // auto_transcribe
-        useVad
+        useVad,
+        minSpeechDuration
       )
       
       const data = res.data
@@ -391,6 +393,30 @@ function ASRDatasets() {
                           className="text-red-600"
                         />
                         <span className="text-sm text-gray-600 dark:text-gray-300">Fixed-length (equal intervals)</span>
+                      </label>
+                    </div>
+                  )}
+                  
+                  {youtubeAutoSegment && useVad && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <label className="flex flex-col space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Min Speech Duration: {minSpeechDuration}ms</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Filter out very short segments</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="100"
+                          max="2000"
+                          step="100"
+                          value={minSpeechDuration}
+                          onChange={(e) => setMinSpeechDuration(Number(e.target.value))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                          <span>100ms (more segments)</span>
+                          <span>2000ms (fewer segments)</span>
+                        </div>
                       </label>
                     </div>
                   )}

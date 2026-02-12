@@ -990,7 +990,7 @@ async def auto_restructure_text(
 
 class MergeRecordsRequest(BaseModel):
     record_ids: List[int]  # IDs of records to merge (order matters)
-    separator: str = "\n\n"  # How to join the texts
+    separator: str = " "  # How to join the texts
 
 
 @router.post("/restructure/merge")
@@ -1182,7 +1182,7 @@ async def generate_questions(
     record_stage_id: int,
     db: Session = Depends(get_db)
 ):
-    """Generate 3 questions for a record (placeholder - returns mock data)."""
+    """Generate 3 questions in Bahasa Rojak for a single record."""
     record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
     
     if not record_stage:
@@ -1191,13 +1191,19 @@ async def generate_questions(
     if not record_stage.restructured_text:
         raise HTTPException(status_code=400, detail="Text must be restructured first")
     
-    # TODO: Call LLM to generate questions
-    # For now, return placeholder questions
-    questions = [
-        f"What is the main topic discussed in this text?",
-        f"Can you explain the key points mentioned?",
-        f"What conclusions can be drawn from this content?"
-    ]
+    # Call Ollama to generate questions in Bahasa Rojak
+    from backend.ollama_service import get_ollama_service
+    ollama = get_ollama_service()
+    
+    try:
+        questions = await asyncio.to_thread(
+            ollama.generate_questions,
+            record_stage.restructured_text,
+            count=3
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate questions for record {record_stage_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
     
     from datetime import datetime
     record_stage.generated_questions = questions
@@ -1301,7 +1307,7 @@ async def generate_model_responses(
     record_stage_id: int,
     db: Session = Depends(get_db)
 ):
-    """Generate responses from 3 base models (placeholder - returns mock data)."""
+    """Generate Bahasa Rojak responses from Ollama (gemma3:4b) for all 3 models."""
     record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
     
     if not record_stage:
@@ -1310,32 +1316,43 @@ async def generate_model_responses(
     if not record_stage.selected_question:
         raise HTTPException(status_code=400, detail="No question selected yet")
     
-    # Get active models
-    models = db.query(ModelConfig).filter(ModelConfig.is_active == True).limit(3).all()
+    # Use restructured text as context
+    context = record_stage.restructured_text or ""
+    if not context:
+        raise HTTPException(status_code=400, detail="No context available for response generation")
     
-    # TODO: Call actual models to generate responses
-    # For now, return placeholder responses
+    # Call Ollama to generate responses in Bahasa Rojak
+    from backend.ollama_service import get_ollama_service
+    ollama = get_ollama_service(model_name="gemma3:4b")
+    
     responses = {}
     
-    if len(models) == 0:
-        # Create mock model responses if no models configured
-        mock_models = [
-            ("Model-A", "model-a-v1"),
-            ("Model-B", "model-b-v1"),
-            ("Model-C", "model-c-v1")
-        ]
-        for model_name, model_id in mock_models:
+    # Generate responses for 3 model variations (simulating different models with same base)
+    model_configs = [
+        ("Model-A (Gemma3:4b)", "gemma3:4b"),
+        ("Model-B (Gemma3:4b)", "gemma3:4b"),
+        ("Model-C (Gemma3:4b)", "gemma3:4b")
+    ]
+    
+    for model_name, model_id in model_configs:
+        try:
+            response_text, problems = await asyncio.to_thread(
+                ollama.generate_model_response,
+                context,
+                record_stage.selected_question,
+                detect_problems=True
+            )
             responses[model_name] = {
                 "model_id": model_id,
-                "response": f"[Mock response from {model_name}] This is a placeholder response to the question: {record_stage.selected_question}",
-                "problems": []
+                "response": response_text,
+                "problems": problems
             }
-    else:
-        for model in models:
-            responses[model.name] = {
-                "model_id": model.model_id,
-                "response": f"[Mock response from {model.name}] This is a placeholder response to the question: {record_stage.selected_question}",
-                "problems": []
+        except Exception as e:
+            logger.error(f"Failed to generate response for {model_name}: {e}")
+            responses[model_name] = {
+                "model_id": model_id,
+                "response": f"Error: {str(e)}",
+                "problems": ["Generation failed"]
             }
     
     from datetime import datetime

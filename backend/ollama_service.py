@@ -150,34 +150,42 @@ Restructured text (in same language):"""
         system = f"""You are an expert at generating questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
 
 Bahasa Rojak characteristics:
-- Mix of Malay and English (code-mixing)
-- Use Malaysian/Singaporean slang and shortforms (lah, leh, meh, lor, kan, sikit, etc.)
+- Mix of Malay (majority) and English (code-mixing)
+- Use Malaysian/Singaporean slang and shortforms (lah, leh, meh, lor, kan, sikit, macam, ke, ah, etc.)
 - Natural conversational style
-- Short, casual expressions
+- Casual but detailed expressions
 
-Your task: Generate {count} diverse questions based on the provided text/response.
-The questions should:
-- Be in Bahasa Rojak style (Malay-English code-mixed)
-- Use slang and shortforms naturally
-- Test different aspects of the text
-- Sound like a natural Malaysian/Singaporean asking a question
-- Be answerable from the text
+Your task: Generate {count} diverse, DETAILED questions based on the provided text/response.
+The questions MUST:
+- Be in Bahasa Rojak style with MALAY as the MAJORITY language, codemixed with English
+- Use slang and shortforms naturally (lah, leh, meh, sikit, macam, ke, ah, betul tak)
+- Be LONGER and MORE DETAILED (at least 10-15 words per question)
+- Highly correlate with and reference specific details from the restructured text
+- Test different aspects of the content in depth
+- Sound like a natural Malaysian/Singaporean asking a detailed question
+- Be fully answerable from the provided text
 
-Examples of Bahasa Rojak questions:
-- "Apa benda yang dia cakap about the economy ah?"
-- "Why lah the government buat macam tu?"
-- "Can you explain sikit about this policy or not?"
-- "Betul ke this thing effective meh?"
+Examples of GOOD Bahasa Rojak questions:
+- "Apa yang dia cakap dalam text tu tentang kesan economy terhadap rakyat Malaysia ah?"
+- "Macam mana government nak implement policy baru ni, ada specific steps ke atau just cakap kosong je?"
+- "Boleh explain sikit tak kenapa situation ni jadi macam tu, ada sebab-sebab tertentu ke or what?"
+- "Betul ke benda yang dia mention about effectiveness of this approach, ada bukti konkrit tak?"
 
-Output ONLY a JSON array of {count} questions in Bahasa Rojak, nothing else.
+Output ONLY a JSON array of {count} DETAILED questions in Bahasa Rojak, nothing else.
 Format: ["Question 1?", "Question 2?", "Question 3?"]"""
 
-        prompt = f"""Based on this text/response, generate {count} diverse questions in Bahasa Rojak style:
+        prompt = f"""Based on this restructured text/answer, generate {count} diverse, DETAILED questions in Bahasa Rojak style:
 
 {text}
 
-Remember: Use Malay-English code-mixing with slang/shortforms (lah, leh, meh, sikit, etc.)
-Output JSON array of questions in Bahasa Rojak:"""
+REQUIREMENTS:
+- Use MALAY as MAJORITY language, codemixed with English
+- Include slang/shortforms (lah, leh, meh, sikit, macam, ke, ah, betul tak)
+- Make questions LONGER (10-15+ words) and DETAILED
+- Reference specific content from the text above
+- NOT too short!
+
+Output JSON array of DETAILED Bahasa Rojak questions:"""
 
         try:
             response = self._call_generate(prompt, system=system, temperature=0.8)
@@ -228,17 +236,38 @@ Output JSON array of questions in Bahasa Rojak:"""
         detect_problems: bool = True
     ) -> tuple[str, List[str]]:
         """
-        Generate a response to a question based on context.
+        Generate a response to a question based on context in Bahasa Rojak style.
         Optionally detect problems in the response (hallucinations, errors).
         """
-        system = """You are a helpful AI assistant. Answer questions based on the provided context accurately and concisely."""
+        system = """You are a helpful AI assistant that answers questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
 
-        prompt = f"""Context:
+Bahasa Rojak characteristics:
+- Mix of Malay (MAJORITY language) and English
+- Use Malaysian/Singaporean slang and shortforms naturally (lah, leh, meh, lor, kan, sikit, macam, tau tak, betul tak, etc.)
+- Natural conversational style
+- Casual but informative tone
+
+Your task: Answer the question based on the provided context/text.
+The answer MUST:
+- Be in Bahasa Rojak style with MALAY as MAJORITY language, codemixed with English
+- Use slang/shortforms naturally (lah, leh, meh, sikit, macam, tau tak, betul tak)
+- Be DETAILED and informative (not too short!)
+- Directly address the question
+- Reference specific details from the context
+- Sound natural and conversational"""
+
+        prompt = f"""Context/Text:
 {context}
 
 Question: {question}
 
-Answer:"""
+REQUIREMENTS:
+- Answer in Bahasa Rojak (Malay majority + English codemix)
+- Use slang (lah, leh, meh, sikit, macam, tau tak, betul tak)
+- Be detailed and informative
+- Directly reference the context above
+
+Answer in Bahasa Rojak:"""
 
         try:
             response = self._call_generate(prompt, system=system, temperature=0.7)
@@ -253,7 +282,7 @@ Answer:"""
                 if "I don't know" in response.lower() or "cannot answer" in response.lower():
                     problems.append("Model declined to answer")
             
-            logger.info(f"Generated response: {response[:100]}...")
+            logger.info(f"Generated Bahasa Rojak response: {response[:100]}...")
             return response, problems
                 
         except Exception as e:
