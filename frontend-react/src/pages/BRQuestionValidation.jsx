@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
+import { runBRStage3 } from '../api'
 
 const API_BASE_URL = 'http://localhost:8000'
 
@@ -12,6 +13,7 @@ function BRQuestionValidation() {
   const [saving, setSaving] = useState({})
   const [generating, setGenerating] = useState({})
   const [validatorName, setValidatorName] = useState(localStorage.getItem('validatorName') || '')
+  const [rerunning, setRerunning] = useState(false)
   
   // Pagination
   const [page, setPage] = useState(1)
@@ -103,6 +105,25 @@ function BRQuestionValidation() {
     }
   }
 
+  const handleRerunStage = async () => {
+    if (!confirm('Rerun Stage 3 (Question Generation in Bahasa Rojak) for all records?\n\nThis will process in the background. You can continue working while it runs.')) return
+    
+    setRerunning(true)
+    try {
+      const res = await runBRStage3(pipelineId, null, true)
+      alert(`✓ Stage 3 started in background!\n\n${res.data.message}\n\nRefresh this page to see updated results.`)
+      // Optionally refresh after a delay
+      setTimeout(() => {
+        fetchRecords()
+      }, 2000)
+    } catch (err) {
+      console.error('Failed to rerun stage:', err)
+      alert('Failed to start Stage 3: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setRerunning(false)
+    }
+  }
+
   if (loading && records.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -121,15 +142,24 @@ function BRQuestionValidation() {
               Stage 3: Question Validation
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Generate 3 questions per item, then select the best one
+              Generate 3 questions per item from restructured text, then select the best one
             </p>
           </div>
-          <button
-            onClick={() => navigate('/text')}
-            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-          >
-            ← Back to Datasets
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRerunStage}
+              disabled={rerunning}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {rerunning ? '⏳ Starting...' : '🔄 Rerun Stage 3'}
+            </button>
+            <button
+              onClick={() => navigate('/text')}
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              ← Back to Datasets
+            </button>
+          </div>
         </div>
 
         {/* Stage Navigation */}
@@ -224,15 +254,36 @@ function BRQuestionValidation() {
                   #{(page - 1) * perPage + idx + 1}
                 </div>
                 <div className="flex-1">
-                  {/* Restructured Text */}
+                  {/* Language Badge */}
+                  {record.detected_language && (
+                    <div className="mb-2">
+                      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                        {record.detected_language}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Restructured Text (Primary - from Stage 2) */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Restructured Text
+                      Restructured Text <span className="text-xs text-gray-400 font-normal">(from Stage 2)</span>
                     </label>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded border border-indigo-200 dark:border-indigo-700 text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
                       {record.restructured_text || <span className="text-gray-400 italic">No restructured text yet</span>}
                     </div>
                   </div>
+
+                  {/* Original Text (Collapsible reference) */}
+                  {record.original_text && (
+                    <details className="mb-4">
+                      <summary className="text-sm font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                        Show Original Text
+                      </summary>
+                      <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                        {record.original_text}
+                      </div>
+                    </details>
+                  )}
                   
                   {/* Generated Questions */}
                   <div>

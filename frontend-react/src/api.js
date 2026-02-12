@@ -176,4 +176,38 @@ export const validateBRQuestion = (recordStageId, questionIndex, validatedBy) =>
 export const getBRPipelineResults = (pipelineId) =>
   api.get(`/br-pipeline/results/${pipelineId}`)
 
+// Run individual stages
+export const runBRStage1 = (pipelineId, recordIds = null, forceRerun = false) =>
+  api.post('/br-pipeline/run-stage1', {
+    pipeline_run_id: pipelineId,
+    record_ids: recordIds,
+    force_rerun: forceRerun
+  })
+
+export const runBRStage2 = (pipelineId, skipRestructure = false, recordIds = null, forceRerun = false) =>
+  api.post('/br-pipeline/run-stage2', {
+    pipeline_run_id: pipelineId,
+    skip_restructure: skipRestructure,
+    record_ids: recordIds,
+    force_rerun: forceRerun
+  })
+
+export const runBRStage3 = (pipelineId, recordIds = null, forceRerun = false) =>
+  api.post('/br-pipeline/run-stage3', {
+    pipeline_run_id: pipelineId,
+    record_ids: recordIds,
+    force_rerun: forceRerun
+  })
+
+// Merge/concatenate records
+export const mergeBRRecords = (recordIds, separator = '\n\n') =>
+  api.post('/br-pipeline/restructure/merge', {
+    record_ids: recordIds,
+    separator: separator
+  })
+
+// Get stage progress (for polling)
+export const getBRStageProgress = (pipelineId) =>
+  api.get(`/br-pipeline/stage-progress/${pipelineId}`)
+
 export default api

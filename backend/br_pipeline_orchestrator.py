@@ -71,19 +71,26 @@ class BRPipelineOrchestrator:
         return pipeline_run
     
     async def _execute_pipeline(self, pipeline_run_id: int):
-        """Execute all automated stages of the pipeline."""
+        """Execute Stage 1 (BR Detection) only. Stages 2 & 3 must be run manually."""
         try:
-            # Stage 1: BR Detection
+            # Check if Ollama is available before starting
+            if not await self._check_ollama_available():
+                error_msg = "Ollama service is not available. Please start Ollama (ollama serve) before running the pipeline."
+                logger.error(f"Pipeline {pipeline_run_id}: {error_msg}")
+                self._mark_pipeline_failed(pipeline_run_id, error_msg)
+                return
+            
+            # Stage 1: BR Detection (automated)
             await self._run_br_detection(pipeline_run_id)
             
-            # Stage 2: Text Restructuring
-            await self._run_text_restructure(pipeline_run_id)
+            # Stage 2: Text Restructuring (MANUAL - use "Rerun Stage 2" button)
+            # await self._run_text_restructure(pipeline_run_id)
             
-            # Stage 3: Question Generation
-            await self._run_question_generation(pipeline_run_id)
+            # Stage 3: Question Generation (MANUAL - use "Rerun Stage 3" button)
+            # await self._run_question_generation(pipeline_run_id)
             
-            # Stage 4: Human Validation (blocks here - manual step)
-            await self._move_to_human_validation(pipeline_run_id)
+            # Stage 4: Human Validation (manual step)
+            # await self._move_to_human_validation(pipeline_run_id)
             
         except Exception as e:
             logger.error(f"Pipeline {pipeline_run_id} failed: {e}")
@@ -103,11 +110,12 @@ class BRPipelineOrchestrator:
             ).first()
             
             # Run BR detection (placeholder - replace with actual model)
-            is_br, confidence = await self._detect_bahasa_rojak(text_record.original_text)
+            is_br, confidence, languages = await self._detect_bahasa_rojak(text_record.original_text)
             
             # Update record stage
             record_stage.is_bahasa_rojak = is_br
             record_stage.br_confidence = confidence
+            record_stage.detected_language = languages
             record_stage.br_detected_at = datetime.utcnow()
             record_stage.current_stage = BRPipelineStage.BR_DETECTION
             
@@ -135,10 +143,14 @@ class BRPipelineOrchestrator:
             ).first()
             
             # Restructure text (placeholder - replace with actual model)
-            restructured = await self._restructure_mcq_text(text_record.original_text)
+            restructured, metadata = await self._restructure_mcq_text(
+                text_record.original_text,
+                skip_restructure=record_stage.skip_restructure
+            )
             
             # Update record stage
             record_stage.restructured_text = restructured
+            record_stage.restructure_metadata = metadata
             record_stage.restructured_at = datetime.utcnow()
             record_stage.current_stage = BRPipelineStage.TEXT_RESTRUCTURE
             
@@ -160,16 +172,35 @@ class BRPipelineOrchestrator:
             BRRecordStage.current_stage == BRPipelineStage.TEXT_RESTRUCTURE
         ).all()
         
+        consecutive_failures = 0
+        max_failures = 3  # Stop after 3 consecutive failures
+        
         for record_stage in record_stages:
-            # Generate 3 questions (placeholder - replace with actual model)
-            questions = await self._generate_questions(record_stage.restructured_text, count=3)
-            
-            # Update record stage
-            record_stage.generated_questions = questions
-            record_stage.questions_generated_at = datetime.utcnow()
-            record_stage.current_stage = BRPipelineStage.QUESTION_GENERATION
-            
-            self.db.commit()
+            try:
+                # Generate 3 questions
+                questions = await self._generate_questions(record_stage.restructured_text, count=3)
+                
+                # Check if we got fallback questions (indicates failure)
+                if questions[0].startswith("What is the main topic"):
+                    consecutive_failures += 1
+                    logger.warning(f"Got fallback questions for record {record_stage.id} (failure {consecutive_failures}/{max_failures})")
+                    if consecutive_failures >= max_failures:
+                        raise Exception("Ollama service appears to be unavailable (too many consecutive failures)")
+                else:
+                    consecutive_failures = 0  # Reset on success
+                
+                # Update record stage
+                record_stage.generated_questions = questions
+                record_stage.questions_generated_at = datetime.utcnow()
+                record_stage.current_stage = BRPipelineStage.QUESTION_GENERATION
+                
+                self.db.commit()
+                
+            except Exception as e:
+                logger.error(f"Failed to generate questions for record {record_stage.id}: {e}")
+                record_stage.error_message = str(e)
+                self.db.commit()
+                raise  # Stop processing
         
         # Update pipeline run
         pipeline_run = self.db.query(BRPipelineRun).filter(
@@ -308,15 +339,25 @@ class BRPipelineOrchestrator:
     
     # ===== AI Functions using Ollama =====
     
-    async def _detect_bahasa_rojak(self, text: str) -> tuple[bool, float]:
-        """Detect if text contains Bahasa Rojak (code-mixing) using Ollama."""
+    async def _check_ollama_available(self) -> bool:
+        """Check if Ollama service is available."""
+        try:
+            import requests
+            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Ollama availability check failed: {e}")
+            return False
+    
+    async def _detect_bahasa_rojak(self, text: str) -> tuple[bool, float, str]:
+        """Detect if text contains Bahasa Rojak (code-mixing) and identify languages using Ollama."""
         ollama = get_ollama_service(model_name="gemma3:4b")
         return ollama.detect_bahasa_rojak(text)
     
-    async def _restructure_mcq_text(self, text: str) -> str:
+    async def _restructure_mcq_text(self, text: str, skip_restructure: bool = False) -> tuple[str, dict]:
         """Restructure MCQ text into consolidated format using Ollama."""
         ollama = get_ollama_service(model_name="gemma3:4b")
-        return ollama.restructure_mcq_text(text)
+        return ollama.restructure_mcq_text(text, skip_restructure=skip_restructure)
     
     async def _generate_questions(self, text: str, count: int = 3) -> List[str]:
         """Generate questions from text using Ollama."""
@@ -343,3 +384,195 @@ class BRPipelineOrchestrator:
         problems = []
         
         return response, problems
+    
+    # ===== Individual Stage Execution Methods =====
+    
+    async def run_stage_1(self, pipeline_run_id: int, record_ids: Optional[List[int]] = None, force_rerun: bool = False):
+        """
+        Run Stage 1 (BR Detection + Language Detection) individually.
+        If record_ids provided, only run for those records, else run for all pending.
+        If force_rerun=True, rerun even if already processed.
+        """
+        rerun_text = " (RERUN)" if force_rerun else ""
+        logger.info(f"Pipeline {pipeline_run_id}: Running Stage 1 (BR Detection + Language Detection){rerun_text}")
+        
+        # Check if Ollama is available
+        if not await self._check_ollama_available():
+            raise Exception("Ollama service is not available. Please start Ollama (ollama serve).")
+        
+        query = self.db.query(BRRecordStage).filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id
+        )
+        
+        if record_ids:
+            query = query.filter(BRRecordStage.id.in_(record_ids))
+        else:
+            # Only run for records that haven't completed Stage 1 (unless force_rerun)
+            if not force_rerun:
+                query = query.filter(
+                    BRRecordStage.current_stage.in_([BRPipelineStage.PENDING])
+                )
+        
+        record_stages = query.all()
+        
+        for record_stage in record_stages:
+            text_record = self.db.query(TextRecord).filter(
+                TextRecord.id == record_stage.text_record_id
+            ).first()
+            
+            # Run BR detection with language detection
+            is_br, confidence, languages = await self._detect_bahasa_rojak(text_record.original_text)
+            
+            # Update record stage
+            record_stage.is_bahasa_rojak = is_br
+            record_stage.br_confidence = confidence
+            record_stage.detected_language = languages
+            record_stage.br_detected_at = datetime.utcnow()
+            record_stage.current_stage = BRPipelineStage.BR_DETECTION
+            
+            self.db.commit()
+        
+        logger.info(f"Stage 1 completed for {len(record_stages)} records")
+        return len(record_stages)
+    
+    async def run_stage_2(
+        self, 
+        pipeline_run_id: int, 
+        record_ids: Optional[List[int]] = None,
+        skip_restructure: bool = False,
+        force_rerun: bool = False
+    ):
+        """
+        Run Stage 2 (Text Restructuring) individually.
+        ONLY processes records classified as Bahasa Rojak (is_bahasa_rojak=True).
+        If skip_restructure=True, keeps original text without restructuring.
+        If force_rerun=True, rerun even if already processed.
+        """
+        rerun_text = " (RERUN)" if force_rerun else ""
+        logger.info(f"Pipeline {pipeline_run_id}: Running Stage 2 (Text Restructuring, skip={skip_restructure}){rerun_text}")
+        
+        if not await self._check_ollama_available():
+            raise Exception("Ollama service is not available. Please start Ollama (ollama serve).")
+        
+        query = self.db.query(BRRecordStage).filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id,
+            BRRecordStage.is_bahasa_rojak == True  # Only process BR records
+        )
+        
+        if record_ids:
+            query = query.filter(BRRecordStage.id.in_(record_ids))
+        else:
+            # Only run for records that completed Stage 1 (unless force_rerun)
+            if not force_rerun:
+                query = query.filter(
+                    BRRecordStage.current_stage == BRPipelineStage.BR_DETECTION
+                )
+            else:
+                # For rerun, include all records that have at least completed Stage 1
+                query = query.filter(
+                    BRRecordStage.current_stage.in_([
+                        BRPipelineStage.BR_DETECTION,
+                        BRPipelineStage.TEXT_RESTRUCTURE,
+                        BRPipelineStage.QUESTION_GENERATION,
+                        BRPipelineStage.HUMAN_VALIDATION,
+                        BRPipelineStage.MODEL_RESPONSE,
+                        BRPipelineStage.COMPLETED
+                    ])
+                )
+        
+        record_stages = query.all()
+        
+        for record_stage in record_stages:
+            text_record = self.db.query(TextRecord).filter(
+                TextRecord.id == record_stage.text_record_id
+            ).first()
+            
+            # Set skip_restructure flag
+            record_stage.skip_restructure = skip_restructure
+            
+            # Restructure text (or skip if requested)
+            restructured, metadata = await self._restructure_mcq_text(
+                text_record.original_text,
+                skip_restructure=skip_restructure
+            )
+            
+            # Update record stage
+            record_stage.restructured_text = restructured
+            record_stage.restructure_metadata = metadata
+            record_stage.restructured_at = datetime.utcnow()
+            record_stage.current_stage = BRPipelineStage.TEXT_RESTRUCTURE
+            
+            self.db.commit()
+        
+        logger.info(f"Stage 2 completed for {len(record_stages)} records")
+        return len(record_stages)
+    
+    async def run_stage_3(self, pipeline_run_id: int, record_ids: Optional[List[int]] = None, force_rerun: bool = False):
+        """
+        Run Stage 3 (Question Generation in Bahasa Rojak) individually.
+        If force_rerun=True, rerun even if already processed.
+        """
+        rerun_text = " (RERUN)" if force_rerun else ""
+        logger.info(f"Pipeline {pipeline_run_id}: Running Stage 3 (Question Generation in Bahasa Rojak){rerun_text}")
+        
+        if not await self._check_ollama_available():
+            raise Exception("Ollama service is not available. Please start Ollama (ollama serve).")
+        
+        query = self.db.query(BRRecordStage).filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id
+        )
+        
+        if record_ids:
+            query = query.filter(BRRecordStage.id.in_(record_ids))
+        else:
+            # Only run for records that completed Stage 2 (unless force_rerun)
+            if not force_rerun:
+                query = query.filter(
+                    BRRecordStage.current_stage == BRPipelineStage.TEXT_RESTRUCTURE
+                )
+            else:
+                # For rerun, include all records that have at least completed Stage 2
+                query = query.filter(
+                    BRRecordStage.current_stage.in_([
+                        BRPipelineStage.TEXT_RESTRUCTURE,
+                        BRPipelineStage.QUESTION_GENERATION,
+                        BRPipelineStage.HUMAN_VALIDATION,
+                        BRPipelineStage.MODEL_RESPONSE,
+                        BRPipelineStage.COMPLETED
+                    ])
+                )
+        
+        record_stages = query.all()
+        
+        consecutive_failures = 0
+        max_failures = 3
+        
+        for record_stage in record_stages:
+            try:
+                # Generate 3 questions in Bahasa Rojak style
+                questions = await self._generate_questions(record_stage.restructured_text, count=3)
+                
+                # Check if we got fallback questions (indicates failure)
+                if questions[0].startswith("What is the main topic"):
+                    consecutive_failures += 1
+                    logger.warning(f"Got fallback questions for record {record_stage.id} (failure {consecutive_failures}/{max_failures})")
+                    if consecutive_failures >= max_failures:
+                        raise Exception("Ollama service appears to be unavailable (too many consecutive failures)")
+                else:
+                    consecutive_failures = 0
+                
+                # Update record stage
+                record_stage.generated_questions = questions
+                record_stage.questions_generated_at = datetime.utcnow()
+                record_stage.current_stage = BRPipelineStage.QUESTION_GENERATION
+                
+                self.db.commit()
+                
+            except Exception as e:
+                logger.error(f"Failed to generate questions for record {record_stage.id}: {e}")
+                record_stage.error_message = str(e)
+                self.db.commit()
+                raise
+        
+        logger.info(f"Stage 3 completed for {len(record_stages)} records")
+        return len(record_stages)

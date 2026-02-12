@@ -138,7 +138,7 @@ def create_text_dataset(data: TextDatasetCreate, db: Session = Depends(get_db)):
     dataset = TextDataset(
         name=data.name,
         description=data.description,
-        task_type=data.task_type,
+        task_type=data.task_type if data.task_type else TaskType.GENERAL,
     )
     db.add(dataset)
     db.commit()
@@ -460,10 +460,14 @@ def export_text_dataset(
             writer.writerow(["id", "original_text", "modified_text", "subject_added", "context_added", "annotated_by"])
             for r in records:
                 writer.writerow([r.id, r.original_text, r.modified_text, r.subject_added, r.context_added, r.annotated_by])
-        else:  # QUESTION_GENERATION
+        elif dataset.task_type == TaskType.QUESTION_GENERATION:
             writer.writerow(["id", "original_text", "question_1", "question_2", "question_3", "annotated_by"])
             for r in records:
                 writer.writerow([r.id, r.original_text, r.question_1, r.question_2, r.question_3, r.annotated_by])
+        else:  # GENERAL - Simple export
+            writer.writerow(["id", "original_text", "is_annotated", "annotated_by"])
+            for r in records:
+                writer.writerow([r.id, r.original_text, r.is_annotated, r.annotated_by])
         
         output.seek(0)
         return StreamingResponse(
@@ -488,10 +492,11 @@ def export_text_dataset(
                 row["modified_text"] = r.modified_text
                 row["subject_added"] = r.subject_added
                 row["context_added"] = r.context_added
-            else:
+            elif dataset.task_type == TaskType.QUESTION_GENERATION:
                 row["question_1"] = r.question_1
                 row["question_2"] = r.question_2
                 row["question_3"] = r.question_3
+            # For GENERAL, just export base fields (id, text, annotation status)
             lines.append(json.dumps(row, ensure_ascii=False))
         
         content = "\n".join(lines)

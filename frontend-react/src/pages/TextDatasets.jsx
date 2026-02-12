@@ -11,6 +11,7 @@ import {
 } from '../api'
 
 const TASK_TYPES = [
+  { value: 'general', label: 'General (For BR Pipeline)' },
   { value: 'bahasa_rojak_identification', label: 'Bahasa Rojak Identification (Yes/No)' },
   { value: 'bahasa_rojak_classification', label: 'Bahasa Rojak Classification' },
   { value: 'text_modification', label: 'Text Modification (Subject/Context)' },
@@ -30,7 +31,7 @@ function TextDatasets() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [showUpload, setShowUpload] = useState(null)
-  const [newDataset, setNewDataset] = useState({ name: '', task_type: 'bahasa_rojak_identification' })
+  const [newDataset, setNewDataset] = useState({ name: '', task_type: 'general' })
   const [uploadFile, setUploadFile] = useState(null)
   const [headers, setHeaders] = useState([])
   const [selectedColumn, setSelectedColumn] = useState('')
@@ -75,11 +76,11 @@ function TextDatasets() {
   }
 
   const handleStartPipeline = async (datasetId) => {
-    if (!confirm('Start BR Pipeline for this dataset? This will run automated classification.')) return
+    if (!confirm('Start BR Pipeline Stage 1 (BR Detection + Language Detection)?\n\nNote: This only runs Stage 1. Use the rerun buttons in the BR Classification page to manually run Stages 2 & 3 when ready.')) return
     setStartingPipeline(datasetId)
     try {
       const res = await startBRPipeline(datasetId)
-      alert(`Pipeline #${res.data.id} started! ${res.data.total_records} records will be processed.`)
+      alert(`✓ Pipeline #${res.data.id} - Stage 1 started!\n\n${res.data.total_records} records will be processed for BR Detection + Language Detection.\n\nAfter Stage 1 completes, use the rerun buttons to manually run Stages 2 & 3.`)
       fetchPipelines()
       // Navigate to classification page
       navigate(`/br-pipeline/classification/${res.data.id}`)
@@ -95,7 +96,7 @@ function TextDatasets() {
     try {
       await createTextDataset(newDataset)
       setShowCreate(false)
-      setNewDataset({ name: '', task_type: 'bahasa_rojak_identification' })
+      setNewDataset({ name: '', task_type: 'general' })
       fetchDatasets()
     } catch (err) {
       alert('Failed to create dataset: ' + (err.response?.data?.detail || err.message))

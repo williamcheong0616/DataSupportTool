@@ -100,6 +100,8 @@ class RestructureRecordResponse(BaseModel):
     original_text: str
     restructured_text: Optional[str]
     was_restructured: bool
+    is_bahasa_rojak: Optional[bool] = None
+    detected_language: Optional[str] = None
 
 
 class RestructureListResponse(BaseModel):
@@ -119,7 +121,10 @@ class RestructureUpdateRequest(BaseModel):
 class QuestionRecordResponse(BaseModel):
     id: int
     text_record_id: int
+    original_text: Optional[str] = None
     restructured_text: Optional[str]
+    detected_language: Optional[str] = None
+    is_bahasa_rojak: Optional[bool] = None
     generated_questions: Optional[List[str]]
     selected_question_index: Optional[int]
     selected_question: Optional[str]
@@ -157,10 +162,32 @@ class ResponseListResponse(BaseModel):
     completed_count: int
 
 
+# Individual Stage Execution Schemas
+class StageExecutionRequest(BaseModel):
+    pipeline_run_id: int
+    record_ids: Optional[List[int]] = None  # If None, run for all eligible records
+    force_rerun: bool = False  # If True, rerun even if already processed
+
+
+class Stage2ExecutionRequest(BaseModel):
+    pipeline_run_id: int
+    skip_restructure: bool = False  # User choice: False=restructure, True=keep original
+    record_ids: Optional[List[int]] = None
+    force_rerun: bool = False  # If True, rerun even if already processed
+
+
+class StageExecutionResponse(BaseModel):
+    pipeline_run_id: int
+    stage: str
+    records_processed: int
+    message: str
+
+
 # ===== API Endpoints =====
 
-async def run_pipeline_in_background(pipeline_run_id: int):
-    """Background task to execute pipeline stages."""
+def run_pipeline_in_background_thread(pipeline_run_id: int):
+    """Background task to execute pipeline stages in a separate thread."""
+    import asyncio
     # Create a new database session for the background task
     db = SessionLocal()
     try:
@@ -171,8 +198,13 @@ async def run_pipeline_in_background(pipeline_run_id: int):
             pipeline_run.status = "running"
             db.commit()
         
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
         orchestrator = BRPipelineOrchestrator(db)
-        await orchestrator._execute_pipeline(pipeline_run_id)
+        loop.run_until_complete(orchestrator._execute_pipeline(pipeline_run_id))
+        
         logger.info(f"Pipeline {pipeline_run_id} background execution completed")
     except Exception as e:
         logger.error(f"Pipeline {pipeline_run_id} background execution failed: {e}")
@@ -184,22 +216,76 @@ async def run_pipeline_in_background(pipeline_run_id: int):
             pipeline_run.error_message = str(e)
             db.commit()
     finally:
+        loop.close()
         db.close()
 
 
 def start_background_pipeline(pipeline_run_id: int):
-    """Wrapper to run async pipeline in background thread."""
+    """Start pipeline in a completely separate thread (non-blocking)."""
+    import threading
+    thread = threading.Thread(
+        target=run_pipeline_in_background_thread,
+        args=(pipeline_run_id,),
+        daemon=True
+    )
+    thread.start()
+    logger.info(f"Pipeline {pipeline_run_id} started in background thread {thread.name}")
+
+
+# Background thread runners for individual stages
+def run_stage_in_background_thread(stage_func, pipeline_run_id: int, **kwargs):
+    """Generic background thread runner for stage execution."""
     import asyncio
+    db = SessionLocal()
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If already in async context, create task
-            asyncio.create_task(run_pipeline_in_background(pipeline_run_id))
-        else:
-            loop.run_until_complete(run_pipeline_in_background(pipeline_run_id))
-    except RuntimeError:
-        # No event loop exists, create one
-        asyncio.run(run_pipeline_in_background(pipeline_run_id))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Update pipeline status to running
+        pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+        if pipeline_run:
+            pipeline_run.status = "running"
+            pipeline_run.error_message = None
+            db.commit()
+        
+        orchestrator = BRPipelineOrchestrator(db)
+        count = loop.run_until_complete(stage_func(orchestrator, pipeline_run_id, **kwargs))
+        
+        # Update pipeline status to completed
+        pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+        if pipeline_run:
+            pipeline_run.status = "completed"
+            pipeline_run.error_message = None
+            db.commit()
+        
+        logger.info(f"Stage execution completed: {count} records processed for pipeline {pipeline_run_id}")
+    except Exception as e:
+        logger.error(f"Stage execution failed for pipeline {pipeline_run_id}: {e}", exc_info=True)
+        # Mark pipeline as failed with error message
+        try:
+            pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+            if pipeline_run:
+                pipeline_run.status = "failed"
+                pipeline_run.error_message = str(e)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        loop.close()
+        db.close()
+
+
+def start_stage_in_background(stage_func, pipeline_run_id: int, **kwargs):
+    """Start stage execution in a completely separate thread (non-blocking)."""
+    import threading
+    thread = threading.Thread(
+        target=run_stage_in_background_thread,
+        args=(stage_func, pipeline_run_id),
+        kwargs=kwargs,
+        daemon=True
+    )
+    thread.start()
+    logger.info(f"Stage for pipeline {pipeline_run_id} started in background thread {thread.name}")
 
 
 @router.post("/start", response_model=PipelineRunResponse)
@@ -209,15 +295,18 @@ def start_pipeline(
     db: Session = Depends(get_db)
 ):
     """
-    Start the automated BR pipeline for a text dataset.
+    Start the BR pipeline - ONLY runs Stage 1 (BR Detection + Language Detection).
     Returns immediately - pipeline runs in background.
     
     Pipeline stages:
-    1. BR Detection (automated)
-    2. Text Restructuring (automated)
-    3. Question Generation (automated) - generates 3 questions per record
-    4. Human Validation (manual) - human picks 1 of 3 questions
+    1. BR Detection (automated on start) - Detects Bahasa Rojak and identifies languages
+    2. Text Restructuring (MANUAL) - Use "Rerun Stage 2" button in UI
+    3. Question Generation (MANUAL) - Use "Rerun Stage 3" button in UI
+    4. Human Validation (manual) - Human picks 1 of 3 questions
     5. Model Response Generation (automated) - 3 models respond to selected question
+    
+    After Stage 1 completes, navigate to the BR Classification page and use the 
+    stage-specific rerun buttons to manually trigger Stages 2 and 3 when ready.
     """
     orchestrator = BRPipelineOrchestrator(db)
     
@@ -267,6 +356,173 @@ def get_pipeline_status(
         started_at=pipeline_run.started_at.isoformat() if pipeline_run.started_at else None,
         completed_at=pipeline_run.completed_at.isoformat() if pipeline_run.completed_at else None
     )
+
+
+# ===== Individual Stage Execution Endpoints =====
+
+@router.post("/run-stage1", response_model=StageExecutionResponse)
+def run_stage_1_individually(
+    request: StageExecutionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Run Stage 1 (BR Detection + Language Detection) individually.
+    Returns immediately - processing runs in background.
+    
+    This stage:
+    - Detects if text is Bahasa Rojak (code-mixed)
+    - Automatically identifies the languages used in the text
+    - Provides confidence score
+    
+    Parameters:
+    - record_ids: If provided, only runs for those specific records
+    - force_rerun: If True, reruns even for records already processed in Stage 1
+    
+    Default behavior (no record_ids, force_rerun=False): Runs only for PENDING records.
+    """
+    try:
+        # Get record count for response
+        if request.record_ids:
+            count = len(request.record_ids)
+        else:
+            from backend.br_pipeline_models import BRRecordStage, BRPipelineStage
+            query = db.query(BRRecordStage).filter(
+                BRRecordStage.pipeline_run_id == request.pipeline_run_id
+            )
+            if not request.force_rerun:
+                query = query.filter(BRRecordStage.current_stage == BRPipelineStage.PENDING)
+            count = query.count()
+        
+        # Start in background thread
+        start_stage_in_background(
+            lambda orch, pid, **kw: orch.run_stage_1(pid, **kw),
+            request.pipeline_run_id,
+            record_ids=request.record_ids,
+            force_rerun=request.force_rerun
+        )
+        
+        rerun_text = " (rerun)" if request.force_rerun else ""
+        return StageExecutionResponse(
+            pipeline_run_id=request.pipeline_run_id,
+            stage="Stage 1: BR Detection + Language Detection",
+            records_processed=count,
+            message=f"Started{rerun_text} processing ~{count} records in background"
+        )
+    except Exception as e:
+        logger.error(f"Stage 1 execution failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Stage 1 failed: {str(e)}")
+
+
+@router.post("/run-stage2", response_model=StageExecutionResponse)
+def run_stage_2_individually(
+    request: Stage2ExecutionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Run Stage 2 (Text Restructuring) individually with user choice.
+    Returns immediately - processing runs in background.
+    
+    This stage can either:
+    - Restructure text: Consolidates MCQ text into clean format (skip_restructure=False)
+    - Keep original: Skips restructuring if text is already contextualized (skip_restructure=True)
+    
+    IMPORTANT: Original language is ALWAYS preserved - no translation occurs.
+    
+    Parameters:
+    - skip_restructure: Choose whether to restructure or keep original
+    - record_ids: If provided, only runs for those specific records
+    - force_rerun: If True, reruns even for records already processed in Stage 2
+    
+    Default behavior (no record_ids, force_rerun=False): Runs only for records that completed Stage 1.
+    """
+    try:
+        # Get record count for response
+        if request.record_ids:
+            count = len(request.record_ids)
+        else:
+            from backend.br_pipeline_models import BRRecordStage, BRPipelineStage
+            query = db.query(BRRecordStage).filter(
+                BRRecordStage.pipeline_run_id == request.pipeline_run_id
+            )
+            if not request.force_rerun:
+                query = query.filter(BRRecordStage.current_stage == BRPipelineStage.BR_DETECTION)
+            count = query.count()
+        
+        # Start in background thread
+        start_stage_in_background(
+            lambda orch, pid, **kw: orch.run_stage_2(pid, **kw),
+            request.pipeline_run_id,
+            record_ids=request.record_ids,
+            skip_restructure=request.skip_restructure,
+            force_rerun=request.force_rerun
+        )
+        
+        action = "Skipping restructure" if request.skip_restructure else "Restructuring text"
+        rerun_text = " (rerun)" if request.force_rerun else ""
+        
+        return StageExecutionResponse(
+            pipeline_run_id=request.pipeline_run_id,
+            stage="Stage 2: Text Restructuring",
+            records_processed=count,
+            message=f"Started{rerun_text} {action} for ~{count} records in background"
+        )
+    except Exception as e:
+        logger.error(f"Stage 2 execution failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Stage 2 failed: {str(e)}")
+
+
+@router.post("/run-stage3", response_model=StageExecutionResponse)
+def run_stage_3_individually(
+    request: StageExecutionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Run Stage 3 (Question Generation in Bahasa Rojak) individually.
+    Returns immediately - processing runs in background.
+    
+    This stage generates 3 questions in BAHASA ROJAK style:
+    - Questions are generated in reverse (from the text/responses)
+    - Uses Malay-English code-mixing (e.g., "Apa benda yang dia cakap about this ah?")
+    - Includes slang and shortforms (lah, leh, meh, lor, sikit, etc.)
+    - Natural conversational Malaysian/Singaporean style
+    
+    Parameters:
+    - record_ids: If provided, only runs for those specific records
+    - force_rerun: If True, reruns even for records already processed in Stage 3
+    
+    Default behavior (no record_ids, force_rerun=False): Runs only for records that completed Stage 2.
+    """
+    try:
+        # Get record count for response
+        if request.record_ids:
+            count = len(request.record_ids)
+        else:
+            from backend.br_pipeline_models import BRRecordStage, BRPipelineStage
+            query = db.query(BRRecordStage).filter(
+                BRRecordStage.pipeline_run_id == request.pipeline_run_id
+            )
+            if not request.force_rerun:
+                query = query.filter(BRRecordStage.current_stage == BRPipelineStage.TEXT_RESTRUCTURE)
+            count = query.count()
+        
+        # Start in background thread
+        start_stage_in_background(
+            lambda orch, pid, **kw: orch.run_stage_3(pid, **kw),
+            request.pipeline_run_id,
+            record_ids=request.record_ids,
+            force_rerun=request.force_rerun
+        )
+        
+        rerun_text = " (rerun)" if request.force_rerun else ""
+        return StageExecutionResponse(
+            pipeline_run_id=request.pipeline_run_id,
+            stage="Stage 3: Question Generation (Bahasa Rojak)",
+            records_processed=count,
+            message=f"Started{rerun_text} generating Bahasa Rojak questions for ~{count} records in background"
+        )
+    except Exception as e:
+        logger.error(f"Stage 3 execution failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Stage 3 failed: {str(e)}")
 
 
 @router.get("/pending-validation", response_model=List[RecordStageResponse])
@@ -631,24 +887,25 @@ def get_restructure_records(
     per_page: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    """Get records for text restructuring with pagination."""
+    """Get records for text restructuring with pagination. Only shows Bahasa Rojak records."""
     pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
-    total = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id
-    ).count()
-    
-    restructured_count = db.query(BRRecordStage).filter(
+    # Only count/show records classified as Bahasa Rojak
+    base_filter = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True
+    )
+    
+    total = base_filter.count()
+    
+    restructured_count = base_filter.filter(
         BRRecordStage.restructured_text != None
     ).count()
     
     offset = (page - 1) * per_page
-    record_stages = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id
-    ).offset(offset).limit(per_page).all()
+    record_stages = base_filter.offset(offset).limit(per_page).all()
     
     text_record_ids = [rs.text_record_id for rs in record_stages]
     text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
@@ -660,12 +917,14 @@ def get_restructure_records(
             text_record_id=rs.text_record_id,
             original_text=text_map.get(rs.text_record_id, ""),
             restructured_text=rs.restructured_text,
-            was_restructured=rs.restructured_text is not None
+            was_restructured=rs.restructured_text is not None,
+            is_bahasa_rojak=rs.is_bahasa_rojak,
+            detected_language=rs.detected_language
         )
         for rs in record_stages
     ]
     
-    total_pages = (total + per_page - 1) // per_page
+    total_pages = max(1, (total + per_page - 1) // per_page)
     
     return RestructureListResponse(
         records=records,
@@ -727,6 +986,134 @@ async def auto_restructure_text(
     return {"id": record_stage.id, "restructured_text": restructured}
 
 
+# ===== Stage 2: Merge/Concatenate Records =====
+
+class MergeRecordsRequest(BaseModel):
+    record_ids: List[int]  # IDs of records to merge (order matters)
+    separator: str = "\n\n"  # How to join the texts
+
+
+@router.post("/restructure/merge")
+def merge_restructure_records(
+    request: MergeRecordsRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Merge/concatenate multiple BR record texts into the first record.
+    The first record_id becomes the merged record, others are marked as merged.
+    Preserves original text in all records - only updates restructured_text.
+    """
+    if len(request.record_ids) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 records to merge")
+    
+    # Fetch all records in order
+    records = []
+    for rid in request.record_ids:
+        rs = db.query(BRRecordStage).filter(BRRecordStage.id == rid).first()
+        if not rs:
+            raise HTTPException(status_code=404, detail=f"Record {rid} not found")
+        records.append(rs)
+    
+    # Get original texts in order
+    texts = []
+    for rs in records:
+        text_record = db.query(TextRecord).filter(TextRecord.id == rs.text_record_id).first()
+        if text_record:
+            texts.append(text_record.original_text)
+    
+    # Merge texts into the first record's restructured_text
+    merged_text = request.separator.join(texts)
+    
+    from datetime import datetime
+    target = records[0]
+    target.restructured_text = merged_text
+    target.restructured_at = datetime.utcnow()
+    target.skip_restructure = True
+    target.restructure_metadata = {
+        "action": "manual_merge",
+        "merged_from": request.record_ids,
+        "record_count": len(request.record_ids)
+    }
+    target.current_stage = BRPipelineStage.TEXT_RESTRUCTURE
+    
+    # Mark other records as merged (set restructured_text to indicate they're merged into the target)
+    for rs in records[1:]:
+        rs.restructured_text = f"[MERGED into record #{target.id}]"
+        rs.restructured_at = datetime.utcnow()
+        rs.skip_restructure = True
+        rs.restructure_metadata = {
+            "action": "merged_into",
+            "target_record_id": target.id
+        }
+        rs.current_stage = BRPipelineStage.TEXT_RESTRUCTURE
+    
+    db.commit()
+    
+    return {
+        "message": f"Merged {len(records)} records into record #{target.id}",
+        "target_id": target.id,
+        "merged_text": merged_text,
+        "merged_count": len(records)
+    }
+
+
+# ===== Stage Progress Endpoint =====
+
+@router.get("/stage-progress/{pipeline_run_id}")
+def get_stage_progress(
+    pipeline_run_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed progress for each stage of a pipeline run.
+    Useful for polling while background processing is running.
+    """
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    total = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id
+    ).count()
+    
+    br_count = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True
+    ).count()
+    
+    stage1_done = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak != None
+    ).count()
+    
+    lang_detected = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.detected_language != None
+    ).count()
+    
+    stage2_done = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.restructured_text != None
+    ).count()
+    
+    stage3_done = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.generated_questions != None
+    ).count()
+    
+    return {
+        "pipeline_id": pipeline_run_id,
+        "status": pipeline_run.status,
+        "error_message": pipeline_run.error_message,
+        "total_records": total,
+        "bahasa_rojak_count": br_count,
+        "stage1_classified": stage1_done,
+        "stage1_language_detected": lang_detected,
+        "stage2_restructured": stage2_done,
+        "stage3_questions_generated": stage3_done
+    }
+
+
 # ===== Stage 3: Question Generation Endpoints =====
 
 @router.get("/questions/{pipeline_run_id}", response_model=QuestionListResponse)
@@ -736,36 +1123,47 @@ def get_question_records(
     per_page: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    """Get records for question validation with pagination."""
+    """Get records for question validation with pagination.
+    Only returns Bahasa Rojak records that have restructured text from Stage 2.
+    """
     pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
-    total = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id
-    ).count()
-    
-    validated_count = db.query(BRRecordStage).filter(
+    # Only count BR records with restructured text (from Stage 2), excluding merged records
+    base_filter = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.restructured_text != None,
+        ~BRRecordStage.restructured_text.like("[MERGED into record #%]")
+    )
+    
+    total = base_filter.count()
+    
+    validated_count = base_filter.filter(
         BRRecordStage.selected_question_index != None
     ).count()
     
     offset = (page - 1) * per_page
-    record_stages = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id
-    ).offset(offset).limit(per_page).all()
+    record_stages = base_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
     
-    records = [
-        QuestionRecordResponse(
-            id=rs.id,
-            text_record_id=rs.text_record_id,
-            restructured_text=rs.restructured_text,
-            generated_questions=rs.generated_questions,
-            selected_question_index=rs.selected_question_index,
-            selected_question=rs.selected_question
+    # Fetch original text from TextRecord for each record
+    records = []
+    for rs in record_stages:
+        text_record = db.query(TextRecord).filter(TextRecord.id == rs.text_record_id).first()
+        records.append(
+            QuestionRecordResponse(
+                id=rs.id,
+                text_record_id=rs.text_record_id,
+                original_text=text_record.original_text if text_record else None,
+                restructured_text=rs.restructured_text,
+                detected_language=rs.detected_language,
+                is_bahasa_rojak=rs.is_bahasa_rojak,
+                generated_questions=rs.generated_questions,
+                selected_question_index=rs.selected_question_index,
+                selected_question=rs.selected_question
+            )
         )
-        for rs in record_stages
-    ]
     
     total_pages = (total + per_page - 1) // per_page
     

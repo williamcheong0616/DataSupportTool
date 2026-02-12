@@ -42,17 +42,20 @@ class OllamaService:
             logger.error(f"Ollama API error: {e}")
             raise Exception(f"Failed to call Ollama: {str(e)}")
     
-    def detect_bahasa_rojak(self, text: str) -> tuple[bool, float]:
+    def detect_bahasa_rojak(self, text: str) -> tuple[bool, float, str]:
         """
-        Detect if text contains Bahasa Rojak (code-mixing).
-        Returns: (is_bahasa_rojak, confidence_score)
+        Detect if text contains Bahasa Rojak (code-mixing) and identify languages.
+        Returns: (is_bahasa_rojak, confidence_score, detected_languages)
         """
         system = """You are a language expert specializing in Malaysian and Singaporean languages. 
 Bahasa Rojak (code-mixing) is when a text mixes multiple languages, typically Malay, English, Chinese dialects, or Tamil.
 
-Your task is to determine if the given text contains Bahasa Rojak.
+Your task is to:
+1. Determine if the text contains Bahasa Rojak (code-mixing)
+2. Identify ALL languages used in the text (e.g., "Malay, English", "English, Mandarin, Malay", etc.)
+
 Respond ONLY with a JSON object in this exact format:
-{"is_bahasa_rojak": true/false, "confidence": 0.0-1.0, "explanation": "brief reason"}"""
+{"is_bahasa_rojak": true/false, "confidence": 0.0-1.0, "languages": "comma-separated list of languages", "explanation": "brief reason"}"""
 
         prompt = f"""Analyze this text for Bahasa Rojak (code-mixing):
 
@@ -72,70 +75,109 @@ Respond with JSON only:"""
                 
                 is_br = result.get("is_bahasa_rojak", False)
                 confidence = result.get("confidence", 0.5)
+                languages = result.get("languages", "Unknown")
                 
-                logger.info(f"BR Detection: {is_br} (confidence: {confidence})")
-                return is_br, confidence
+                logger.info(f"BR Detection: {is_br} (confidence: {confidence}, languages: {languages})")
+                return is_br, confidence, languages
             else:
                 logger.warning(f"Could not parse JSON from response: {response}")
-                return False, 0.5
+                return False, 0.5, "Unknown"
                 
         except Exception as e:
             logger.error(f"BR detection failed: {e}")
-            return False, 0.5
+            return False, 0.5, "Unknown"
     
-    def restructure_mcq_text(self, text: str) -> str:
+    def restructure_mcq_text(self, text: str, skip_restructure: bool = False) -> tuple[str, dict]:
         """
         Restructure MCQ text into a consolidated, clean format.
+        If skip_restructure=True, returns original text with metadata.
+        Returns: (restructured_text, metadata)
         """
+        if skip_restructure:
+            logger.info("Skipping restructure, keeping original text")
+            return text, {
+                "action": "skipped",
+                "reason": "User chose to keep original text"
+            }
+        
         system = """You are an expert at restructuring multiple-choice questions (MCQ).
 Your task is to consolidate MCQ text into a single coherent passage that:
 1. Combines the question stem and all options
 2. Removes formatting artifacts (A), B), etc.)
 3. Creates a natural, flowing text
 4. Maintains all important information
+5. KEEP THE ORIGINAL LANGUAGE - Do NOT translate to English or any other language
+6. Preserve all slang, shortforms, and code-mixed text exactly as they are
 
-Output ONLY the restructured text, nothing else."""
+Output ONLY the restructured text in the SAME LANGUAGE(S) as the input, nothing else."""
 
-        prompt = f"""Restructure this MCQ text into a clean, consolidated format:
+        prompt = f"""Restructure this MCQ text into a clean, consolidated format.
+IMPORTANT: Keep the SAME LANGUAGE(S) as the original. Do NOT translate.
 
 {text}
 
-Restructured text:"""
+Restructured text (in same language):"""
 
         try:
             response = self._call_generate(prompt, system=system, temperature=0.5)
             
             if response and len(response) > 10:
                 logger.info(f"Restructured text: {response[:100]}...")
-                return response
+                return response, {
+                    "action": "restructured",
+                    "original_length": len(text),
+                    "restructured_length": len(response)
+                }
             else:
                 logger.warning("Restructuring returned empty/short response, using original")
-                return text
+                return text, {
+                    "action": "failed",
+                    "reason": "Empty response from model"
+                }
                 
         except Exception as e:
             logger.error(f"Text restructuring failed: {e}")
-            return text
+            return text, {
+                "action": "failed",
+                "reason": str(e)
+            }
     
     def generate_questions(self, text: str, count: int = 3) -> List[str]:
         """
-        Generate multiple questions from the given text.
+        Generate multiple questions from the given text in Bahasa Rojak style.
+        Questions should be in reverse (generated from responses/text).
         """
-        system = f"""You are an expert question generator. 
-Your task is to generate {count} diverse, thoughtful questions based on the given text.
-Questions should:
-- Be clear and specific
-- Test different aspects of understanding
-- Be answerable from the text
-- Vary in difficulty and focus
+        system = f"""You are an expert at generating questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
 
-Output ONLY a JSON array of {count} questions, nothing else.
+Bahasa Rojak characteristics:
+- Mix of Malay and English (code-mixing)
+- Use Malaysian/Singaporean slang and shortforms (lah, leh, meh, lor, kan, sikit, etc.)
+- Natural conversational style
+- Short, casual expressions
+
+Your task: Generate {count} diverse questions based on the provided text/response.
+The questions should:
+- Be in Bahasa Rojak style (Malay-English code-mixed)
+- Use slang and shortforms naturally
+- Test different aspects of the text
+- Sound like a natural Malaysian/Singaporean asking a question
+- Be answerable from the text
+
+Examples of Bahasa Rojak questions:
+- "Apa benda yang dia cakap about the economy ah?"
+- "Why lah the government buat macam tu?"
+- "Can you explain sikit about this policy or not?"
+- "Betul ke this thing effective meh?"
+
+Output ONLY a JSON array of {count} questions in Bahasa Rojak, nothing else.
 Format: ["Question 1?", "Question 2?", "Question 3?"]"""
 
-        prompt = f"""Generate {count} diverse questions from this text:
+        prompt = f"""Based on this text/response, generate {count} diverse questions in Bahasa Rojak style:
 
 {text}
 
-Output JSON array of questions:"""
+Remember: Use Malay-English code-mixing with slang/shortforms (lah, leh, meh, sikit, etc.)
+Output JSON array of questions in Bahasa Rojak:"""
 
         try:
             response = self._call_generate(prompt, system=system, temperature=0.8)

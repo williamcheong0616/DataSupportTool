@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getBRClassificationRecords, updateBRClassification, getBRPipelineStatus } from '../api'
+import { getBRClassificationRecords, updateBRClassification, getBRPipelineStatus, runBRStage1, getBRStageProgress } from '../api'
 
 const LANGUAGES = [
   'Malay',
@@ -23,6 +23,9 @@ function BRClassification() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})
   const [pipelineInfo, setPipelineInfo] = useState(null)
+  const [rerunning, setRerunning] = useState(false)
+  const [polling, setPolling] = useState(false)
+  const [progress, setProgress] = useState(null)
   
   // Pagination
   const [page, setPage] = useState(1)
@@ -38,6 +41,25 @@ function BRClassification() {
   useEffect(() => {
     fetchRecords()
   }, [pipelineId, page])
+
+  // Poll progress when pipeline is running
+  useEffect(() => {
+    if (!polling) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await getBRStageProgress(pipelineId)
+        setProgress(res.data)
+        if (res.data.status !== 'running') {
+          setPolling(false)
+          fetchRecords()
+          fetchPipelineInfo()
+        }
+      } catch (err) {
+        console.error('Poll failed:', err)
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [polling, pipelineId])
 
   const fetchPipelineInfo = async () => {
     try {
@@ -107,6 +129,22 @@ function BRClassification() {
     }
   }
 
+  const handleRerunStage = async () => {
+    if (!confirm('Rerun Stage 1 (BR Detection + Language Detection) for all records?\n\nThis will process in the background. You can continue working while it runs.')) return
+    
+    setRerunning(true)
+    try {
+      const res = await runBRStage1(pipelineId, null, true)
+      alert(`Stage 1 started in background!\n\n${res.data.message}\n\nThe page will auto-refresh as processing completes.`)
+      setPolling(true)
+    } catch (err) {
+      console.error('Failed to rerun stage:', err)
+      alert('Failed to start Stage 1: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setRerunning(false)
+    }
+  }
+
   if (loading && records.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -128,12 +166,21 @@ function BRClassification() {
               Review detected language and Bahasa Rojak classification
             </p>
           </div>
-          <button
-            onClick={() => navigate('/text')}
-            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-          >
-            ← Back to Datasets
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRerunStage}
+              disabled={rerunning}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {rerunning ? '⏳ Starting...' : '🔄 Rerun Stage 1'}
+            </button>
+            <button
+              onClick={() => navigate('/text')}
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              ← Back to Datasets
+            </button>
+          </div>
         </div>
 
         {/* Stage Navigation */}
@@ -165,6 +212,26 @@ function BRClassification() {
             </Link>
           </div>
         </div>
+
+        {/* Progress Banner (shown when running) */}
+        {polling && progress && (
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin text-blue-600 dark:text-blue-400">&#9203;</div>
+              <div>
+                <div className="font-medium text-blue-900 dark:text-blue-200">
+                  Stage 1 running in background...
+                </div>
+                <div className="text-sm text-blue-700 dark:text-blue-300">
+                  {progress.stage1_classified} / {progress.total_records} classified | {progress.stage1_language_detected} with language detected
+                  {progress.error_message && (
+                    <span className="text-red-600 ml-2">Error: {progress.error_message}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Bar */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
@@ -225,7 +292,7 @@ function BRClassification() {
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {records.map((record, idx) => (
-                  <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                  <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {(page - 1) * perPage + idx + 1}
                     </td>
@@ -242,6 +309,9 @@ function BRClassification() {
                         className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                       >
                         <option value="">-- Select --</option>
+                        {record.detected_language && !LANGUAGES.includes(record.detected_language) && (
+                          <option value={record.detected_language}>{record.detected_language} (detected)</option>
+                        )}
                         {LANGUAGES.map(lang => (
                           <option key={lang} value={lang}>{lang}</option>
                         ))}
