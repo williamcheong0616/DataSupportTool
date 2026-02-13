@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { RequestLogger } from './utils/logger'
 
 const API_BASE = '/api'
 
@@ -6,6 +7,68 @@ const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 })
+
+// ==================== REQUEST/RESPONSE INTERCEPTORS ====================
+
+/**
+ * Request interceptor - logs all outgoing requests
+ */
+api.interceptors.request.use(
+  (config) => {
+    // Create request logger and store in config for use in response
+    const operation = `${config.method.toUpperCase()} ${config.url}`
+    const requestLogger = new RequestLogger(operation, {
+      params: config.params,
+      data: config.data,
+    })
+    
+    // Start logging
+    requestLogger.start()
+    
+    // Store logger in config for response interceptor
+    config.metadata = { startTime: Date.now(), requestLogger }
+    
+    return config
+  },
+  (error) => {
+    // Log request setup errors
+    const reqLogger = new RequestLogger('REQUEST_SETUP_ERROR')
+    reqLogger.start()
+    reqLogger.error(error)
+    return Promise.reject(error)
+  }
+)
+
+/**
+ * Response interceptor - logs all responses and errors
+ */
+api.interceptors.response.use(
+  (response) => {
+    // Log successful response
+    const { requestLogger } = response.config.metadata || {}
+    if (requestLogger) {
+      requestLogger.success(response, {
+        status: response.status,
+        request_id: response.headers['x-request-id'],
+      })
+    }
+    return response
+  },
+  (error) => {
+    // Log error response
+    const { requestLogger } = error.config?.metadata || {}
+    if (requestLogger) {
+      requestLogger.error(error, {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message,
+        request_id: error.response?.headers['x-request-id'],
+      })
+    }
+    return Promise.reject(error)
+  }
+)
+
+// =============================================================================
 
 // Stats
 export const getStats = () => api.get('/stats')
@@ -97,6 +160,12 @@ export const transcribeAudio = (id, useCelery = false) =>
 export const retranscribeAudio = (id, useCelery = false) => 
   api.post(`/asr/files/${id}/retranscribe?use_celery=${useCelery}`)
 export const deleteAudioFile = (id) => api.delete(`/asr/files/${id}`)
+export const fuseAudioFiles = (fileIds, outputFilename = null) => {
+  const params = new URLSearchParams()
+  fileIds.forEach(id => params.append('file_ids', id))
+  if (outputFilename) params.append('output_filename', outputFilename)
+  return api.post(`/asr/files/fuse?${params}`)
+}
 export const annotateTranscript = (id, transcript, annotator = 'anonymous') =>
   api.post(`/asr/files/${id}/annotate?annotator=${annotator}`, {
     corrected_transcript: transcript
@@ -120,18 +189,95 @@ export const segmentAllFiles = (datasetId, chunkLength = 30, useCelery = true, u
 }
 
 // YouTube Import
-export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, chunkLength = 30, autoTranscribe = false, useVad = true) => {
+export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, chunkLength = 30, autoTranscribe = false, useVad = true, minSpeechDuration = 500) => {
   const params = new URLSearchParams({
     youtube_url: youtubeUrl,
     auto_segment: autoSegment,
     chunk_length: chunkLength,
     auto_transcribe: autoTranscribe,
-    use_vad: useVad
+    use_vad: useVad,
+    min_speech_duration_ms: minSpeechDuration
   })
   return api.post(`/asr/datasets/${datasetId}/youtube?${params}`)
 }
 
 // Task Status (Celery)
 export const getTaskStatus = (taskId) => api.get(`/tasks/${taskId}/status`)
+
+
+// === BR PIPELINE ===
+
+// Start BR Pipeline
+export const startBRPipeline = (datasetId) => 
+  api.post('/br-pipeline/start', { dataset_id: datasetId })
+
+// Get pipeline status
+export const getBRPipelineStatus = (pipelineId) => 
+  api.get(`/br-pipeline/status/${pipelineId}`)
+
+// List all pipelines (optionally by dataset)
+export const listBRPipelines = (datasetId = null) => {
+  const params = datasetId ? `?dataset_id=${datasetId}` : ''
+  return api.get(`/br-pipeline/pipelines${params}`)
+}
+
+// Get classification records with pagination
+export const getBRClassificationRecords = (pipelineId, page = 1, perPage = 15) =>
+  api.get(`/br-pipeline/classification/${pipelineId}?page=${page}&per_page=${perPage}`)
+
+// Update classification (is_bahasa_rojak and/or detected_language)
+export const updateBRClassification = (recordStageId, data) =>
+  api.patch(`/br-pipeline/classification/${recordStageId}`, data)
+
+// Get pending validation records
+export const getBRPendingValidation = (pipelineId = null) => {
+  const params = pipelineId ? `?pipeline_run_id=${pipelineId}` : ''
+  return api.get(`/br-pipeline/pending-validation${params}`)
+}
+
+// Submit question validation
+export const validateBRQuestion = (recordStageId, questionIndex, validatedBy) =>
+  api.post(`/br-pipeline/validate/${recordStageId}`, {
+    question_index: questionIndex,
+    validated_by: validatedBy
+  })
+
+// Get pipeline results
+export const getBRPipelineResults = (pipelineId) =>
+  api.get(`/br-pipeline/results/${pipelineId}`)
+
+// Run individual stages
+export const runBRStage1 = (pipelineId, recordIds = null, forceRerun = false) =>
+  api.post('/br-pipeline/run-stage1', {
+    pipeline_run_id: pipelineId,
+    record_ids: recordIds,
+    force_rerun: forceRerun
+  })
+
+export const runBRStage2 = (pipelineId, skipRestructure = false, recordIds = null, forceRerun = false) =>
+  api.post('/br-pipeline/run-stage2', {
+    pipeline_run_id: pipelineId,
+    skip_restructure: skipRestructure,
+    record_ids: recordIds,
+    force_rerun: forceRerun
+  })
+
+export const runBRStage3 = (pipelineId, recordIds = null, forceRerun = false) =>
+  api.post('/br-pipeline/run-stage3', {
+    pipeline_run_id: pipelineId,
+    record_ids: recordIds,
+    force_rerun: forceRerun
+  })
+
+// Merge/concatenate records
+export const mergeBRRecords = (recordIds, separator = ' ') =>
+  api.post('/br-pipeline/restructure/merge', {
+    record_ids: recordIds,
+    separator: separator
+  })
+
+// Get stage progress (for polling)
+export const getBRStageProgress = (pipelineId) =>
+  api.get(`/br-pipeline/stage-progress/${pipelineId}`)
 
 export default api

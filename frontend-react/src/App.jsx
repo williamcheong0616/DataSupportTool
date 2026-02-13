@@ -5,6 +5,12 @@ import TextDatasets from './pages/TextDatasets'
 import TextAnnotate from './pages/TextAnnotate'
 import ASRDatasets from './pages/ASRDatasets'
 import ASRAnnotate from './pages/ASRAnnotate'
+import BRPipelineValidation from './pages/BRPipelineValidation'
+import BRPipelineResults from './pages/BRPipelineResults'
+import BRClassification from './pages/BRClassification'
+import BRRestructure from './pages/BRRestructure'
+import BRQuestionValidation from './pages/BRQuestionValidation'
+import BRModelResponses from './pages/BRModelResponses'
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -104,6 +110,12 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/text" element={<TextDatasets />} />
             <Route path="/text/:datasetId/annotate" element={<TextAnnotate />} />
+            <Route path="/br-pipeline/validate" element={<BRPipelineValidation />} />
+            <Route path="/br-pipeline/results/:pipelineId" element={<BRPipelineResults />} />
+            <Route path="/br-pipeline/classification/:pipelineId" element={<BRClassification />} />
+            <Route path="/br-pipeline/restructure/:pipelineId" element={<BRRestructure />} />
+            <Route path="/br-pipeline/questions/:pipelineId" element={<BRQuestionValidation />} />
+            <Route path="/br-pipeline/responses/:pipelineId" element={<BRModelResponses />} />
             <Route path="/asr" element={<ASRDatasets />} />
             <Route path="/asr/:datasetId/annotate" element={<ASRAnnotate />} />
           </Routes>

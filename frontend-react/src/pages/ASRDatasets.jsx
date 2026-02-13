@@ -33,6 +33,7 @@ function ASRDatasets() {
   const [youtubeAutoSegment, setYoutubeAutoSegment] = useState(true)
   const [youtubeChunkLength, setYoutubeChunkLength] = useState(30)
   const [useVad, setUseVad] = useState(true) // true = Silero VAD, false = fixed-length
+  const [minSpeechDuration, setMinSpeechDuration] = useState(500) // VAD min speech duration in ms
 
   useEffect(() => {
     fetchDatasets()
@@ -104,7 +105,8 @@ function ASRDatasets() {
         youtubeAutoSegment,
         youtubeChunkLength,
         false, // auto_transcribe
-        useVad
+        useVad,
+        minSpeechDuration
       )
       
       const data = res.data
@@ -213,12 +215,16 @@ function ASRDatasets() {
 
   const handleExport = async (id, format) => {
     try {
+      const dataset = datasets.find(d => d.id === id)
+      const datasetName = dataset?.name || 'asr_dataset'
       const res = await exportASRDataset(id, format)
       const blob = new Blob([res.data], { type: format === 'csv' ? 'text/csv' : 'application/json' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `asr_dataset_${id}.${format === 'csv' ? 'csv' : 'jsonl'}`
+      const date = new Date().toISOString().split('T')[0]
+      const sanitizedName = datasetName.replace(/[^a-zA-Z0-9]/g, '_')
+      a.download = `${sanitizedName}_${date}_export_asr_transcriptions.${format === 'csv' ? 'csv' : 'jsonl'}`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (err) {
@@ -391,6 +397,30 @@ function ASRDatasets() {
                           className="text-red-600"
                         />
                         <span className="text-sm text-gray-600 dark:text-gray-300">Fixed-length (equal intervals)</span>
+                      </label>
+                    </div>
+                  )}
+                  
+                  {youtubeAutoSegment && useVad && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <label className="flex flex-col space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Min Speech Duration: {minSpeechDuration}ms</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Filter out very short segments</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="100"
+                          max="2000"
+                          step="100"
+                          value={minSpeechDuration}
+                          onChange={(e) => setMinSpeechDuration(Number(e.target.value))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                          <span>100ms (more segments)</span>
+                          <span>2000ms (fewer segments)</span>
+                        </div>
                       </label>
                     </div>
                   )}

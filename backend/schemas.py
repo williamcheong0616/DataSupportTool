@@ -8,6 +8,7 @@ from enum import Enum
 # === Enums ===
 
 class TaskType(str, Enum):
+    GENERAL = "general"
     BAHASA_ROJAK_IDENTIFICATION = "bahasa_rojak_identification"
     BAHASA_ROJAK_CLASSIFICATION = "bahasa_rojak_classification"
     TEXT_MODIFICATION = "text_modification"
@@ -27,7 +28,7 @@ class TranscriptionStatus(str, Enum):
 class TextDatasetCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    task_type: TaskType
+    task_type: Optional[TaskType] = TaskType.GENERAL
 
 
 class TextDatasetUpdate(BaseModel):

@@ -219,7 +219,7 @@ function TextAnnotate() {
           </button>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{dataset.name}</h1>
           <p className="text-gray-500 dark:text-gray-400">
-            {dataset.task_type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+            {dataset.task_type === 'general' ? 'General Dataset (Use BR Pipeline)' : dataset.task_type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
           </p>
         </div>
         <div className="flex items-center space-x-4">
@@ -242,7 +242,22 @@ function TextAnnotate() {
       </div>
 
       {/* Annotation Area */}
-      {records.length === 0 ? (
+      {dataset.task_type === 'general' ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+          <p className="text-xl mb-4 text-gray-900 dark:text-gray-100">
+            🤖 This is a general dataset for BR Pipeline
+          </p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Use the BR Pipeline instead of manual annotation for automated processing.
+          </p>
+          <button
+            onClick={() => navigate('/text')}
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
+            Go to Datasets & Start Pipeline
+          </button>
+        </div>
+      ) : records.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-gray-500 dark:text-gray-400">
           <p className="text-xl mb-4">
             No records found in this dataset

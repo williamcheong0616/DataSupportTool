@@ -15,6 +15,7 @@ Base = declarative_base()
 
 class TaskType(str, enum.Enum):
     """Type of annotation task."""
+    GENERAL = "general"  # Default for BR Pipeline
     BAHASA_ROJAK_IDENTIFICATION = "bahasa_rojak_identification"  # Yes/No
     BAHASA_ROJAK_CLASSIFICATION = "bahasa_rojak_classification"  # Categories
     TEXT_MODIFICATION = "text_modification"  # Subject/Context adding
@@ -28,7 +29,7 @@ class TextDataset(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    task_type = Column(SQLEnum(TaskType), nullable=False)
+    task_type = Column(SQLEnum(TaskType), nullable=False, default=TaskType.GENERAL)
     column_mapping = Column(JSON, nullable=True)  # Maps original headers to internal fields
     original_headers = Column(JSON, nullable=True)  # Original CSV/JSON headers
     created_at = Column(DateTime, default=datetime.utcnow)
