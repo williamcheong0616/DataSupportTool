@@ -215,12 +215,16 @@ function ASRDatasets() {
 
   const handleExport = async (id, format) => {
     try {
+      const dataset = datasets.find(d => d.id === id)
+      const datasetName = dataset?.name || 'asr_dataset'
       const res = await exportASRDataset(id, format)
       const blob = new Blob([res.data], { type: format === 'csv' ? 'text/csv' : 'application/json' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `asr_dataset_${id}.${format === 'csv' ? 'csv' : 'jsonl'}`
+      const date = new Date().toISOString().split('T')[0]
+      const sanitizedName = datasetName.replace(/[^a-zA-Z0-9]/g, '_')
+      a.download = `${sanitizedName}_${date}_export_asr_transcriptions.${format === 'csv' ? 'csv' : 'jsonl'}`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (err) {

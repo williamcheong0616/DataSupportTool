@@ -153,6 +153,20 @@ class ResponseRecordResponse(BaseModel):
     completed: bool
 
 
+class ModelResponseEditRequest(BaseModel):
+    """Request to edit a model response."""
+    model_name: str
+    corrected_response: str
+    edited_by: str
+
+
+class ModelProblemsEditRequest(BaseModel):
+    """Request to edit problems for a model response."""
+    model_name: str
+    problems: List[str]
+    edited_by: str
+
+
 class ResponseListResponse(BaseModel):
     records: List[ResponseRecordResponse]
     total: int
@@ -160,6 +174,9 @@ class ResponseListResponse(BaseModel):
     per_page: int
     total_pages: int
     completed_count: int
+    pipeline_id: int
+    dataset_id: int
+    dataset_name: str
 
 
 # Individual Stage Execution Schemas
@@ -1292,13 +1309,21 @@ def get_response_records(
     
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
     
+    # Get dataset info
+    from backend.models import TextDataset
+    dataset = db.query(TextDataset).filter(TextDataset.id == pipeline_run.dataset_id).first()
+    dataset_name = dataset.name if dataset else "unknown"
+    
     return ResponseListResponse(
         records=records,
         total=total,
         page=page,
         per_page=per_page,
         total_pages=total_pages,
-        completed_count=completed_count
+        completed_count=completed_count,
+        pipeline_id=pipeline_run_id,
+        dataset_id=pipeline_run.dataset_id,
+        dataset_name=dataset_name
     )
 
 
@@ -1363,3 +1388,94 @@ async def generate_model_responses(
     db.commit()
     
     return {"id": record_stage.id, "responses": responses}
+
+
+@router.post("/responses/{record_stage_id}/edit")
+def edit_model_response(
+    record_stage_id: int,
+    edit_request: ModelResponseEditRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Save edited/corrected model response for problematic outputs.
+    
+    This allows users to edit model responses that have problems,
+    storing the corrected version for future fine-tuning analysis.
+    """
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    if not record_stage.model_responses:
+        raise HTTPException(status_code=400, detail="No model responses available")
+    
+    # Get current responses
+    responses = record_stage.model_responses.copy()
+    
+    # Check if model exists
+    if edit_request.model_name not in responses:
+        raise HTTPException(status_code=404, detail=f"Model '{edit_request.model_name}' not found")
+    
+    # Add corrected response and metadata
+    from datetime import datetime
+    responses[edit_request.model_name]["corrected_response"] = edit_request.corrected_response
+    responses[edit_request.model_name]["edited_by"] = edit_request.edited_by
+    responses[edit_request.model_name]["edited_at"] = datetime.utcnow().isoformat()
+    
+    # Update the record
+    record_stage.model_responses = responses
+    db.commit()
+    
+    return {
+        "message": "Response edited successfully",
+        "record_id": record_stage_id,
+        "model_name": edit_request.model_name,
+        "updated_response": responses[edit_request.model_name]
+    }
+
+
+@router.post("/responses/{record_stage_id}/edit-problems")
+def edit_model_problems(
+    record_stage_id: int,
+    edit_request: ModelProblemsEditRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Edit the problems identified in a model response.
+    
+    This allows users to manually define or update the problems for any model response,
+    which will be used for fine-tuning analysis.
+    """
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    if not record_stage.model_responses:
+        raise HTTPException(status_code=400, detail="No model responses available")
+    
+    # Get current responses
+    responses = record_stage.model_responses.copy()
+    
+    # Check if model exists
+    if edit_request.model_name not in responses:
+        raise HTTPException(status_code=404, detail=f"Model '{edit_request.model_name}' not found")
+    
+    # Update problems and metadata
+    from datetime import datetime
+    responses[edit_request.model_name]["problems"] = edit_request.problems
+    responses[edit_request.model_name]["edited_by"] = edit_request.edited_by
+    responses[edit_request.model_name]["edited_at"] = datetime.utcnow().isoformat()
+    
+    # Update the record
+    record_stage.model_responses = responses
+    db.commit()
+    
+    return {
+        "message": "Problems updated successfully",
+        "record_id": record_stage_id,
+        "model_name": edit_request.model_name,
+        "updated_response": responses[edit_request.model_name]
+    }
+

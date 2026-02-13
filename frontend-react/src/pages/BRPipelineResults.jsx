@@ -54,7 +54,11 @@ function BRPipelineResults() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `br_pipeline_results_${pipelineId}.csv`
+    const date = new Date().toISOString().split('T')[0]
+    // Get dataset name from results if available
+    const datasetName = results.dataset_name || 'br_pipeline'
+    const sanitizedName = datasetName.replace(/[^a-zA-Z0-9]/g, '_')
+    a.download = `${sanitizedName}_${date}_export_full_results.csv`
     a.click()
   }
 

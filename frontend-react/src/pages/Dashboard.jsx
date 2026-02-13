@@ -100,11 +100,11 @@ function Dashboard() {
             href="/text"
             className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
           >
-            <span className="text-3xl mr-4">📝</span>
+            <span className="text-3xl mr-4">�</span>
             <div>
-              <h3 className="font-semibold text-blue-900 dark:text-blue-300">Text Annotation</h3>
+              <h3 className="font-semibold text-blue-900 dark:text-blue-300">BR Pipeline (Automated)</h3>
               <p className="text-sm text-blue-700 dark:text-blue-400">
-                Annotate Bahasa Rojak, classify text, or generate questions
+                Batch process Bahasa Rojak data through 4-stage pipeline
               </p>
             </div>
           </a>
@@ -114,9 +114,9 @@ function Dashboard() {
           >
             <span className="text-3xl mr-4">🎧</span>
             <div>
-              <h3 className="font-semibold text-purple-900 dark:text-purple-300">ASR Annotation</h3>
+              <h3 className="font-semibold text-purple-900 dark:text-purple-300">ASR Datasets</h3>
               <p className="text-sm text-purple-700 dark:text-purple-400">
-                Transcribe and correct audio files using Whisper
+                Transcribe and correct audio files with Whisper
               </p>
             </div>
           </a>
@@ -128,23 +128,44 @@ function Dashboard() {
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Getting Started</h2>
         <div className="space-y-4 text-gray-600 dark:text-gray-300">
           <div>
-            <h3 className="font-medium text-gray-900 dark:text-gray-100">1. Text Annotation Workflow</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">1. BR Pipeline Workflow (Automated)</h3>
             <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
-              <li>Create a dataset and choose the task type (Bahasa Rojak ID, Classification, Modification, Questions)</li>
-              <li>Upload your JSON or CSV file with text data</li>
-              <li>Select the column containing the text to annotate</li>
-              <li>Annotate each record based on the task type</li>
+              <li>Create a text dataset and select "General (For BR Pipeline)" task type</li>
+              <li>Upload your JSON or CSV file with Malaysian English conversation data</li>
+              <li>Start the BR Pipeline - processes all records automatically through 4 stages:</li>
+              <li className="ml-6">• Stage 1: BR Detection + Language Classification (automated)</li>
+              <li className="ml-6">• Stage 2: Text Restructuring/MCQ Consolidation (automated)</li>
+              <li className="ml-6">• Stage 3: Question Generation (3 questions per record, automated)</li>
+              <li className="ml-6">• Stage 4: Model Response Generation (multiple models respond, automated)</li>
+              <li>Review and manually edit problems in model responses for fine-tuning datasets</li>
+              <li>Export results as CSV for analysis and model training</li>
+            </ul>
+            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
+                <strong>Note:</strong> The BR Pipeline runs automatically on all records in batch. 
+                You only need to review and edit the problems in Stage 4 responses for quality control and fine-tuning preparation.
+              </p>
+            </div>
+          </div>
+          <div>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">2. Text Annotation Workflow (Legacy - One-by-One)</h3>
+            <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
+              <li>For manual annotation tasks (Bahasa Rojak ID, Classification, Questions)</li>
+              <li>Create a dataset with specific task type</li>
+              <li>Upload JSON or CSV file with text data</li>
+              <li>Annotate records individually through the annotation interface</li>
               <li>Export annotated data as CSV or JSONL</li>
             </ul>
           </div>
           <div>
-            <h3 className="font-medium text-gray-900 dark:text-gray-100">2. ASR Annotation Workflow</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">3. ASR Annotation Workflow</h3>
             <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
               <li>Create an ASR dataset</li>
-              <li>Upload audio files in batch (supports MP3, WAV, etc.)</li>
-              <li>Run Whisper transcription on each file</li>
-              <li>Listen to audio and correct the transcript</li>
-              <li>Mark as complete and export results</li>
+              <li>Upload audio files in batch (supports MP3, WAV, etc.) or import from YouTube</li>
+              <li>Auto-segment long audio files into manageable chunks</li>
+              <li>Run Whisper transcription on all files (batch processing)</li>
+              <li>Review transcripts, listen to audio, and make corrections</li>
+              <li>Export completed transcriptions for training data</li>
             </ul>
           </div>
         </div>
