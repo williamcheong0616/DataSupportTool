@@ -28,7 +28,6 @@ from backend.schemas import (
     ASRDatasetCreate, ASRDatasetResponse,
     AudioFileResponse, TranscriptAnnotation
 )
-from backend.tasks import transcribe_audio_task, batch_transcribe_task
 from backend.services.transcription_service import TranscriptionService
 from backend.utils.logger import RequestLogger
 
@@ -191,10 +190,14 @@ async def upload_audio_files(
             db.refresh(audio_file)
             uploaded.append(audio_file.id)
             
-            # Queue transcription via Celery
+            # Transcribe inline using local Whisper
             if auto_transcribe:
-                task = transcribe_audio_task.delay(audio_file.id)
-                task_ids.append(task.id)
+                try:
+                    service = TranscriptionService(db)
+                    service.transcribe_single(audio_file.id)
+                    task_ids.append(audio_file.id)  # Track transcribed file IDs
+                except Exception as e:
+                    logger.warning(f"Auto-transcribe failed for file {audio_file.id}: {e}")
         
         logger.info(f"Uploaded {len(uploaded)} files to dataset {dataset_id}", extra={
             "file_ids": uploaded,
@@ -221,6 +224,7 @@ def import_youtube_audio(
     use_vad: bool = Query(True, description="Use VAD (voice-only) or fixed-length cutting"),
     auto_transcribe: bool = Query(False, description="Automatically transcribe after segmentation"),
     min_speech_duration_ms: int = Query(500, ge=100, le=5000, description="Minimum speech duration in ms for VAD"),
+    min_silence_duration_ms: int = Query(300, ge=100, le=5000, description="Minimum silence duration in ms to split segments"),
     db: Session = Depends(get_db)
 ):
     """
@@ -240,6 +244,7 @@ def import_youtube_audio(
         use_vad: True for voice activity detection, False for fixed-length cuts
         auto_transcribe: Whether to auto-queue transcription for segments
         min_speech_duration_ms: Minimum speech segment duration for VAD (100-5000ms)
+        min_silence_duration_ms: Minimum silence duration to split segments (100-5000ms)
         
     Returns:
         Import summary with YouTube metadata and created file IDs
@@ -284,7 +289,8 @@ def import_youtube_audio(
                     chunk_length=chunk_length,
                     output_base=dataset_dir,
                     use_vad=use_vad,
-                    min_speech_duration_ms=min_speech_duration_ms
+                    min_speech_duration_ms=min_speech_duration_ms,
+                    min_silence_duration_ms=min_silence_duration_ms
                 )
                 
                 # Create AudioFile records for each chunk
@@ -304,8 +310,12 @@ def import_youtube_audio(
                     created_files.append(audio_file.id)
                     
                     if auto_transcribe:
-                        task = transcribe_audio_task.delay(audio_file.id)
-                        task_ids.append(task.id)
+                        try:
+                            service = TranscriptionService(db)
+                            service.transcribe_single(audio_file.id)
+                            task_ids.append(audio_file.id)
+                        except Exception as e:
+                            logger.warning(f"Auto-transcribe failed for file {audio_file.id}: {e}")
                 
                 db.commit()
                 
@@ -349,8 +359,12 @@ def import_youtube_audio(
             created_files.append(audio_file.id)
             
             if auto_transcribe:
-                task = transcribe_audio_task.delay(audio_file.id)
-                task_ids.append(task.id)
+                try:
+                    service = TranscriptionService(db)
+                    service.transcribe_single(audio_file.id)
+                    task_ids.append(audio_file.id)
+                except Exception as e:
+                    logger.warning(f"Auto-transcribe failed for file {audio_file.id}: {e}")
             
             logger.info(f"Added YouTube audio without segmentation", extra={
                 "file_id": audio_file.id,
@@ -374,163 +388,77 @@ def import_youtube_audio(
 @router.post("/files/{file_id}/transcribe")
 def manual_transcribe(
     file_id: int,
-    use_celery: bool = Query(False, description="Use Celery for async transcription (requires Redis)"),
     db: Session = Depends(get_db)
 ):
     """
-    Trigger transcription for a single audio file.
+    Transcribe a single audio file using local MLX-Whisper.
     
-    Modes:
-    - Synchronous (use_celery=False): Blocks until transcription completes
-    - Asynchronous (use_celery=True): Queues via Celery, returns task_id immediately
+    Runs transcription inline (synchronously) using the local Whisper model.
+    No Redis/Celery required.
     
     Args:
         file_id: Audio file ID to transcribe
-        use_celery: Whether to use async Celery task queue
         
     Returns:
-        Transcription result (sync) or task_id (async)
+        Transcription result with transcript, language, and confidence
     """
-    with RequestLogger(f"Manual transcribe file {file_id}", file_id=file_id, use_celery=use_celery):
-        audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
-        if not audio_file:
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        if use_celery:
-            # Async via Celery (requires Redis)
-            logger.info(f"Queueing transcription for file {file_id} via Celery")
-            task = transcribe_audio_task.delay(file_id)
-            return {"message": "Transcription queued", "task_id": task.id}
-        else:
-            # Synchronous transcription using service layer
-            logger.info(f"Starting synchronous transcription for file {file_id}")
-            service = TranscriptionService(db)
+    with RequestLogger(f"Manual transcribe file {file_id}", file_id=file_id):
+        service = TranscriptionService(db)
+        try:
             result = service.transcribe_single(file_id)
-            
-            logger.info(f"Transcription completed for file {file_id}", extra={
-                "language": result.get("language"),
-                "confidence": result.get("confidence")
-            })
             return result
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/datasets/{dataset_id}/transcribe-all")
 def batch_transcribe(
     dataset_id: int,
     file_ids: Optional[List[int]] = Query(None, description="Specific file IDs to transcribe"),
-    use_celery: bool = Query(False, description="Use Celery for async transcription (requires Redis)"),
     db: Session = Depends(get_db)
 ):
     """
-    Transcribe all pending files in a dataset.
+    Transcribe all pending files in a dataset using local MLX-Whisper.
+    
+    Runs transcription inline (synchronously) for each pending file.
+    No Redis/Celery required.
     
     Args:
         dataset_id: Dataset ID
         file_ids: Optional list of specific file IDs to transcribe
-        use_celery: Whether to use async Celery task queue
         
     Returns:
-        Batch transcription results
+        Batch transcription summary with per-file results
     """
     with RequestLogger(f"Batch transcribe dataset {dataset_id}",
                        dataset_id=dataset_id,
-                       file_ids=file_ids,
-                       use_celery=use_celery):
+                       file_ids=file_ids):
         dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
-        if use_celery:
-            # Async via Celery (requires Redis)
-            logger.info(f"Queueing batch transcription for dataset {dataset_id} via Celery")
-            task = batch_transcribe_task.delay(dataset_id, file_ids)
-            return {"message": "Batch transcription queued", "task_id": task.id}
-        else:
-            # Synchronous batch transcription using service layer
-            logger.info(f"Starting synchronous batch transcription for dataset {dataset_id}")
-            service = TranscriptionService(db)
-            result = service.transcribe_batch(dataset_id, file_ids)
-            
-            logger.info(f"Batch transcription completed for dataset {dataset_id}", extra={
-                "files_processed": result.get("files_processed"),
-                "success_count": result.get("success_count"),
-                "error_count": result.get("error_count")
-            })
-            return result
+        service = TranscriptionService(db)
+        result = service.transcribe_batch(dataset_id, file_ids)
+        return result
 
 
 @router.post("/files/{file_id}/retranscribe")
 def retranscribe_audio(
     file_id: int,
-    use_celery: bool = Query(False, description="Use Celery for async transcription (requires Redis)"),
     db: Session = Depends(get_db)
 ):
     """
-    Clear existing transcription and re-transcribe an audio file.
+    Clear existing transcription and re-transcribe an audio file using local MLX-Whisper.
     
     Useful for re-running transcription with updated models or settings.
     """
-    with RequestLogger(f"Retranscribe file {file_id}", file_id=file_id, use_celery=use_celery):
-        audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
-        if not audio_file:
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        if use_celery:
-            # Async via Celery
-            logger.info(f"Queueing re-transcription for file {file_id} via Celery")
-            # Clear existing transcription before queueing
-            audio_file.whisper_transcript = None
-            audio_file.corrected_transcript = None
-            audio_file.whisper_language = None
-            audio_file.whisper_confidence = None
-            audio_file.status = TranscriptionStatus.TRANSCRIBING
-            db.commit()
-            
-            task = transcribe_audio_task.delay(file_id)
-            return {"message": "Re-transcription queued", "task_id": task.id}
-        else:
-            # Synchronous re-transcription using service layer
-            logger.info(f"Starting synchronous re-transcription for file {file_id}")
-            service = TranscriptionService(db)
+    with RequestLogger(f"Retranscribe file {file_id}", file_id=file_id):
+        service = TranscriptionService(db)
+        try:
             result = service.retranscribe(file_id)
-            
-            logger.info(f"Re-transcription completed for file {file_id}")
             return result
-            audio_file.status = TranscriptionStatus.PENDING
-            db.commit()
-            raise HTTPException(status_code=500, detail=f"Re-transcription failed: {str(e)}")
-
-
-# ==================== CELERY TASK STATUS ====================
-
-@router.get("/../../tasks/{task_id}/status")
-def get_task_status(task_id: str):
-    """
-    Get the status of a Celery task.
-    
-    Args:
-        task_id: Celery task ID to check
-        
-    Returns:
-        Task status with result (if completed) or error (if failed)
-    """
-    from backend.celery_app import celery_app
-    
-    result = celery_app.AsyncResult(task_id)
-    
-    response = {
-        "task_id": task_id,
-        "status": result.status,
-        "ready": result.ready(),
-    }
-    
-    if result.ready():
-        if result.successful():
-            response["result"] = result.result
-        else:
-            response["error"] = str(result.result)
-    
-    return response
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
 
 # ==================== AUDIO FILE MANAGEMENT ====================

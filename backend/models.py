@@ -1,25 +1,17 @@
 """Database models for Text and ASR Annotation."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+import enum
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float, DateTime, 
     ForeignKey, JSON, Enum as SQLEnum
 )
 from sqlalchemy.orm import relationship, declarative_base
-import enum
+from backend.enums import TaskType, TranscriptionStatus
 
 Base = declarative_base()
 
 
-# === Text Annotation Models ===
-
-class TaskType(str, enum.Enum):
-    """Type of annotation task."""
-    GENERAL = "general"  # Default for BR Pipeline
-    BAHASA_ROJAK_IDENTIFICATION = "bahasa_rojak_identification"  # Yes/No
-    BAHASA_ROJAK_CLASSIFICATION = "bahasa_rojak_classification"  # Categories
-    TEXT_MODIFICATION = "text_modification"  # Subject/Context adding
-    QUESTION_GENERATION = "question_generation"  # 3 questions
 
 
 class TextDataset(Base):
@@ -32,8 +24,8 @@ class TextDataset(Base):
     task_type = Column(SQLEnum(TaskType), nullable=False, default=TaskType.GENERAL)
     column_mapping = Column(JSON, nullable=True)  # Maps original headers to internal fields
     original_headers = Column(JSON, nullable=True)  # Original CSV/JSON headers
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     records = relationship("TextRecord", back_populates="dataset", cascade="all, delete-orphan")
@@ -71,7 +63,7 @@ class TextRecord(Base):
     annotated_by = Column(String(255), nullable=True)
     annotated_at = Column(DateTime, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     dataset = relationship("TextDataset", back_populates="records")
@@ -86,20 +78,13 @@ class ASRDataset(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     audio_files = relationship("AudioFile", back_populates="dataset", cascade="all, delete-orphan")
 
 
-class TranscriptionStatus(str, enum.Enum):
-    """Status of audio transcription."""
-    PENDING = "pending"  # Not yet transcribed
-    TRANSCRIBING = "transcribing"  # Whisper processing
-    TRANSCRIBED = "transcribed"  # Whisper done, awaiting annotation
-    ANNOTATING = "annotating"  # User is editing
-    COMPLETED = "completed"  # Annotation done
 
 
 class AudioFile(Base):
@@ -129,7 +114,7 @@ class AudioFile(Base):
     annotated_by = Column(String(255), nullable=True)
     annotated_at = Column(DateTime, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     dataset = relationship("ASRDataset", back_populates="audio_files")
@@ -165,8 +150,8 @@ class Dataset(Base):
     description = Column(Text, nullable=True)
     source_type = Column(String(100), nullable=True)  # text, asr, etc.
     config = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     records = relationship("DataRecord", back_populates="dataset", cascade="all, delete-orphan")
@@ -190,7 +175,7 @@ class DataRecord(Base):
     
     # Extra data
     record_metadata = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     dataset = relationship("Dataset", back_populates="records")
@@ -220,7 +205,7 @@ class PipelineRun(Base):
     # Timestamps
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     dataset = relationship("Dataset", back_populates="pipeline_runs")
@@ -245,7 +230,7 @@ class ModelResponse(Base):
     token_count = Column(Integer, nullable=True)
     raw_response = Column(JSON, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     record = relationship("DataRecord", back_populates="model_responses")
@@ -275,7 +260,7 @@ class ValidationRecord(Base):
     reviewer = Column(String(255), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     record = relationship("DataRecord", back_populates="validation_records")

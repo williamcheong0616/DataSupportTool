@@ -100,8 +100,3 @@ secrets/
 *.temp
 *_old.py
 *_backup.*
-__pycache__/config.cpython-312.pyc
-backend/__pycache__/api.cpython-312.pyc
-backend/__pycache__/database.cpython-312.pyc
-backend/__pycache__/models.cpython-312.pyc
-backend/__pycache__/schemas.cpython-312.pyc

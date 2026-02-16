@@ -1,11 +1,8 @@
 """
 Celery application configuration for distributed task processing.
 """
-import os
 from celery import Celery
-
-# Redis URL - use environment variable or default to localhost
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+from config import REDIS_URL
 
 # Create Celery app
 celery_app = Celery(
@@ -32,10 +29,13 @@ celery_app.conf.update(
     # Result settings
     result_expires=3600,  # Results expire after 1 hour
     
-    # Task routing
+    # Task routing - separate queues to avoid clashing
     task_routes={
+        # ASR transcription tasks on dedicated queue
         "backend.tasks.transcribe_audio_task": {"queue": "transcription"},
         "backend.tasks.batch_transcribe_task": {"queue": "transcription"},
+        # Text model generation tasks on separate queue (if needed)
+        # "backend.tasks.generate_model_response_task": {"queue": "model_generation"},
     },
     
     # Task rate limiting (to avoid overwhelming Whisper API)

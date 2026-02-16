@@ -11,11 +11,12 @@ from backend.celery_app import celery_app
 from backend.database import SessionLocal
 from backend.models import AudioFile, TranscriptionStatus
 
+from config import WHISPER_API_URL
+
 logger = logging.getLogger(__name__)
 
 # Use local MLX Whisper (set to False to use remote API)
 USE_LOCAL_WHISPER = os.getenv("USE_LOCAL_WHISPER", "true").lower() == "true"
-WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://localhost:9000")
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=30)

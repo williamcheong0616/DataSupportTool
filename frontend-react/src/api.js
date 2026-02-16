@@ -155,10 +155,11 @@ export const getAudioFiles = (datasetId, status = null, limit = 50, offset = 0) 
 
 export const getAudioFile = (id) => api.get(`/asr/files/${id}`)
 export const getAudioUrl = (id) => `${API_BASE}/asr/files/${id}/audio`
-export const transcribeAudio = (id, useCelery = false) => 
-  api.post(`/asr/files/${id}/transcribe?use_celery=${useCelery}`)
-export const retranscribeAudio = (id, useCelery = false) => 
-  api.post(`/asr/files/${id}/retranscribe?use_celery=${useCelery}`)
+// Transcription now always uses Celery background tasks
+export const transcribeAudio = (id) => 
+  api.post(`/asr/files/${id}/transcribe`)
+export const retranscribeAudio = (id) => 
+  api.post(`/asr/files/${id}/retranscribe`)
 export const deleteAudioFile = (id) => api.delete(`/asr/files/${id}`)
 export const fuseAudioFiles = (fileIds, outputFilename = null) => {
   const params = new URLSearchParams()
@@ -172,11 +173,14 @@ export const annotateTranscript = (id, transcript, annotator = 'anonymous') =>
   })
 export const updateFileStatus = (id, status) => api.post(`/asr/files/${id}/status?status=${status}`)
 
-// Batch Transcription (synchronous by default, use_celery=true requires Redis)
-export const batchTranscribe = (datasetId, fileIds = null, useCelery = false) => {
-  const params = new URLSearchParams({ use_celery: useCelery })
-  if (fileIds) params.append('file_ids', fileIds.join(','))
-  return api.post(`/asr/datasets/${datasetId}/transcribe-all?${params}`)
+// Batch Transcription - always uses Celery background tasks to avoid API blocking
+export const batchTranscribe = (datasetId, fileIds = null) => {
+  const params = new URLSearchParams()
+  if (fileIds && fileIds.length > 0) {
+    fileIds.forEach(id => params.append('file_ids', id))
+  }
+  const queryString = params.toString()
+  return api.post(`/asr/datasets/${datasetId}/transcribe-all${queryString ? '?' + queryString : ''}`)
 }
 
 // Audio Segmentation
@@ -189,14 +193,15 @@ export const segmentAllFiles = (datasetId, chunkLength = 30, useCelery = true, u
 }
 
 // YouTube Import
-export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, chunkLength = 30, autoTranscribe = false, useVad = true, minSpeechDuration = 500) => {
+export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, chunkLength = 30, autoTranscribe = false, useVad = true, minSpeechDuration = 500, minSilenceDuration = 300) => {
   const params = new URLSearchParams({
     youtube_url: youtubeUrl,
     auto_segment: autoSegment,
     chunk_length: chunkLength,
     auto_transcribe: autoTranscribe,
     use_vad: useVad,
-    min_speech_duration_ms: minSpeechDuration
+    min_speech_duration_ms: minSpeechDuration,
+    min_silence_duration_ms: minSilenceDuration
   })
   return api.post(`/asr/datasets/${datasetId}/youtube?${params}`)
 }

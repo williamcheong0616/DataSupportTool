@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   getASRDatasets,
@@ -11,7 +11,6 @@ import {
   batchTranscribe,
   segmentAllFiles,
   importYoutubeAudio,
-  getTaskStatus,
 } from '../api'
 
 function ASRDatasets() {
@@ -25,7 +24,6 @@ function ASRDatasets() {
   const [uploading, setUploading] = useState(false)
   const [transcribing, setTranscribing] = useState({})
   const [segmenting, setSegmenting] = useState({})
-  const [taskStatus, setTaskStatus] = useState({}) // { datasetId: { taskId, status, progress } }
   
   // YouTube import state
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -34,6 +32,7 @@ function ASRDatasets() {
   const [youtubeChunkLength, setYoutubeChunkLength] = useState(30)
   const [useVad, setUseVad] = useState(true) // true = Silero VAD, false = fixed-length
   const [minSpeechDuration, setMinSpeechDuration] = useState(500) // VAD min speech duration in ms
+  const [minSilenceDuration, setMinSilenceDuration] = useState(300) // VAD min silence duration in ms
 
   useEffect(() => {
     fetchDatasets()
@@ -106,7 +105,8 @@ function ASRDatasets() {
         youtubeChunkLength,
         false, // auto_transcribe
         useVad,
-        minSpeechDuration
+        minSpeechDuration,
+        minSilenceDuration
       )
       
       const data = res.data
@@ -129,20 +129,20 @@ function ASRDatasets() {
   const handleTranscribeAll = async (datasetId) => {
     setTranscribing({ ...transcribing, [datasetId]: true })
     try {
-      // Use Celery batch transcription
       const res = await batchTranscribe(datasetId)
-      const taskId = res.data.task_id
+      const result = res.data
       
-      setTaskStatus(prev => ({
-        ...prev,
-        [datasetId]: { taskId, status: 'PENDING', message: res.data.message }
-      }))
+      if (result.files_processed === 0) {
+        alert('No pending files to transcribe')
+      } else {
+        alert(`Transcription complete: ${result.success_count} succeeded, ${result.error_count} failed out of ${result.files_processed} files`)
+      }
       
-      // Poll for task status
-      pollTaskStatus(datasetId, taskId)
+      fetchDatasets() // Refresh to show updated counts
       
     } catch (err) {
-      alert('Failed to start transcription: ' + (err.response?.data?.detail || err.message))
+      alert('Failed to transcribe: ' + (err.response?.data?.detail || err.message))
+    } finally {
       setTranscribing({ ...transcribing, [datasetId]: false })
     }
   }
@@ -171,47 +171,6 @@ function ASRDatasets() {
       setSegmenting({ ...segmenting, [datasetId]: false })
     }
   }
-
-  const pollTaskStatus = useCallback(async (datasetId, taskId) => {
-    const checkStatus = async () => {
-      try {
-        const res = await getTaskStatus(taskId)
-        const { status, ready, result } = res.data
-        
-        setTaskStatus(prev => ({
-          ...prev,
-          [datasetId]: { 
-            taskId, 
-            status, 
-            ready,
-            result,
-            message: result?.message || `Status: ${status}`
-          }
-        }))
-        
-        if (ready) {
-          // Task completed
-          setTranscribing(prev => ({ ...prev, [datasetId]: false }))
-          fetchDatasets() // Refresh to show updated counts
-          
-          if (result?.status === 'queued') {
-            // Batch task queued individual tasks, keep polling for a bit
-            setTimeout(() => {
-              fetchDatasets()
-            }, 5000)
-          }
-        } else {
-          // Keep polling
-          setTimeout(checkStatus, 2000)
-        }
-      } catch (err) {
-        console.error('Failed to check task status:', err)
-        setTranscribing(prev => ({ ...prev, [datasetId]: false }))
-      }
-    }
-    
-    checkStatus()
-  }, [])
 
   const handleExport = async (id, format) => {
     try {
@@ -264,8 +223,8 @@ function ASRDatasets() {
                 </label>
                 <input
                   type="text"
-                  value={newDatasetName}
-                  onChange={(e) => setNewDatasetName(e.target.value)}
+                  value={newDataset.name}
+                  onChange={(e) => setNewDataset({ ...newDataset, name: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 />
@@ -422,6 +381,25 @@ function ASRDatasets() {
                           <span>2000ms (fewer segments)</span>
                         </div>
                       </label>
+                      <label className="flex flex-col space-y-2 mt-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Min Silence Duration: {minSilenceDuration}ms</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Gap needed to split segments</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="100"
+                          max="2000"
+                          step="50"
+                          value={minSilenceDuration}
+                          onChange={(e) => setMinSilenceDuration(Number(e.target.value))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                          <span>100ms (split on short pauses)</span>
+                          <span>2000ms (merge across pauses)</span>
+                        </div>
+                      </label>
                     </div>
                   )}
                   
@@ -536,25 +514,6 @@ function ASRDatasets() {
                         </>
                       )}
                     </div>
-                    
-                    {/* Task Status */}
-                    {taskStatus[dataset.id] && (
-                      <div className={`text-xs px-2 py-1 rounded ${
-                        taskStatus[dataset.id].status === 'SUCCESS' 
-                          ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                          : taskStatus[dataset.id].status === 'FAILURE'
-                          ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                          : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                      }`}>
-                        <span className="font-medium">Task: </span>
-                        {taskStatus[dataset.id].message || taskStatus[dataset.id].status}
-                        {taskStatus[dataset.id].result?.count && (
-                          <span className="ml-2">
-                            ({taskStatus[dataset.id].result.count} files queued)
-                          </span>
-                        )}
-                      </div>
-                    )}
                     
                     <div className="flex space-x-2">
                       {dataset.file_count > 0 && (

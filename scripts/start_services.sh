@@ -73,18 +73,18 @@ else
     echo "⏳ FastAPI: Starting up..."
 fi
 
-# Frontend
-if curl -s http://localhost:8501 > /dev/null 2>&1; then
-    echo "✅ Streamlit Frontend: Running on http://localhost:8501"
+# Frontend (React)
+if curl -s http://localhost:5173 > /dev/null 2>&1; then
+    echo "✅ React Frontend: Running on http://localhost:5173"
 else
-    echo "⏳ Streamlit: Starting up..."
+    echo "⏳ React Frontend: Not running (start with: cd frontend-react && npm run dev)"
 fi
 
 echo ""
 echo "🎉 All services started!"
 echo ""
 echo "📚 Quick Links:"
-echo "  - Frontend:        http://localhost:8501"
+echo "  - Frontend:        http://localhost:5173"
 echo "  - API Docs:        http://localhost:8000/docs"
 echo "  - MLflow:          http://localhost:5000"
 echo "  - Argilla:         http://localhost:6900"

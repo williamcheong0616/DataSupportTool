@@ -54,23 +54,4 @@ WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://localhost:9000")
 # Model endpoint for LLM inference (Ollama, vLLM, etc.)
 MODEL_ENDPOINT = os.getenv("MODEL_ENDPOINT", "http://localhost:8080/v1/completions")
 
-# ==================== PIPELINE SETTINGS ====================
-# BR Pipeline validation and iteration configuration
-VALIDATION_THRESHOLD = 0.8  # Minimum quality score (0-1) to pass validation
-MAX_ITERATIONS = 5  # Maximum retry iterations before requiring manual review
-
-# ==================== MLFLOW SETTINGS ====================
-# MLflow tracking server for experiment logging and model versioning
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "data_pipeline_validation")
-
-# ==================== ARGILLA SETTINGS ====================
-# Argilla annotation platform configuration (optional)
-ARGILLA_API_URL = os.getenv("ARGILLA_API_URL", "http://localhost:6900")
-ARGILLA_API_KEY = os.getenv("ARGILLA_API_KEY", "admin.apikey")
-ARGILLA_WORKSPACE = os.getenv("ARGILLA_WORKSPACE", "data_pipeline")
-
-# ==================== PREFECT SETTINGS ====================
-# Prefect workflow orchestration (optional)
-PREFECT_API_URL = os.getenv("PREFECT_API_URL", "http://localhost:4200/api")
 

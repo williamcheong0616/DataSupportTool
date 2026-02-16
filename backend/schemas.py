@@ -2,25 +2,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
-from enum import Enum
-
-
-# === Enums ===
-
-class TaskType(str, Enum):
-    GENERAL = "general"
-    BAHASA_ROJAK_IDENTIFICATION = "bahasa_rojak_identification"
-    BAHASA_ROJAK_CLASSIFICATION = "bahasa_rojak_classification"
-    TEXT_MODIFICATION = "text_modification"
-    QUESTION_GENERATION = "question_generation"
-
-
-class TranscriptionStatus(str, Enum):
-    PENDING = "pending"
-    TRANSCRIBING = "transcribing"
-    TRANSCRIBED = "transcribed"
-    ANNOTATING = "annotating"
-    COMPLETED = "completed"
+from backend.enums import TaskType, TranscriptionStatus
 
 
 # === Text Dataset Schemas ===

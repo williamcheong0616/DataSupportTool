@@ -28,11 +28,12 @@ prefect>=3.0.0
 # ML Tracking (MLflow)
 mlflow>=2.10.0
 
+# YouTube Audio Download
+yt-dlp>=2024.1.0
+
 # Utilities
 python-dotenv>=1.0.1
 aiofiles>=23.2.1
-httpx>=0.26.0
-python-multipart>=0.0.9
 
 # Logging
 python-json-logger>=2.0.7

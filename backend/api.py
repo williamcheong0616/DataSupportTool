@@ -15,6 +15,8 @@ Architecture:
 - Utility functions in backend/utils/ directory
 """
 
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -31,37 +33,45 @@ logger.info("=" * 80)
 logger.info("DataSupportTool API Starting Up...")
 logger.info("=" * 80)
 
+
+# ==================== LIFESPAN ====================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup and shutdown events."""
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("✓ Database initialized successfully")
+    logger.info("✓ API ready to accept requests")
+    yield
+    logger.info("DataSupportTool API shutting down...")
+
+
 # Create FastAPI application
 app = FastAPI(
     title="DataSupportTool API",
     description="API for Text and ASR Annotation workflows with BR Pipeline support",
     version="3.0.0",
     docs_url="/api/docs",  # Swagger UI at /api/docs
-    redoc_url="/api/redoc"  # ReDoc at /api/redoc
+    redoc_url="/api/redoc",  # ReDoc at /api/redoc
+    lifespan=lifespan,
 )
 
 # ==================== MIDDLEWARE ====================
 # Request logging middleware (must be before CORS)
 app.add_middleware(RequestLoggingMiddleware)
 
-# CORS middleware - Allow all origins for development (restrict in production)
+# CORS middleware - configurable origins (restrict in production)
+# Set CORS_ORIGINS env var to comma-separated origins, e.g. "http://localhost:5173,https://myapp.com"
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
+cors_origins = ["*"] if CORS_ORIGINS == "*" else [o.strip() for o in CORS_ORIGINS.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ==================== DATABASE INITIALIZATION ====================
-@app.on_event("startup")
-def startup():
-    """Initialize database and log startup info."""
-    logger.info("Initializing database...")
-    init_db()
-    logger.info("✓ Database initialized successfully")
-    logger.info("✓ API ready to accept requests")
 
 
 # ==================== ROUTE REGISTRATION ====================
