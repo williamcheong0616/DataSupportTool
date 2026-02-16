@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getBRClassificationRecords, updateBRClassification, getBRPipelineStatus, runBRStage1, getBRStageProgress } from '../api'
+import { getBRClassificationRecords, updateBRClassification, deleteBRClassificationRecord, getBRPipelineStatus, runBRStage1, getBRStageProgress } from '../api'
 
 const LANGUAGES = [
   'Malay',
@@ -16,6 +16,13 @@ const LANGUAGES = [
   'Unknown'
 ]
 
+const FILTER_OPTIONS = [
+  { value: '', label: 'All Records' },
+  { value: 'true', label: 'Bahasa Rojak Only' },
+  { value: 'false', label: 'Not Bahasa Rojak' },
+  { value: 'unclassified', label: 'Unclassified' },
+]
+
 function BRClassification() {
   const { pipelineId } = useParams()
   const navigate = useNavigate()
@@ -26,6 +33,10 @@ function BRClassification() {
   const [rerunning, setRerunning] = useState(false)
   const [polling, setPolling] = useState(false)
   const [progress, setProgress] = useState(null)
+  const [deleting, setDeleting] = useState({})
+  
+  // Filter
+  const [filter, setFilter] = useState('')
   
   // Pagination
   const [page, setPage] = useState(1)
@@ -40,7 +51,7 @@ function BRClassification() {
 
   useEffect(() => {
     fetchRecords()
-  }, [pipelineId, page])
+  }, [pipelineId, page, filter])
 
   // Poll progress when pipeline is running
   useEffect(() => {
@@ -73,7 +84,8 @@ function BRClassification() {
   const fetchRecords = async () => {
     setLoading(true)
     try {
-      const res = await getBRClassificationRecords(pipelineId, page, perPage)
+      const filterParam = filter || null
+      const res = await getBRClassificationRecords(pipelineId, page, perPage, filterParam)
       setRecords(res.data.records)
       setTotal(res.data.total)
       setTotalPages(res.data.total_pages)
@@ -121,6 +133,33 @@ function BRClassification() {
     } finally {
       setSaving(prev => ({ ...prev, [`lang_${recordId}`]: false }))
     }
+  }
+
+  const handleDelete = async (recordId) => {
+    if (!confirm('Delete this record? This will also remove the underlying text record. This action cannot be undone.')) return
+    
+    setDeleting(prev => ({ ...prev, [recordId]: true }))
+    try {
+      await deleteBRClassificationRecord(recordId)
+      // Remove from local state
+      setRecords(prev => prev.filter(r => r.id !== recordId))
+      setTotal(prev => prev - 1)
+      // If the deleted record was classified, decrement classified count
+      const record = records.find(r => r.id === recordId)
+      if (record && record.is_bahasa_rojak !== null) {
+        setClassifiedCount(prev => prev - 1)
+      }
+    } catch (err) {
+      console.error('Failed to delete record:', err)
+      alert('Failed to delete: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setDeleting(prev => ({ ...prev, [recordId]: false }))
+    }
+  }
+
+  const handleFilterChange = (value) => {
+    setFilter(value)
+    setPage(1) // Reset to page 1 when filter changes
   }
 
   const goToPage = (newPage) => {
@@ -241,7 +280,9 @@ function BRClassification() {
                 <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                   {total}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Total Records</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  {filter ? 'Filtered' : 'Total'} Records
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -256,15 +297,30 @@ function BRClassification() {
                 <div className="text-sm text-gray-500 dark:text-gray-400">Pending</div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {Math.round((classifiedCount / total) * 100) || 0}% Complete
-              </span>
-              <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(classifiedCount / total) * 100}%` }}
-                />
+            <div className="flex items-center gap-4">
+              {/* Filter Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-500 dark:text-gray-400">Filter:</label>
+                <select
+                  value={filter}
+                  onChange={(e) => handleFilterChange(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                >
+                  {FILTER_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {Math.round((classifiedCount / total) * 100) || 0}% Complete
+                </span>
+                <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(classifiedCount / total) * 100}%` }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -287,6 +343,9 @@ function BRClassification() {
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
                     Bahasa Rojak?
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -342,6 +401,25 @@ function BRClassification() {
                           No
                         </button>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleDelete(record.id)}
+                        disabled={deleting[record.id]}
+                        className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50"
+                        title="Delete record"
+                      >
+                        {deleting[record.id] ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
                     </td>
                   </tr>
                 ))}

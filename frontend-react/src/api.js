@@ -226,13 +226,20 @@ export const listBRPipelines = (datasetId = null) => {
   return api.get(`/br-pipeline/pipelines${params}`)
 }
 
-// Get classification records with pagination
-export const getBRClassificationRecords = (pipelineId, page = 1, perPage = 15) =>
-  api.get(`/br-pipeline/classification/${pipelineId}?page=${page}&per_page=${perPage}`)
+// Get classification records with pagination and optional filter
+export const getBRClassificationRecords = (pipelineId, page = 1, perPage = 15, isBahasaRojak = null) => {
+  const params = new URLSearchParams({ page, per_page: perPage })
+  if (isBahasaRojak !== null) params.append('is_bahasa_rojak', isBahasaRojak)
+  return api.get(`/br-pipeline/classification/${pipelineId}?${params}`)
+}
 
 // Update classification (is_bahasa_rojak and/or detected_language)
 export const updateBRClassification = (recordStageId, data) =>
   api.patch(`/br-pipeline/classification/${recordStageId}`, data)
+
+// Delete a classification record
+export const deleteBRClassificationRecord = (recordStageId) =>
+  api.delete(`/br-pipeline/classification/${recordStageId}`)
 
 // Get pending validation records
 export const getBRPendingValidation = (pipelineId = null) => {

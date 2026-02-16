@@ -75,6 +75,11 @@ function BRModelResponses() {
     setEditedProblems('')
   }
 
+  const putResponseInProblem = (recordId, modelName, responseText) => {
+    setEditingResponse({ recordId, modelName })
+    setEditedProblems(responseText || '')
+  }
+
   const saveEditedProblems = async () => {
     if (!editingResponse) return
     
@@ -270,9 +275,6 @@ function BRModelResponses() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
-                          Actions
-                        </th>
                       Record #{(page - 1) * perPage + idx + 1}
                     </span>
                     <h3 className="text-lg font-medium mt-1">
@@ -305,118 +307,147 @@ function BRModelResponses() {
                 </div>
               </div>
 
-              {/* Model Responses Table */}
+              {/* Original Response (Restructured Text) + Model Responses */}
               {record.model_responses ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-100 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
-                          Model
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Response
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-48">
-                          Problems
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {Object.entries(record.model_responses).map(([modelName, data]) => {
-                        const isEditing = editingResponse?.recordId === record.id && editingResponse?.modelName === modelName
-                        const hasCorrectedVersion = data.corrected_response
-                        
-                        return (
-                          <tr key={modelName} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td className="px-4 py-4 text-sm">
-                              <div className="font-medium text-gray-900 dark:text-white">{modelName}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{data.model_id}</div>
-                              {hasCorrectedVersion && (
-                                <div className="mt-1 text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                  </svg>
-                                  Corrected
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">
-                              <div className="whitespace-pre-wrap max-h-40 overflow-y-auto">
-                                {data.response}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 text-sm">
-                              {isEditing ? (
-                                <div className="space-y-2">
-                                  <textarea
-                                    value={editedProblems}
-                                    onChange={(e) => setEditedProblems(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white min-h-[100px]"
-                                    placeholder="Enter problems (one per line)..."
-                                  />
-                                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                    Enter one problem per line
+                <div className="flex">
+                  {/* Left Side: Restructured Text */}
+                  {record.restructured_text && (
+                    <div className="w-1/3 border-r border-gray-200 dark:border-gray-700 p-4">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                        Original Response (Restructured Text)
+                      </label>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white whitespace-pre-wrap max-h-64 overflow-y-auto">
+                        {record.restructured_text}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Right Side: Model Responses Table */}
+                  <div className={record.restructured_text ? 'w-2/3' : 'w-full'}>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-100 dark:bg-gray-700">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
+                              Model
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              Response
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-48">
+                              Problems
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {Object.entries(record.model_responses).map(([modelName, data]) => {
+                            const isEditing = editingResponse?.recordId === record.id && editingResponse?.modelName === modelName
+                            const hasCorrectedVersion = data.corrected_response
+                            
+                            return (
+                              <tr key={modelName} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td className="px-4 py-4 text-sm">
+                                  <div className="font-medium text-gray-900 dark:text-white">{modelName}</div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">{data.model_id}</div>
+                                  {hasCorrectedVersion && (
+                                    <div className="mt-1 text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                      </svg>
+                                      Corrected
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">
+                                  <div className="whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                    {data.response}
                                   </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={saveEditedProblems}
-                                      disabled={saving}
-                                      className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
-                                    >
-                                      {saving ? 'Saving...' : '💾 Save'}
-                                    </button>
-                                    <button
-                                      onClick={cancelEditing}
-                                      disabled={saving}
-                                      className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:opacity-50"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div>
-                                  {data.problems && data.problems.length > 0 ? (
-                                    <div className="space-y-1">
-                                      {data.problems.map((problem, pidx) => (
-                                        <div key={pidx} className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">
-                                          {problem}
-                                        </div>
-                                      ))}
-                                      {data.edited_by && (
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                          Edited by {data.edited_by}
-                                        </div>
-                                      )}
+                                </td>
+                                <td className="px-4 py-4 text-sm">
+                                  {isEditing ? (
+                                    <div className="space-y-2">
+                                      <textarea
+                                        value={editedProblems}
+                                        onChange={(e) => setEditedProblems(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white min-h-[100px]"
+                                        placeholder="Enter problems (one per line)..."
+                                      />
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                        Enter one problem per line
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={saveEditedProblems}
+                                          disabled={saving}
+                                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                                        >
+                                          {saving ? 'Saving...' : '💾 Save'}
+                                        </button>
+                                        <button
+                                          onClick={cancelEditing}
+                                          disabled={saving}
+                                          className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:opacity-50"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
                                     </div>
                                   ) : (
-                                    <span className="text-gray-400 dark:text-gray-500 text-xs">None detected</span>
+                                    <div>
+                                      {data.problems && data.problems.length > 0 ? (
+                                        <div className="space-y-1">
+                                          {data.problems.map((problem, pidx) => (
+                                            <div key={pidx} className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">
+                                              {problem}
+                                            </div>
+                                          ))}
+                                          {data.edited_by && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                              Edited by {data.edited_by}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-400 dark:text-gray-500 text-xs">None detected</span>
+                                      )}
+                                    </div>
                                   )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-sm">
-                              {!isEditing && (
-                                <button
-                                  onClick={() => startEditing(record.id, modelName, data.problems)}
-                                  className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 flex items-center gap-1"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                  Edit
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                                </td>
+                                <td className="px-4 py-4 text-sm">
+                                  {!isEditing && (
+                                    <div className="flex flex-col gap-2">
+                                      <button
+                                        onClick={() => startEditing(record.id, modelName, data.problems)}
+                                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 flex items-center gap-1"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => putResponseInProblem(record.id, modelName, data.response)}
+                                        className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded hover:bg-amber-700 flex items-center gap-1"
+                                        title="Copy the generated response into the Problem field for annotation"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        Put in Problem
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="p-8 text-center text-gray-500 dark:text-gray-400">

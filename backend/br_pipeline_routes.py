@@ -573,23 +573,35 @@ def get_classification_records(
     pipeline_run_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(15, ge=1, le=100),
+    is_bahasa_rojak: Optional[str] = Query(None, description="Filter: 'true', 'false', or 'unclassified'"),
     db: Session = Depends(get_db)
 ):
     """
     Get BR classification records with pagination for review/editing.
     Returns 15 records per page by default.
+    Optionally filter by is_bahasa_rojak status.
     """
     # Check pipeline exists
     pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
-    # Get total count
-    total = db.query(BRRecordStage).filter(
+    # Base query with optional filter
+    base_query = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id
-    ).count()
+    )
     
-    # Count classified (those with is_bahasa_rojak set)
+    if is_bahasa_rojak == 'true':
+        base_query = base_query.filter(BRRecordStage.is_bahasa_rojak == True)
+    elif is_bahasa_rojak == 'false':
+        base_query = base_query.filter(BRRecordStage.is_bahasa_rojak == False)
+    elif is_bahasa_rojak == 'unclassified':
+        base_query = base_query.filter(BRRecordStage.is_bahasa_rojak == None)
+    
+    # Get total count (filtered)
+    total = base_query.count()
+    
+    # Count classified (those with is_bahasa_rojak set) - always unfiltered for stats
     classified_count = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
         BRRecordStage.is_bahasa_rojak != None
@@ -597,9 +609,7 @@ def get_classification_records(
     
     # Get paginated records with text
     offset = (page - 1) * per_page
-    record_stages = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id
-    ).offset(offset).limit(per_page).all()
+    record_stages = base_query.offset(offset).limit(per_page).all()
     
     # Get original texts for these records
     text_record_ids = [rs.text_record_id for rs in record_stages]
@@ -660,6 +670,41 @@ def update_classification(
         "detected_language": record_stage.detected_language,
         "message": "Classification updated"
     }
+
+
+@router.delete("/classification/{record_stage_id}")
+def delete_classification_record(
+    record_stage_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a BR classification record (and its underlying text record).
+    """
+    record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
+    
+    if not record_stage:
+        raise HTTPException(status_code=404, detail="Record stage not found")
+    
+    text_record_id = record_stage.text_record_id
+    
+    # Delete the record stage
+    db.delete(record_stage)
+    
+    # Also delete the underlying text record
+    text_record = db.query(TextRecord).filter(TextRecord.id == text_record_id).first()
+    if text_record:
+        db.delete(text_record)
+    
+    # Update pipeline total
+    pipeline_run = db.query(BRPipelineRun).filter(
+        BRPipelineRun.id == record_stage.pipeline_run_id
+    ).first()
+    if pipeline_run and pipeline_run.total_records > 0:
+        pipeline_run.total_records -= 1
+    
+    db.commit()
+    
+    return {"message": "Record deleted", "deleted_id": record_stage_id}
 
 
 @router.get("/pipelines")
@@ -1125,6 +1170,7 @@ def get_response_records(
         ResponseRecordResponse(
             id=rs.id,
             text_record_id=rs.text_record_id,
+            restructured_text=rs.restructured_text,
             selected_question=rs.selected_question,
             model_responses=rs.model_responses,
             completed=rs.model_responses is not None

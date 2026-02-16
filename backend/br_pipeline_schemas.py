@@ -140,6 +140,7 @@ class QuestionSelectRequest(BaseModel):
 class ResponseRecordResponse(BaseModel):
     id: int
     text_record_id: int
+    restructured_text: Optional[str] = None
     selected_question: Optional[str]
     model_responses: Optional[dict]
     completed: bool
