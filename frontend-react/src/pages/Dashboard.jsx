@@ -42,12 +42,6 @@ function Dashboard() {
       color: 'bg-green-500',
     },
     {
-      title: 'Text Annotated',
-      value: stats?.text_annotated || 0,
-      icon: '✅',
-      color: 'bg-emerald-500',
-    },
-    {
       title: 'ASR Datasets',
       value: stats?.asr_datasets || 0,
       icon: '🎵',
@@ -146,17 +140,6 @@ function Dashboard() {
                 You only need to review and edit the problems in Stage 4 responses for quality control and fine-tuning preparation.
               </p>
             </div>
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900 dark:text-gray-100">2. Text Annotation Workflow (Legacy - One-by-One)</h3>
-            <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
-              <li>For manual annotation tasks (Bahasa Rojak ID, Classification, Questions)</li>
-              <li>Create a dataset with specific task type</li>
-              <li>Upload JSON or CSV file with text data</li>
-              <li>Annotate records individually through the annotation interface</li>
-              <li>Export annotated data as CSV or JSONL</li>
-            </ul>
-          </div>
           <div>
             <h3 className="font-medium text-gray-900 dark:text-gray-100">3. ASR Annotation Workflow</h3>
             <ul className="ml-4 mt-2 list-disc list-inside space-y-1">

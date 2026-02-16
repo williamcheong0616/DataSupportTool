@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   getTextDataset,
@@ -9,333 +9,283 @@ import {
   annotateQuestions,
 } from '../api'
 
-const CLASSIFICATION_OPTIONS = [
-  'Pure Malay',
-  'Pure English', 
-  'Malay-English Mix',
-  'Contains Chinese',
-  'Contains Tamil',
-  'Other',
+const LANGUAGES = [
+  'Pure Malay', 'Pure English', 'Malay-English Mix',
+  'Contains Chinese', 'Contains Tamil', 'Other',
 ]
+
+const PAGE_SIZE = 50
 
 function TextAnnotate() {
   const { datasetId } = useParams()
   const navigate = useNavigate()
+
   const [dataset, setDataset] = useState(null)
   const [records, setRecords] = useState([])
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const [idx, setIdx] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [fetching, setFetching] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [totalRecords, setTotalRecords] = useState(0)
-  const [annotatedCount, setAnnotatedCount] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [done, setDone] = useState(0)
+  const [canLoadMore, setCanLoadMore] = useState(true)
+  const [loadedSoFar, setLoadedSoFar] = useState(0)
 
-  // Annotation states
-  const [modifiedText, setModifiedText] = useState('')
-  const [subjectAdded, setSubjectAdded] = useState('')
-  const [contextAdded, setContextAdded] = useState('')
-  const [question1, setQuestion1] = useState('')
-  const [question2, setQuestion2] = useState('')
-  const [question3, setQuestion3] = useState('')
+  // form fields
+  const [modText, setModText] = useState('')
+  const [subject, setSubject] = useState('')
+  const [context, setContext] = useState('')
+  const [q1, setQ1] = useState('')
+  const [q2, setQ2] = useState('')
+  const [q3, setQ3] = useState('')
 
+  const cur = records[idx]
+
+  // load dataset info
   useEffect(() => {
-    fetchDataset()
+    getTextDataset(datasetId)
+      .then(res => setDataset(res.data))
+      .catch(() => navigate('/text'))
   }, [datasetId])
 
+  // load first batch once we have the dataset
   useEffect(() => {
-    if (dataset) {
-      fetchRecords()
-    }
+    if (!dataset) return
+    loadBatch(0, true)
   }, [dataset])
 
-  const fetchDataset = async () => {
-    try {
-      const res = await getTextDataset(datasetId)
-      setDataset(res.data)
-    } catch (err) {
-      console.error('Failed to fetch dataset:', err)
-      navigate('/text')
-    }
-  }
+  // sync form fields when navigating between records
+  useEffect(() => {
+    if (!cur) return
+    setModText(cur.modified_text || cur.original_text || '')
+    setSubject(cur.subject_added || '')
+    setContext(cur.context_added || '')
+    setQ1(cur.question_1 || '')
+    setQ2(cur.question_2 || '')
+    setQ3(cur.question_3 || '')
+  }, [idx, records])
 
-  const fetchRecords = async () => {
-    setLoading(true)
+  async function loadBatch(offset, isFirst = false) {
+    if (isFirst) setLoading(true)
+    else setFetching(true)
+
     try {
-      // Always load ALL records (pass null for is_annotated filter)
-      const res = await getTextRecords(datasetId, null, 1000)
-      const fetchedRecords = res.data.records || []
-      setRecords(fetchedRecords)
-      setTotalRecords(res.data.total || 0)
-      setAnnotatedCount(res.data.annotated || 0)
-      
-      // Find the first unannotated record to start from
-      let startIndex = 0
-      if (fetchedRecords.length > 0) {
-        const firstUnannotatedIndex = fetchedRecords.findIndex(r => !r.is_annotated)
-        // If found, start there; otherwise start at the beginning
-        startIndex = firstUnannotatedIndex >= 0 ? firstUnannotatedIndex : 0
+      const res = await getTextRecords(datasetId, null, PAGE_SIZE, offset)
+      const batch = res.data.records || []
+
+      if (isFirst) {
+        setRecords(batch)
+        // jump to first unannotated record
+        const start = batch.findIndex(r => !r.is_annotated)
+        setIdx(start >= 0 ? start : 0)
+      } else {
+        setRecords(prev => [...prev, ...batch])
       }
-      setCurrentIndex(startIndex)
-      if (fetchedRecords.length > 0) {
-        initializeAnnotation(fetchedRecords[startIndex])
-      }
+
+      setTotal(res.data.total || 0)
+      setDone(res.data.annotated || 0)
+      setLoadedSoFar(offset + batch.length)
+      setCanLoadMore(batch.length >= PAGE_SIZE)
     } catch (err) {
-      console.error('Failed to fetch records:', err)
+      console.error('Failed to load records:', err)
     } finally {
       setLoading(false)
+      setFetching(false)
     }
   }
 
-  const initializeAnnotation = useCallback((record) => {
-    if (!record) return
-    setModifiedText(record.modified_text || record.original_text || '')
-    setSubjectAdded(record.subject_added || '')
-    setContextAdded(record.context_added || '')
-    setQuestion1(record.question_1 || '')
-    setQuestion2(record.question_2 || '')
-    setQuestion3(record.question_3 || '')
-  }, [])
-
-  useEffect(() => {
-    if (records[currentIndex]) {
-      initializeAnnotation(records[currentIndex])
+  function goNext() {
+    // prefetch next batch if we're getting close to the end
+    if (idx >= records.length - 5 && canLoadMore && !fetching) {
+      loadBatch(loadedSoFar)
     }
-  }, [currentIndex, records, initializeAnnotation])
+    if (idx < records.length - 1) {
+      setIdx(idx + 1)
+    } else if (canLoadMore) {
+      loadBatch(loadedSoFar)
+    }
+  }
 
-  const currentRecord = records[currentIndex]
+  function goPrev() {
+    if (idx > 0) setIdx(idx - 1)
+  }
 
-  const handleBahasaRojak = async (isBahasaRojak) => {
-    if (!currentRecord) return
+  async function afterSave() {
+    // mark as done locally
+    setRecords(prev => prev.map((r, i) => i === idx ? { ...r, is_annotated: true } : r))
+    setDone(d => d + 1)
+    goNext()
+  }
+
+  async function saveBR(val) {
     setSaving(true)
     try {
-      await annotateBahasaRojak(currentRecord.id, isBahasaRojak)
-      moveToNextAfterSave()
+      await annotateBahasaRojak(cur.id, val)
+      afterSave()
     } catch (err) {
-      alert('Failed to save: ' + (err.response?.data?.detail || err.message))
-    } finally {
-      setSaving(false)
+      alert('Save failed: ' + (err.response?.data?.detail || err.message))
     }
+    setSaving(false)
   }
 
-  const handleClassification = async (label) => {
-    if (!currentRecord) return
+  async function saveClassification(label) {
     setSaving(true)
     try {
-      await annotateClassification(currentRecord.id, label)
-      moveToNextAfterSave()
+      await annotateClassification(cur.id, label)
+      afterSave()
     } catch (err) {
-      alert('Failed to save: ' + (err.response?.data?.detail || err.message))
-    } finally {
-      setSaving(false)
+      alert('Save failed: ' + (err.response?.data?.detail || err.message))
     }
+    setSaving(false)
   }
 
-  const handleModification = async () => {
-    if (!currentRecord) return
+  async function saveMod() {
     setSaving(true)
     try {
-      await annotateModification(currentRecord.id, {
-        modified_text: modifiedText,
-        subject_added: subjectAdded,
-        context_added: contextAdded,
+      await annotateModification(cur.id, {
+        modified_text: modText,
+        subject_added: subject,
+        context_added: context,
       })
-      moveToNextAfterSave()
+      afterSave()
     } catch (err) {
-      alert('Failed to save: ' + (err.response?.data?.detail || err.message))
-    } finally {
-      setSaving(false)
+      alert('Save failed: ' + (err.response?.data?.detail || err.message))
     }
+    setSaving(false)
   }
 
-  const handleQuestions = async () => {
-    if (!currentRecord) return
-    if (!question1 || !question2 || !question3) {
-      alert('Please fill in all 3 questions')
-      return
-    }
+  async function saveQuestions() {
+    if (!q1 || !q2 || !q3) return alert('Please fill in all 3 questions')
     setSaving(true)
     try {
-      await annotateQuestions(currentRecord.id, {
-        question_1: question1,
-        question_2: question2,
-        question_3: question3,
-      })
-      moveToNextAfterSave()
+      await annotateQuestions(cur.id, { question_1: q1, question_2: q2, question_3: q3 })
+      afterSave()
     } catch (err) {
-      alert('Failed to save: ' + (err.response?.data?.detail || err.message))
-    } finally {
-      setSaving(false)
+      alert('Save failed: ' + (err.response?.data?.detail || err.message))
     }
+    setSaving(false)
   }
 
-  const moveToNext = () => {
-    if (currentIndex < records.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      // Reload to get more unannotated records
-      fetchRecords()
-    }
-  }
-
-  const moveToNextAfterSave = () => {
-    // Only increment count when actually saving an annotation
-    // The count is fetched from the server on fetchRecords, so we refresh
-    if (currentIndex < records.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    }
-    // Refresh to get updated counts from database
-    fetchRecords()
-  }
-
-  const moveToPrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
-    }
-  }
+  // --- render ---
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
       </div>
     )
   }
 
-  if (!dataset) {
-    return <div className="text-gray-900 dark:text-gray-100">Dataset not found</div>
-  }
+  if (!dataset) return <div className="text-gray-900 dark:text-gray-100">Dataset not found</div>
 
-  const progress = totalRecords > 0 ? (annotatedCount / totalRecords) * 100 : 0
+  const pct = total > 0 ? (done / total) * 100 : 0
 
   return (
     <div>
-      {/* Header */}
+      {/* header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <button
-            onClick={() => navigate('/text')}
-            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-2"
-          >
+          <button onClick={() => navigate('/text')} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-2">
             ← Back to Datasets
           </button>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{dataset.name}</h1>
           <p className="text-gray-500 dark:text-gray-400">
-            {dataset.task_type === 'general' ? 'General Dataset (Use BR Pipeline)' : dataset.task_type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+            {dataset.task_type === 'general'
+              ? 'General Dataset (Use BR Pipeline)'
+              : dataset.task_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
           </p>
         </div>
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Navigate to review previous annotations</span>
-        </div>
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          Loaded {records.length} / {total}{canLoadMore && ' (scroll for more)'}
+        </span>
       </div>
 
-      {/* Progress */}
+      {/* progress bar */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
         <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-          <span>Progress: {annotatedCount} / {totalRecords} annotated</span>
-          <span>{progress.toFixed(1)}%</span>
+          <span>Progress: {done} / {total} annotated</span>
+          <span>{pct.toFixed(1)}%</span>
         </div>
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            className="bg-indigo-600 h-2 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          ></div>
+          <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
 
-      {/* Annotation Area */}
+      {/* main content */}
       {dataset.task_type === 'general' ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
-          <p className="text-xl mb-4 text-gray-900 dark:text-gray-100">
-            🤖 This is a general dataset for BR Pipeline
-          </p>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Use the BR Pipeline instead of manual annotation for automated processing.
-          </p>
-          <button
-            onClick={() => navigate('/text')}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-          >
+          <p className="text-xl mb-4 text-gray-900 dark:text-gray-100">🤖 This is a general dataset for BR Pipeline</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">Use the BR Pipeline instead of manual annotation.</p>
+          <button onClick={() => navigate('/text')} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
             Go to Datasets & Start Pipeline
           </button>
         </div>
       ) : records.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-gray-500 dark:text-gray-400">
-          <p className="text-xl mb-4">
-            No records found in this dataset
-          </p>
-          <button
-            onClick={() => navigate('/text')}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
+          <p className="text-xl mb-4">No records found in this dataset</p>
+          <button onClick={() => navigate('/text')} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
             Back to Datasets
           </button>
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          {/* Navigation */}
+          {/* nav */}
           <div className="flex justify-between items-center mb-4">
-            <button
-              onClick={moveToPrev}
-              disabled={currentIndex === 0}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-            >
+            <button onClick={goPrev} disabled={idx === 0}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
               ← Previous
             </button>
             <div className="text-center">
               <span className="text-gray-600 dark:text-gray-400">
-                Record {currentIndex + 1} of {records.length}
+                Record {idx + 1} of {records.length}
+                {canLoadMore && <span className="text-xs text-gray-400 ml-1">({total} total)</span>}
               </span>
-              {currentRecord?.is_annotated && (
-                <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
-                  ✓ Annotated
-                </span>
+              {cur?.is_annotated && (
+                <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">✓ Annotated</span>
               )}
             </div>
-            <button
-              onClick={moveToNext}
-              disabled={currentIndex >= records.length - 1}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-            >
-              Next →
+            <button onClick={goNext} disabled={idx >= records.length - 1 && !canLoadMore}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+              {idx >= records.length - 1 && canLoadMore
+                ? (fetching ? 'Loading...' : 'Load More →')
+                : 'Next →'}
             </button>
           </div>
 
-          {/* Original Text Display */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Original Text
-            </label>
-            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-lg dark:text-gray-100">
-              {currentRecord?.original_text || 'No text'}
+          {fetching && (
+            <div className="flex items-center justify-center gap-2 py-2 mb-4 text-sm text-indigo-600 dark:text-indigo-400">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600" />
+              Loading more records...
             </div>
-            {currentRecord?.raw_data && Object.keys(currentRecord.raw_data).length > 1 && (
+          )}
+
+          {/* original text */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Original Text</label>
+            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-lg dark:text-gray-100">
+              {cur?.original_text || 'No text'}
+            </div>
+            {cur?.raw_data && Object.keys(cur.raw_data).length > 1 && (
               <details className="mt-2">
-                <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer">
-                  Show all columns
-                </summary>
+                <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer">Show all columns</summary>
                 <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded text-sm overflow-x-auto">
-                  {JSON.stringify(currentRecord.raw_data, null, 2)}
+                  {JSON.stringify(cur.raw_data, null, 2)}
                 </pre>
               </details>
             )}
           </div>
 
-          {/* Task-specific UI */}
+          {/* task-specific annotation UI */}
           {dataset.task_type === 'bahasa_rojak_identification' && (
             <div className="space-y-4">
               <p className="text-gray-700 dark:text-gray-300 font-medium">Is this Bahasa Rojak?</p>
               <div className="flex space-x-4">
-                <button
-                  onClick={() => handleBahasaRojak(true)}
-                  disabled={saving}
-                  className="flex-1 py-4 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/60 font-semibold text-lg disabled:opacity-50"
-                >
+                <button onClick={() => saveBR(true)} disabled={saving}
+                  className="flex-1 py-4 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/60 font-semibold text-lg disabled:opacity-50">
                   ✓ Yes, Bahasa Rojak
                 </button>
-                <button
-                  onClick={() => handleBahasaRojak(false)}
-                  disabled={saving}
-                  className="flex-1 py-4 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/60 font-semibold text-lg disabled:opacity-50"
-                >
+                <button onClick={() => saveBR(false)} disabled={saving}
+                  className="flex-1 py-4 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/60 font-semibold text-lg disabled:opacity-50">
                   ✗ No, Not Bahasa Rojak
                 </button>
               </div>
@@ -346,14 +296,10 @@ function TextAnnotate() {
             <div className="space-y-4">
               <p className="text-gray-700 dark:text-gray-300 font-medium">Classify this text:</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {CLASSIFICATION_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => handleClassification(option)}
-                    disabled={saving}
-                    className="py-3 px-4 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/60 font-medium disabled:opacity-50"
-                  >
-                    {option}
+                {LANGUAGES.map(opt => (
+                  <button key={opt} onClick={() => saveClassification(opt)} disabled={saving}
+                    className="py-3 px-4 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/60 font-medium disabled:opacity-50">
+                    {opt}
                   </button>
                 ))}
               </div>
@@ -363,45 +309,22 @@ function TextAnnotate() {
           {dataset.task_type === 'text_modification' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Modified Text
-                </label>
-                <textarea
-                  value={modifiedText}
-                  onChange={(e) => setModifiedText(e.target.value)}
-                  rows={3}
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Modified Text</label>
+                <textarea value={modText} onChange={e => setModText(e.target.value)} rows={3}
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Subject Added
-                </label>
-                <input
-                  type="text"
-                  value={subjectAdded}
-                  onChange={(e) => setSubjectAdded(e.target.value)}
-                  placeholder="What subject was added?"
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject Added</label>
+                <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="What subject was added?"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Context Added
-                </label>
-                <input
-                  type="text"
-                  value={contextAdded}
-                  onChange={(e) => setContextAdded(e.target.value)}
-                  placeholder="What context was added?"
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Context Added</label>
+                <input value={context} onChange={e => setContext(e.target.value)} placeholder="What context was added?"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
               </div>
-              <button
-                onClick={handleModification}
-                disabled={saving}
-                className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50"
-              >
+              <button onClick={saveMod} disabled={saving}
+                className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save & Next'}
               </button>
             </div>
@@ -409,74 +332,27 @@ function TextAnnotate() {
 
           {dataset.task_type === 'question_generation' && (
             <div className="space-y-4">
-              <p className="text-gray-700 dark:text-gray-300 font-medium">
-                Generate 3 questions based on this text:
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Question 1
-                </label>
-                <input
-                  type="text"
-                  value={question1}
-                  onChange={(e) => setQuestion1(e.target.value)}
-                  placeholder="Enter first question..."
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Question 2
-                </label>
-                <input
-                  type="text"
-                  value={question2}
-                  onChange={(e) => setQuestion2(e.target.value)}
-                  placeholder="Enter second question..."
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Question 3
-                </label>
-                <input
-                  type="text"
-                  value={question3}
-                  onChange={(e) => setQuestion3(e.target.value)}
-                  placeholder="Enter third question..."
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <button
-                onClick={handleQuestions}
-                disabled={saving}
-                className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50"
-              >
+              <p className="text-gray-700 dark:text-gray-300 font-medium">Generate 3 questions based on this text:</p>
+              {[['Question 1', q1, setQ1], ['Question 2', q2, setQ2], ['Question 3', q3, setQ3]].map(([label, val, setter]) => (
+                <div key={label}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+                  <input value={val} onChange={e => setter(e.target.value)} placeholder={`Enter ${label.toLowerCase()}...`}
+                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              ))}
+              <button onClick={saveQuestions} disabled={saving}
+                className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save & Next'}
               </button>
             </div>
           )}
 
-          {/* Annotation Status */}
-          {currentRecord?.is_annotated && (
+          {cur?.is_annotated && (
             <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-green-700 dark:text-green-300">
               ✓ This record has been annotated
-              {currentRecord.annotated_at && (
-                <span className="ml-2 text-sm">
-                  at {new Date(currentRecord.annotated_at).toLocaleString()}
-                </span>
-              )}
+              {cur.annotated_at && <span className="ml-2 text-sm">at {new Date(cur.annotated_at).toLocaleString()}</span>}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Keyboard Shortcuts Help */}
-      {(dataset.task_type === 'bahasa_rojak_identification' || 
-        dataset.task_type === 'bahasa_rojak_classification') && (
-        <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-center">
-          Tip: Use keyboard shortcuts for faster annotation
         </div>
       )}
     </div>
