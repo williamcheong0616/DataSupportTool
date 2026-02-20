@@ -313,9 +313,23 @@ Answer in Bahasa Rojak:"""
 _ollama_service = None
 
 
-def get_ollama_service(model_name: str = "gemma3:4b") -> OllamaService:
-    """Get or create the global Ollama service instance."""
+def get_ollama_service(model_name: str = None) -> OllamaService:
+    """Get or create the global Ollama service instance. Reads config from settings.json."""
     global _ollama_service
+    
+    # Read from settings if no explicit model given
+    if model_name is None:
+        try:
+            from backend.routes.settings import load_settings
+            settings = load_settings()
+            model_name = settings.get("ollama_model", "gemma3:4b")
+            base_url = settings.get("ollama_base_url", "http://localhost:11434")
+        except Exception:
+            model_name = "gemma3:4b"
+            base_url = "http://localhost:11434"
+    else:
+        base_url = "http://localhost:11434"
+    
     if _ollama_service is None or _ollama_service.model_name != model_name:
-        _ollama_service = OllamaService(model_name=model_name)
+        _ollama_service = OllamaService(base_url=base_url, model_name=model_name)
     return _ollama_service

@@ -85,7 +85,7 @@ def create_asr_dataset(data: ASRDatasetCreate, db: Session = Depends(get_db)):
         Created dataset with initial counts (all 0)
     """
     with RequestLogger(f"Create ASR dataset: {data.name}", name=data.name):
-        dataset = ASRDataset(name=data.name, description=data.description)
+        dataset = ASRDataset(name=data.name, description=data.description, created_by=data.created_by)
         db.add(dataset)
         db.commit()
         db.refresh(dataset)
@@ -489,11 +489,15 @@ def list_audio_files(
     total = base_query.count()
     pending_count = base_query.filter(AudioFile.status == TranscriptionStatus.PENDING).count()
     completed_count = base_query.filter(AudioFile.status == TranscriptionStatus.COMPLETED).count()
+    transcribed_count = base_query.filter(AudioFile.status == TranscriptionStatus.TRANSCRIBED).count()
     
     # Apply filter
     query = base_query
     if status:
         query = query.filter(AudioFile.status == status)
+    
+    filtered_total = query.count()
+    total_pages = max(1, (filtered_total + limit - 1) // limit)
     
     files = query.order_by(AudioFile.created_at).offset(offset).limit(limit).all()
     
@@ -521,8 +525,11 @@ def list_audio_files(
     return {
         "files": files_data,
         "total": total,
+        "filtered_total": filtered_total,
+        "total_pages": total_pages,
         "pending": pending_count,
         "completed": completed_count,
+        "transcribed": transcribed_count,
         "limit": limit,
         "offset": offset,
     }

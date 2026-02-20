@@ -73,6 +73,7 @@ def create_text_dataset(data: TextDatasetCreate, db: Session = Depends(get_db)):
         name=data.name,
         description=data.description,
         task_type=data.task_type if data.task_type else TaskType.GENERAL,
+        created_by=data.created_by,
     )
     db.add(dataset)
     db.commit()

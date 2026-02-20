@@ -11,6 +11,7 @@ import BRClassification from './pages/BRClassification'
 import BRRestructure from './pages/BRRestructure'
 import BRQuestionValidation from './pages/BRQuestionValidation'
 import BRModelResponses from './pages/BRModelResponses'
+import Settings from './pages/Settings'
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -81,6 +82,18 @@ function App() {
                   >
                     ASR Annotation
                   </NavLink>
+                  <NavLink
+                    to="/settings"
+                    className={({ isActive }) =>
+                      `inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                        isActive
+                          ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`
+                    }
+                  >
+                    ⚙️ Settings
+                  </NavLink>
                 </div>
               </div>
               <div className="flex items-center">
@@ -118,6 +131,7 @@ function App() {
             <Route path="/br-pipeline/responses/:pipelineId" element={<BRModelResponses />} />
             <Route path="/asr" element={<ASRDatasets />} />
             <Route path="/asr/:datasetId/annotate" element={<ASRAnnotate />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </div>

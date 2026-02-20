@@ -100,6 +100,11 @@ try:
 except ImportError:
     logger.warning("⚠ BR Pipeline routes not available (module not installed)")
 
+# Settings routes
+from backend.routes.settings import router as settings_router
+app.include_router(settings_router)
+logger.info("✓ Settings routes registered")
+
 
 # ==================== ROOT ENDPOINT ====================
 @app.get("/")

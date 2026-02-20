@@ -292,4 +292,14 @@ export const mergeBRRecords = (recordIds, separator = ' ') =>
 export const getBRStageProgress = (pipelineId) =>
   api.get(`/br-pipeline/stage-progress/${pipelineId}`)
 
+
+// === SETTINGS ===
+
+export const getModelConfig = () => api.get('/settings/models')
+export const updateModelConfig = (config) => api.put('/settings/models', config)
+export const getOllamaModels = () => api.get('/settings/models/ollama/available')
+export const pullOllamaModel = (modelName) =>
+  api.post(`/settings/models/ollama/pull?model_name=${encodeURIComponent(modelName)}`)
+export const getWhisperStatus = () => api.get('/settings/models/whisper/status')
+
 export default api

@@ -24,6 +24,7 @@ class TextDataset(Base):
     task_type = Column(SQLEnum(TaskType), nullable=False, default=TaskType.GENERAL)
     column_mapping = Column(JSON, nullable=True)  # Maps original headers to internal fields
     original_headers = Column(JSON, nullable=True)  # Original CSV/JSON headers
+    created_by = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -78,6 +79,7 @@ class ASRDataset(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    created_by = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -150,6 +152,7 @@ class Dataset(Base):
     description = Column(Text, nullable=True)
     source_type = Column(String(100), nullable=True)  # text, asr, etc.
     config = Column(JSON, nullable=True)
+    created_by = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     

@@ -11,6 +11,7 @@ class TextDatasetCreate(BaseModel):
     name: str
     description: Optional[str] = None
     task_type: Optional[TaskType] = TaskType.GENERAL
+    created_by: Optional[str] = None
 
 
 class TextDatasetUpdate(BaseModel):
@@ -28,6 +29,7 @@ class TextDatasetResponse(BaseModel):
     original_headers: Optional[List[str]]
     record_count: int = 0
     annotated_count: int = 0
+    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -84,6 +86,7 @@ class QuestionGenerationAnnotation(BaseModel):
 class ASRDatasetCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    created_by: Optional[str] = None
 
 
 class ASRDatasetResponse(BaseModel):
@@ -93,6 +96,7 @@ class ASRDatasetResponse(BaseModel):
     file_count: int = 0
     pending_count: int = 0
     completed_count: int = 0
+    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

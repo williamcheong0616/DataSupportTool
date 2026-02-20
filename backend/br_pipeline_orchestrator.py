@@ -351,17 +351,17 @@ class BRPipelineOrchestrator:
     
     async def _detect_bahasa_rojak(self, text: str) -> tuple[bool, float, str]:
         """Detect if text contains Bahasa Rojak (code-mixing) and identify languages using Ollama."""
-        ollama = get_ollama_service(model_name="gemma3:4b")
+        ollama = get_ollama_service()
         return ollama.detect_bahasa_rojak(text)
     
     async def _restructure_mcq_text(self, text: str, skip_restructure: bool = False) -> tuple[str, dict]:
         """Restructure MCQ text into consolidated format using Ollama."""
-        ollama = get_ollama_service(model_name="gemma3:4b")
+        ollama = get_ollama_service()
         return ollama.restructure_mcq_text(text, skip_restructure=skip_restructure)
     
     async def _generate_questions(self, text: str, count: int = 3) -> List[str]:
         """Generate questions from text using Ollama."""
-        ollama = get_ollama_service(model_name="gemma3:4b")
+        ollama = get_ollama_service()
         return ollama.generate_questions(text, count)
     
     async def _generate_model_response(

@@ -1219,7 +1219,7 @@ async def generate_model_responses(
     
     # Call Ollama to generate responses in Bahasa Rojak
     from backend.ollama_service import get_ollama_service
-    ollama = get_ollama_service(model_name="gemma3:4b")
+    ollama = get_ollama_service()
     
     responses = {}
     

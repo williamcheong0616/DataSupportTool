@@ -120,7 +120,8 @@ function TextAnnotate() {
   async function saveBR(val) {
     setSaving(true)
     try {
-      await annotateBahasaRojak(cur.id, val)
+      const annotator = localStorage.getItem('dst_username') || 'anonymous'
+      await annotateBahasaRojak(cur.id, val, annotator)
       afterSave()
     } catch (err) {
       alert('Save failed: ' + (err.response?.data?.detail || err.message))
@@ -131,7 +132,8 @@ function TextAnnotate() {
   async function saveClassification(label) {
     setSaving(true)
     try {
-      await annotateClassification(cur.id, label)
+      const annotator = localStorage.getItem('dst_username') || 'anonymous'
+      await annotateClassification(cur.id, label, annotator)
       afterSave()
     } catch (err) {
       alert('Save failed: ' + (err.response?.data?.detail || err.message))
@@ -142,11 +144,12 @@ function TextAnnotate() {
   async function saveMod() {
     setSaving(true)
     try {
+      const annotator = localStorage.getItem('dst_username') || 'anonymous'
       await annotateModification(cur.id, {
         modified_text: modText,
         subject_added: subject,
         context_added: context,
-      })
+      }, annotator)
       afterSave()
     } catch (err) {
       alert('Save failed: ' + (err.response?.data?.detail || err.message))
@@ -158,7 +161,8 @@ function TextAnnotate() {
     if (!q1 || !q2 || !q3) return alert('Please fill in all 3 questions')
     setSaving(true)
     try {
-      await annotateQuestions(cur.id, { question_1: q1, question_2: q2, question_3: q3 })
+      const annotator = localStorage.getItem('dst_username') || 'anonymous'
+      await annotateQuestions(cur.id, { question_1: q1, question_2: q2, question_3: q3 }, annotator)
       afterSave()
     } catch (err) {
       alert('Save failed: ' + (err.response?.data?.detail || err.message))

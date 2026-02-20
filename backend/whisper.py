@@ -336,6 +336,15 @@ def transcribe_audio(
         )
 
 
+def _get_configured_model() -> str:
+    """Read whisper model name from settings.json."""
+    try:
+        from backend.routes.settings import load_settings
+        return load_settings().get("whisper_model", "mlx-community/whisper-large-v3-turbo")
+    except Exception:
+        return "mlx-community/whisper-large-v3-turbo"
+
+
 def transcribe_audio_simple(
     audio_path: str,
     language: Optional[str] = None,
@@ -354,7 +363,8 @@ def transcribe_audio_simple(
     Returns:
         Dict with 'text', 'language', 'confidence', 'segments', and 'backend'
     """
-    result = transcribe_audio(audio_path, backend=backend, language=language)
+    model_name = _get_configured_model()
+    result = transcribe_audio(audio_path, backend=backend, language=language, model_name=model_name)
     return result.to_dict()
 
 

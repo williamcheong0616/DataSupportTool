@@ -31,7 +31,7 @@ function TextDatasets() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [showUpload, setShowUpload] = useState(null)
-  const [newDataset, setNewDataset] = useState({ name: '', task_type: 'general' })
+  const [newDataset, setNewDataset] = useState({ name: '', task_type: 'general', created_by: localStorage.getItem('dst_username') || '' })
   const [uploadFile, setUploadFile] = useState(null)
   const [headers, setHeaders] = useState([])
   const [selectedColumn, setSelectedColumn] = useState('')
@@ -95,8 +95,9 @@ function TextDatasets() {
     e.preventDefault()
     try {
       await createTextDataset(newDataset)
+      if (newDataset.created_by) localStorage.setItem('dst_username', newDataset.created_by)
       setShowCreate(false)
-      setNewDataset({ name: '', task_type: 'general' })
+      setNewDataset({ name: '', task_type: 'general', created_by: newDataset.created_by })
       fetchDatasets()
     } catch (err) {
       alert('Failed to create dataset: ' + (err.response?.data?.detail || err.message))
@@ -334,6 +335,19 @@ function TextDatasets() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  value={newDataset.created_by}
+                  onChange={(e) => setNewDataset({ ...newDataset, created_by: e.target.value })}
+                  placeholder="Enter your name"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
               </div>
               <div className="flex justify-end space-x-2">
                 <button

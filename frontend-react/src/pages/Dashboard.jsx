@@ -140,8 +140,9 @@ function Dashboard() {
                 You only need to review and edit the problems in Stage 4 responses for quality control and fine-tuning preparation.
               </p>
             </div>
+          </div>
           <div>
-            <h3 className="font-medium text-gray-900 dark:text-gray-100">3. ASR Annotation Workflow</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">2. ASR Annotation Workflow</h3>
             <ul className="ml-4 mt-2 list-disc list-inside space-y-1">
               <li>Create an ASR dataset</li>
               <li>Upload audio files in batch (supports MP3, WAV, etc.) or import from YouTube</li>

@@ -18,7 +18,7 @@ function ASRDatasets() {
   const [datasets, setDatasets] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [newDataset, setNewDataset] = useState({ name: '', description: '' })
+  const [newDataset, setNewDataset] = useState({ name: '', description: '', created_by: localStorage.getItem('dst_username') || '' })
   const [showUpload, setShowUpload] = useState(null)
   const [uploadFiles, setUploadFiles] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -53,8 +53,9 @@ function ASRDatasets() {
     e.preventDefault()
     try {
       await createASRDataset(newDataset)
+      if (newDataset.created_by) localStorage.setItem('dst_username', newDataset.created_by)
       setShowCreate(false)
-      setNewDataset({ name: '', description: '' })
+      setNewDataset({ name: '', description: '', created_by: newDataset.created_by })
       fetchDatasets()
     } catch (err) {
       alert('Failed to create dataset: ' + (err.response?.data?.detail || err.message))
@@ -238,6 +239,19 @@ function ASRDatasets() {
                   onChange={(e) => setNewDataset({ ...newDataset, description: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
                   rows={2}
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  value={newDataset.created_by}
+                  onChange={(e) => setNewDataset({ ...newDataset, created_by: e.target.value })}
+                  placeholder="Enter your name"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                  required
                 />
               </div>
               <div className="flex justify-end space-x-2">

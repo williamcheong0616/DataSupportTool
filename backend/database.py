@@ -68,4 +68,26 @@ def init_db():
     """
     from backend.models import Base  # Import Base to register all models
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
+
+
+def _run_migrations():
+    """Run lightweight schema migrations for new columns."""
+    from sqlalchemy import text, inspect
+    
+    inspector = inspect(engine)
+    migrations = [
+        ("text_datasets", "created_by", "VARCHAR(255)"),
+        ("asr_datasets", "created_by", "VARCHAR(255)"),
+        ("datasets", "created_by", "VARCHAR(255)"),
+    ]
+    
+    with engine.connect() as conn:
+        for table, column, col_type in migrations:
+            if table not in inspector.get_table_names():
+                continue
+            existing_cols = [c["name"] for c in inspector.get_columns(table)]
+            if column not in existing_cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+                conn.commit()
 
