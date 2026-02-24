@@ -1,95 +1,78 @@
 #!/bin/bash
-# Script to start all production services
+# Start all DataSupportTool infrastructure services via Docker Compose
+# then apply migrations and start the API + Celery worker.
 
 set -e
 
-echo "🚀 Starting Data Pipeline Production Services..."
+echo "🚀 Starting DataSupportTool Services..."
 
-# Check if Docker is running
+# ── 1. Check Docker ──────────────────────────────────────────
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker is not running. Please start Docker first."
     exit 1
 fi
 
-# Start all services
+# ── 2. Start infrastructure (PostgreSQL, Redis, Flower) ──────
 echo "📦 Starting Docker containers..."
 docker-compose up -d
 
-# Wait for services to be healthy
-echo "⏳ Waiting for services to be ready..."
-sleep 10
+echo "⏳ Waiting for services to be healthy..."
+sleep 5
 
-# Check service status
+# ── 3. Check infrastructure health ──────────────────────────
 echo ""
-echo "✅ Services Status:"
-echo "-------------------"
+echo "✅ Infrastructure Status:"
+echo "─────────────────────────"
 
-# PostgreSQL
 if docker-compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
-    echo "✅ PostgreSQL: Running on port 5432"
+    echo "  ✅ PostgreSQL: Running on port 5432"
 else
-    echo "❌ PostgreSQL: Not ready"
+    echo "  ❌ PostgreSQL: Not ready"
+    exit 1
 fi
 
-# Redis
 if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
-    echo "✅ Redis: Running on port 6379"
+    echo "  ✅ Redis: Running on port 6379"
 else
-    echo "❌ Redis: Not ready"
+    echo "  ❌ Redis: Not ready"
+    exit 1
 fi
 
-# MLflow
-if curl -s http://localhost:5000/health > /dev/null 2>&1; then
-    echo "✅ MLflow: Running on http://localhost:5000"
-else
-    echo "⏳ MLflow: Starting up..."
-fi
+# ── 4. Run Alembic migrations ────────────────────────────────
+echo ""
+echo "📋 Running database migrations..."
+alembic upgrade head
+echo "  ✅ Migrations applied"
 
-# Argilla
-if curl -s http://localhost:6900/api/_status > /dev/null 2>&1; then
-    echo "✅ Argilla: Running on http://localhost:6900"
-else
-    echo "⏳ Argilla: Starting up..."
-fi
+# ── 5. Start Celery worker (background) ─────────────────────
+echo ""
+echo "🔄 Starting Celery worker..."
+celery -A backend.celery_app:celery_app worker \
+    --loglevel=info \
+    --queues=celery,transcription \
+    --concurrency=2 \
+    &
+CELERY_PID=$!
+echo "  ✅ Celery worker started (PID: $CELERY_PID)"
 
-# Prefect
-if curl -s http://localhost:4200/api/health > /dev/null 2>&1; then
-    echo "✅ Prefect: Running on http://localhost:4200"
-else
-    echo "⏳ Prefect: Starting up..."
-fi
-
-# Flower
-if curl -s http://localhost:5555 > /dev/null 2>&1; then
-    echo "✅ Flower (Celery Monitor): Running on http://localhost:5555"
-else
-    echo "⏳ Flower: Starting up..."
-fi
-
-# API
-if curl -s http://localhost:8000/docs > /dev/null 2>&1; then
-    echo "✅ FastAPI Backend: Running on http://localhost:8000"
-else
-    echo "⏳ FastAPI: Starting up..."
-fi
-
-# Frontend (React)
-if curl -s http://localhost:5173 > /dev/null 2>&1; then
-    echo "✅ React Frontend: Running on http://localhost:5173"
-else
-    echo "⏳ React Frontend: Not running (start with: cd frontend-react && npm run dev)"
-fi
+# ── 6. Start FastAPI ────────────────────────────────────────
+echo ""
+echo "🌐 Starting FastAPI server..."
+python run_api.py &
+API_PID=$!
+sleep 3
 
 echo ""
-echo "🎉 All services started!"
+echo "════════════════════════════════════════"
+echo "🎉 All services running!"
+echo "════════════════════════════════════════"
 echo ""
 echo "📚 Quick Links:"
-echo "  - Frontend:        http://localhost:5173"
-echo "  - API Docs:        http://localhost:8000/docs"
-echo "  - MLflow:          http://localhost:5000"
-echo "  - Argilla:         http://localhost:6900"
-echo "  - Prefect:         http://localhost:4200"
-echo "  - Flower (Celery): http://localhost:5555"
+echo "  Frontend:        http://localhost:5173"
+echo "  API Docs:        http://localhost:8000/api/docs"
+echo "  Health Check:    http://localhost:8000/api/health"
+echo "  Flower (Celery): http://localhost:5555"
 echo ""
-echo "💡 To stop all services: docker-compose down"
-echo "💡 To view logs: docker-compose logs -f [service_name]"
+echo "💡 To stop:"
+echo "  kill $API_PID $CELERY_PID   # Stop API + Celery"
+echo "  docker-compose down          # Stop infrastructure"

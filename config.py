@@ -33,14 +33,14 @@ for dir_path in [DATA_DIR, UPLOADS_DIR, PROCESSED_DIR, EXPORTS_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 # ==================== DATABASE ====================
-# SQLite for development (default), PostgreSQL for production
-# Example PostgreSQL: postgresql://user:password@localhost/dbname
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data_pipeline.db")
+# PostgreSQL connection (provided by Docker Compose)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/data_pipeline")
 
 # ==================== REDIS ====================
-# Redis connection string for Celery and caching
-# Default: local Redis instance on port 6379
+# Redis connection for Celery broker and caching
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# Separate Redis DB for Celery result backend (avoids broker/result collisions)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 
 # ==================== API SETTINGS ====================
 # FastAPI server host and port configuration

@@ -38,9 +38,18 @@ logger.info("=" * 80)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    logger.info("Initializing database...")
-    init_db()
-    logger.info("✓ Database initialized successfully")
+    # Run Alembic migrations at startup
+    logger.info("Running database migrations...")
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("✓ Database migrations applied successfully")
+    except Exception as e:
+        logger.warning(f"⚠ Alembic migration failed ({e}), falling back to init_db()")
+        init_db()
+        logger.info("✓ Database initialized via init_db() fallback")
     logger.info("✓ API ready to accept requests")
     yield
     logger.info("DataSupportTool API shutting down...")

@@ -3,7 +3,7 @@ Celery tasks for background job processing.
 """
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from celery import shared_task, group, chord
 from celery.exceptions import MaxRetriesExceededError
 
@@ -58,7 +58,7 @@ def transcribe_audio_task(self, audio_file_id: int) -> dict:
             audio_file.whisper_language = result.get("language")
             audio_file.whisper_confidence = result.get("confidence")
             audio_file.status = TranscriptionStatus.TRANSCRIBED
-            audio_file.transcribed_at = datetime.utcnow()
+            audio_file.transcribed_at = datetime.now(timezone.utc)
             db.commit()
             
             return {
@@ -86,7 +86,7 @@ def transcribe_audio_task(self, audio_file_id: int) -> dict:
                     audio_file.whisper_transcript = result.get("text", "")
                     audio_file.whisper_language = result.get("language")
                     audio_file.status = TranscriptionStatus.TRANSCRIBED
-                    audio_file.transcribed_at = datetime.utcnow()
+                    audio_file.transcribed_at = datetime.now(timezone.utc)
                     db.commit()
                     
                     return {
@@ -167,7 +167,7 @@ def check_stale_transcriptions() -> dict:
     db = SessionLocal()
     try:
         # Find files stuck in TRANSCRIBING for more than 10 minutes
-        stale_cutoff = datetime.utcnow() - timedelta(minutes=10)
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
         
         stale_files = db.query(AudioFile).filter(
             AudioFile.status == TranscriptionStatus.TRANSCRIBING,
