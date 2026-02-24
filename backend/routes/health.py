@@ -1,35 +1,82 @@
 """
 Health check and statistics endpoints.
 
-Provides system health monitoring and annotation statistics across
-text and ASR datasets.
+Provides system health monitoring with component-level status
+for PostgreSQL, Redis, and Celery workers.
 """
 
+import redis as redis_lib
 from fastapi import APIRouter, Depends
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import get_db, engine
 from backend.models import (
     TextDataset, TextRecord, ASRDataset, AudioFile, TranscriptionStatus
 )
 from backend.schemas import AnnotationStats
+from config import REDIS_URL
 
 # Create router with /api prefix
 router = APIRouter(prefix="/api", tags=["health", "stats"])
 
 
 @router.get("/health")
-def health_check():
+def health_check(db: Session = Depends(get_db)):
     """
-    Health check endpoint.
+    Comprehensive health check with component-level status.
+    
+    Checks connectivity to:
+    - PostgreSQL database
+    - Redis cache / broker
+    - Celery workers (via inspect)
     
     Returns:
-        dict: Status indicator
-        
-    Example:
-        GET /api/health -> {"status": "healthy"}
+        dict: Component-level health status
     """
-    return {"status": "healthy"}
+    components = {}
+    overall = "healthy"
+    
+    # --- PostgreSQL ---
+    try:
+        db.execute(text("SELECT 1"))
+        components["postgres"] = {"status": "healthy"}
+    except Exception as e:
+        components["postgres"] = {"status": "unhealthy", "error": str(e)}
+        overall = "degraded"
+    
+    # --- Redis ---
+    try:
+        r = redis_lib.from_url(REDIS_URL, socket_timeout=3)
+        r.ping()
+        components["redis"] = {"status": "healthy"}
+    except Exception as e:
+        components["redis"] = {"status": "unhealthy", "error": str(e)}
+        overall = "degraded"
+    
+    # --- Celery workers ---
+    try:
+        from backend.celery_app import celery_app
+        inspector = celery_app.control.inspect(timeout=3)
+        active = inspector.active()
+        if active is not None:
+            worker_names = list(active.keys())
+            components["celery"] = {
+                "status": "healthy",
+                "workers": len(worker_names),
+                "worker_names": worker_names,
+            }
+        else:
+            components["celery"] = {"status": "no_workers", "workers": 0}
+            # Workers being absent doesn't mean the system is broken,
+            # just that no background tasks will be processed
+    except Exception as e:
+        components["celery"] = {"status": "unavailable", "error": str(e)}
+    
+    return {
+        "status": overall,
+        "components": components,
+    }
 
 
 @router.get("/stats", response_model=AnnotationStats)
@@ -46,16 +93,6 @@ def get_stats(db: Session = Depends(get_db)):
         
     Returns:
         AnnotationStats: Comprehensive statistics object
-        
-    Example:
-        GET /api/stats -> {
-            "text_datasets": 5,
-            "text_records": 100,
-            "text_annotated": 75,
-            "asr_datasets": 3,
-            "audio_files": 50,
-            "asr_completed": 40
-        }
     """
     text_records = db.query(TextRecord).count()
     text_annotated = db.query(TextRecord).filter(

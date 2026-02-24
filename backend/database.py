@@ -1,8 +1,8 @@
 """
 Database setup and session management.
 
-Configures SQLAlchemy engine and session factory for database access.
-Supports both SQLite (development) and PostgreSQL (production) via DATABASE_URL.
+Configures SQLAlchemy engine and session factory for PostgreSQL.
+Uses connection pooling for production-grade performance.
 
 Usage:
     from backend.database import get_db, init_db
@@ -22,11 +22,13 @@ from sqlalchemy.orm import sessionmaker, Session
 
 from config import DATABASE_URL
 
-# Create database engine
-# For SQLite: add check_same_thread=False to allow multi-threaded access
+# Create database engine with connection pooling for PostgreSQL
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+    pool_size=10,          # Maintain 10 persistent connections
+    max_overflow=20,       # Allow up to 20 additional connections under load
+    pool_pre_ping=True,    # Verify connections before use (handles stale connections)
+    pool_recycle=1800,     # Recycle connections after 30 minutes
 )
 
 # Session factory for creating database sessions
@@ -64,30 +66,7 @@ def init_db():
     
     Note:
         This uses SQLAlchemy's create_all() which is safe to call multiple times
-        (won't drop existing tables or data).
+        (won't drop existing tables or data). For production, prefer Alembic migrations.
     """
     from backend.models import Base  # Import Base to register all models
     Base.metadata.create_all(bind=engine)
-    _run_migrations()
-
-
-def _run_migrations():
-    """Run lightweight schema migrations for new columns."""
-    from sqlalchemy import text, inspect
-    
-    inspector = inspect(engine)
-    migrations = [
-        ("text_datasets", "created_by", "VARCHAR(255)"),
-        ("asr_datasets", "created_by", "VARCHAR(255)"),
-        ("datasets", "created_by", "VARCHAR(255)"),
-    ]
-    
-    with engine.connect() as conn:
-        for table, column, col_type in migrations:
-            if table not in inspector.get_table_names():
-                continue
-            existing_cols = [c["name"] for c in inspector.get_columns(table)]
-            if column not in existing_cols:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-                conn.commit()
-
