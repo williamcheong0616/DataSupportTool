@@ -11,6 +11,8 @@ import {
   fuseAudioFiles,
   annotateTranscript,
   updateFileStatus,
+  getTaskStatus,
+  pollTaskUntilDone,
 } from '../api'
 
 const STATUS_COLORS = {
@@ -150,40 +152,51 @@ function ASRAnnotate() {
     }
   }
 
-  async function doTranscribe() {
+  async function doTranscribe(engine = 'whisper') {
     if (!cur) return
     const id = cur.id
     setTranscribing(true)
     try {
-      const res = await transcribeAudio(id)
-      setTranscript(res.data.transcript || res.data.whisper_transcript || '')
-      setFiles(prev => prev.map(f => f.id === id ? {
-        ...f,
-        whisper_transcript: res.data.transcript || res.data.whisper_transcript,
-        whisper_language: res.data.language || res.data.whisper_language,
-        whisper_confidence: res.data.confidence || res.data.whisper_confidence,
-        status: 'transcribed',
-      } : f))
+      const res = await transcribeAudio(id, engine)
+      const taskId = res.data.task_id
+      
+      if (taskId) {
+        // Poll until transcription completes
+        try {
+          const result = await pollTaskUntilDone(taskId, 2000, 150)
+          
+          if (result && result.status === 'success') {
+            // Refresh the file list to get updated data
+            await fetchFiles()
+          }
+        } catch (pollErr) {
+          alert('Transcription may still be running. Refresh to check.')
+        }
+      }
     } catch (err) {
       alert('Transcribe failed: ' + (err.response?.data?.detail || err.message))
     }
     setTranscribing(false)
   }
 
-  async function doRetranscribe() {
-    if (!cur || !confirm('Re-transcribe? This clears the existing transcription.')) return
+  async function doRetranscribe(engine = 'whisper') {
+    if (!cur || !confirm(`Re-transcribe with ${engine}? This clears the existing ${engine} transcription.`)) return
     const id = cur.id
     setTranscribing(true)
     try {
-      const res = await retranscribeAudio(id)
-      setTranscript(res.data.transcript || res.data.whisper_transcript || '')
-      setFiles(prev => prev.map(f => f.id === id ? {
-        ...f,
-        whisper_transcript: res.data.transcript || res.data.whisper_transcript,
-        whisper_language: res.data.language || res.data.whisper_language,
-        whisper_confidence: res.data.confidence || res.data.whisper_confidence,
-        status: 'transcribed',
-      } : f))
+      const res = await retranscribeAudio(id, engine)
+      const taskId = res.data.task_id
+      
+      if (taskId) {
+        try {
+          const result = await pollTaskUntilDone(taskId, 2000, 150)
+          if (result && result.status === 'success') {
+            await fetchFiles()
+          }
+        } catch (pollErr) {
+          alert('Re-transcription may still be running. Refresh to check.')
+        }
+      }
     } catch (err) {
       alert('Re-transcribe failed: ' + (err.response?.data?.detail || err.message))
     }
@@ -428,10 +441,16 @@ function ASRAnnotate() {
                     <h2 className="font-semibold text-gray-900 dark:text-gray-100">{cur.filename}</h2>
                     <div className="flex items-center space-x-2">
                       <span className={`text-sm px-3 py-1 rounded ${STATUS_COLORS[cur.status] || STATUS_COLORS.pending}`}>{cur.status}</span>
-                      <button onClick={doRetranscribe} disabled={transcribing}
-                        className="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50">
-                        {transcribing ? '...' : '🔄 Re-transcribe'}
-                      </button>
+                      <div className="flex items-center space-x-1">
+                        <button onClick={() => doRetranscribe('whisper')} disabled={transcribing}
+                          className="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50">
+                          {transcribing ? '...' : '🔄 Whisper'}
+                        </button>
+                        <button onClick={() => doRetranscribe('qwen3')} disabled={transcribing}
+                          className="px-2 py-1 text-xs text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-600 rounded hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50">
+                          {transcribing ? '...' : '🔄 Qwen3'}
+                        </button>
+                      </div>
                       <button onClick={doDelete}
                         className="px-2 py-1 text-xs text-red-600 dark:text-red-400 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30">
                         🗑️ Delete
@@ -489,31 +508,73 @@ function ASRAnnotate() {
                   </div>
                 </div>
 
-                {/* whisper transcript */}
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">📝 Whisper Transcription</h2>
-                    <div className="flex items-center space-x-2">
-                      {cur.corrected_transcript && cur.corrected_transcript !== cur.whisper_transcript && (
-                        <span className="px-2 py-1 text-xs text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 rounded">✓ Has correction</span>
-                      )}
-                      {!cur.whisper_transcript && cur.status === 'pending' && (
-                        <button onClick={doTranscribe} disabled={transcribing}
-                          className="px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 disabled:opacity-50">
-                          {transcribing ? 'Transcribing...' : '🎤 Run Whisper'}
-                        </button>
-                      )}
+                {/* Transcript panels (Whisper + Qwen3 side by side) */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Whisper transcript */}
+                  <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">📝 Whisper</h2>
+                      <div className="flex items-center space-x-2">
+                        {cur.whisper_transcript && (
+                          <button onClick={() => setTranscript(cur.whisper_transcript)}
+                            className="px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30">
+                            Use as base
+                          </button>
+                        )}
+                        {!cur.whisper_transcript && cur.status === 'pending' && (
+                          <button onClick={() => doTranscribe('whisper')} disabled={transcribing}
+                            className="px-3 py-1 text-xs text-white bg-yellow-500 rounded hover:bg-yellow-600 disabled:opacity-50">
+                            {transcribing ? '...' : '🎤 Run'}
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {cur.whisper_transcript ? (
+                      <div className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                        <p className="leading-relaxed text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{cur.whisper_transcript}</p>
+                        {cur.whisper_language && (
+                          <div className="mt-2 text-xs text-gray-400">Lang: {cur.whisper_language}{cur.whisper_confidence ? ` · Conf: ${(cur.whisper_confidence * 100).toFixed(0)}%` : ''}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-sm text-gray-400 border border-gray-300 dark:border-gray-600 border-dashed rounded-lg bg-gray-50 dark:bg-gray-700">
+                        {cur.status === 'transcribing' ? '⏳ Processing...' : 'Not available'}
+                      </div>
+                    )}
                   </div>
-                  {cur.whisper_transcript ? (
-                    <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
-                      <p className="leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{cur.whisper_transcript}</p>
+
+                  {/* Qwen3 transcript */}
+                  <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">🤖 Qwen3</h2>
+                      <div className="flex items-center space-x-2">
+                        {cur.qwen3_transcript && (
+                          <button onClick={() => setTranscript(cur.qwen3_transcript)}
+                            className="px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30">
+                            Use as base
+                          </button>
+                        )}
+                        {!cur.qwen3_transcript && (
+                          <button onClick={() => doTranscribe('qwen3')} disabled={transcribing}
+                            className="px-3 py-1 text-xs text-white bg-purple-500 rounded hover:bg-purple-600 disabled:opacity-50">
+                            {transcribing ? '...' : '🎤 Run'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="p-4 text-center text-gray-400 border border-gray-300 dark:border-gray-600 border-dashed rounded-lg bg-gray-50 dark:bg-gray-700">
-                      {cur.status === 'transcribing' ? '⏳ Transcription in progress...' : 'No transcription yet. Click "Run Whisper".'}
-                    </div>
-                  )}
+                    {cur.qwen3_transcript ? (
+                      <div className="p-3 border border-purple-200 dark:border-purple-600 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                        <p className="leading-relaxed text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{cur.qwen3_transcript}</p>
+                        {cur.qwen3_language && (
+                          <div className="mt-2 text-xs text-gray-400">Lang: {cur.qwen3_language}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-sm text-gray-400 border border-gray-300 dark:border-gray-600 border-dashed rounded-lg bg-gray-50 dark:bg-gray-700">
+                        {cur.status === 'transcribing' ? '⏳ Processing...' : 'Not available — click "🎤 Run"'}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* corrected transcript */}

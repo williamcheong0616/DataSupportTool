@@ -21,6 +21,8 @@ SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__f
 DEFAULTS = {
     "whisper_model": "mlx-community/whisper-large-v3-turbo",
     "whisper_backend": "auto",
+    "qwen3_model": "Qwen/Qwen3-ASR-1.7B",
+    "qwen3_enabled": False,
     "ollama_model": "gemma3:4b",
     "ollama_base_url": "http://localhost:11434",
 }
@@ -47,6 +49,8 @@ def save_settings(settings: dict):
 class ModelConfig(BaseModel):
     whisper_model: Optional[str] = None
     whisper_backend: Optional[str] = None
+    qwen3_model: Optional[str] = None
+    qwen3_enabled: Optional[bool] = None
     ollama_model: Optional[str] = None
     ollama_base_url: Optional[str] = None
 
@@ -137,5 +141,23 @@ def get_whisper_status():
             "configured_backend": settings["whisper_backend"],
             "detected_backend": None,
             "available": False,
+            "error": str(e),
+        }
+
+
+@router.get("/models/qwen3/status")
+def get_qwen3_status():
+    """Get Qwen3-ASR availability and configuration status."""
+    settings = load_settings()
+    try:
+        from backend.qwen3_asr import get_qwen3_status as _get_status
+        status = _get_status()
+        status["enabled"] = settings.get("qwen3_enabled", False)
+        return status
+    except Exception as e:
+        return {
+            "configured_model": settings.get("qwen3_model", "Qwen/Qwen3-ASR-1.7B"),
+            "package_installed": False,
+            "enabled": settings.get("qwen3_enabled", False),
             "error": str(e),
         }

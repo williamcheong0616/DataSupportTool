@@ -1,5 +1,8 @@
 """
 Celery tasks for background job processing.
+
+All transcription and segmentation work runs through Celery workers
+to avoid blocking the API and support concurrent multiuser usage.
 """
 import os
 import logging
@@ -20,13 +23,14 @@ USE_LOCAL_WHISPER = os.getenv("USE_LOCAL_WHISPER", "true").lower() == "true"
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
-def transcribe_audio_task(self, audio_file_id: int) -> dict:
+def transcribe_audio_task(self, audio_file_id: int, engine: str = "whisper") -> dict:
     """
     Celery task to transcribe a single audio file.
-    Uses local MLX Whisper on Apple Silicon or falls back to Whisper API.
+    Uses specified engine (whisper or qwen3).
     
     Args:
         audio_file_id: The ID of the audio file to transcribe
+        engine: ASR engine to use ('whisper' or 'qwen3')
         
     Returns:
         dict with transcription result or error
@@ -47,28 +51,25 @@ def transcribe_audio_task(self, audio_file_id: int) -> dict:
             db.commit()
             return {"status": "error", "message": "Audio file not found on disk", "file_id": audio_file_id}
         
-        if USE_LOCAL_WHISPER:
-            # Use local MLX Whisper
-            from backend.whisper import transcribe_audio_simple
+        # Transcribe using the specified engine
+        if engine == "qwen3":
+            from backend.qwen3_asr import transcribe_audio_qwen3_simple
+            logger.info(f"Transcribing with Qwen3-ASR: {audio_file.filename}")
+            result = transcribe_audio_qwen3_simple(audio_file.file_path)
             
-            logger.info(f"Transcribing locally with MLX Whisper: {audio_file.filename}")
+            audio_file.qwen3_transcript = result.get("text", "")
+            audio_file.qwen3_language = result.get("language")
+            audio_file.qwen3_confidence = result.get("confidence")
+            audio_file.qwen3_transcribed_at = datetime.now(timezone.utc)
+        elif USE_LOCAL_WHISPER:
+            from backend.whisper import transcribe_audio_simple
+            logger.info(f"Transcribing locally with Whisper: {audio_file.filename}")
             result = transcribe_audio_simple(audio_file.file_path)
             
             audio_file.whisper_transcript = result.get("text", "")
             audio_file.whisper_language = result.get("language")
             audio_file.whisper_confidence = result.get("confidence")
-            audio_file.status = TranscriptionStatus.TRANSCRIBED
             audio_file.transcribed_at = datetime.now(timezone.utc)
-            db.commit()
-            
-            return {
-                "status": "success",
-                "file_id": audio_file_id,
-                "filename": audio_file.filename,
-                "transcript": audio_file.whisper_transcript[:100] + "..." if len(audio_file.whisper_transcript) > 100 else audio_file.whisper_transcript,
-                "language": audio_file.whisper_language,
-                "confidence": audio_file.whisper_confidence
-            }
         else:
             # Fall back to Whisper API
             import httpx
@@ -85,19 +86,34 @@ def transcribe_audio_task(self, audio_file_id: int) -> dict:
                     result = response.json()
                     audio_file.whisper_transcript = result.get("text", "")
                     audio_file.whisper_language = result.get("language")
-                    audio_file.status = TranscriptionStatus.TRANSCRIBED
                     audio_file.transcribed_at = datetime.now(timezone.utc)
-                    db.commit()
-                    
-                    return {
-                        "status": "success",
-                        "file_id": audio_file_id,
-                        "filename": audio_file.filename,
-                        "transcript": audio_file.whisper_transcript[:100] + "..." if len(audio_file.whisper_transcript) > 100 else audio_file.whisper_transcript,
-                        "language": audio_file.whisper_language
-                    }
                 else:
                     raise self.retry(exc=Exception(f"Whisper API error: {response.status_code}"))
+        
+        audio_file.status = TranscriptionStatus.TRANSCRIBED
+        db.commit()
+        
+        # Build response based on engine
+        transcript = (
+            audio_file.qwen3_transcript if engine == "qwen3"
+            else audio_file.whisper_transcript
+        ) or ""
+        
+        return {
+            "status": "success",
+            "file_id": audio_file_id,
+            "filename": audio_file.filename,
+            "transcript": transcript[:100] + "..." if len(transcript) > 100 else transcript,
+            "language": (
+                audio_file.qwen3_language if engine == "qwen3"
+                else audio_file.whisper_language
+            ),
+            "confidence": (
+                audio_file.qwen3_confidence if engine == "qwen3"
+                else audio_file.whisper_confidence
+            ),
+            "engine": engine,
+        }
                 
     except MaxRetriesExceededError:
         audio_file.status = TranscriptionStatus.PENDING
@@ -118,7 +134,8 @@ def transcribe_audio_task(self, audio_file_id: int) -> dict:
 @celery_app.task(bind=True)
 def batch_transcribe_task(self, dataset_id: int, file_ids: list = None) -> dict:
     """
-    Queue multiple files for transcription.
+    Queue multiple files for transcription via Celery group.
+    Runs BOTH Whisper and Qwen3 on every file to provide dual perspectives.
     
     Args:
         dataset_id: The dataset ID
@@ -143,16 +160,23 @@ def batch_transcribe_task(self, dataset_id: int, file_ids: list = None) -> dict:
         if not files:
             return {"status": "no_files", "message": "No files to transcribe", "count": 0}
         
-        # Queue individual transcription tasks
-        job_group = group(transcribe_audio_task.s(f.id) for f in files)
+        # Queue both Whisper AND Qwen3 tasks for every file
+        tasks = []
+        for f in files:
+            tasks.append(transcribe_audio_task.s(f.id, "whisper"))
+            tasks.append(transcribe_audio_task.s(f.id, "qwen3"))
+        
+        job_group = group(tasks)
         result = job_group.apply_async()
         
         return {
             "status": "queued",
-            "message": f"Queued {len(files)} files for transcription",
+            "message": f"Queued {len(files)} files for dual-engine (Whisper + Qwen3) transcription",
             "count": len(files),
+            "total_tasks": len(tasks),
             "task_group_id": result.id,
-            "file_ids": [f.id for f in files]
+            "file_ids": [f.id for f in files],
+            "engines": ["whisper", "qwen3"],
         }
     finally:
         db.close()

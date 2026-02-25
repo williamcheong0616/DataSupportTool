@@ -11,6 +11,7 @@ import {
   batchTranscribe,
   segmentAllFiles,
   importYoutubeAudio,
+  getTaskStatus,
 } from '../api'
 
 function ASRDatasets() {
@@ -133,13 +134,55 @@ function ASRDatasets() {
       const res = await batchTranscribe(datasetId)
       const result = res.data
       
-      if (result.files_processed === 0) {
+      if (result.status === 'no_files' || result.files_processed === 0) {
         alert('No pending files to transcribe')
-      } else {
-        alert(`Transcription complete: ${result.success_count} succeeded, ${result.error_count} failed out of ${result.files_processed} files`)
+        setTranscribing({ ...transcribing, [datasetId]: false })
+        return
       }
       
-      fetchDatasets() // Refresh to show updated counts
+      if (result.status === 'queued' && result.task_id) {
+        // Poll task status until complete
+        const taskId = result.task_id
+        const pendingCount = result.pending_count || 0
+        
+        let attempts = 0
+        const maxAttempts = 600 // 10 minutes at 2s interval
+        
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          attempts++
+          
+          try {
+            const statusRes = await getTaskStatus(taskId)
+            const taskStatus = statusRes.data
+            
+            if (taskStatus.status === 'SUCCESS') {
+              const taskResult = taskStatus.result
+              if (taskResult) {
+                alert(`✅ Dual-engine transcription complete: ${taskResult.count || pendingCount} files processed with Whisper + Qwen3`)
+              } else {
+                alert(`✅ Batch transcription completed`)
+              }
+              break
+            } else if (taskStatus.status === 'FAILURE') {
+              alert(`❌ Transcription failed: ${taskStatus.error || 'Unknown error'}`)
+              break
+            }
+            // Refresh dataset counts periodically
+            if (attempts % 5 === 0) {
+              fetchDatasets()
+            }
+          } catch (pollErr) {
+            console.warn('Poll error:', pollErr)
+          }
+        }
+        
+        if (attempts >= maxAttempts) {
+          alert('⏰ Transcription is still running in the background. Refresh the page to check progress.')
+        }
+      }
+      
+      fetchDatasets() // Final refresh
       
     } catch (err) {
       alert('Failed to transcribe: ' + (err.response?.data?.detail || err.message))
@@ -567,7 +610,7 @@ function ASRDatasets() {
         <ol className="list-decimal list-inside space-y-1 text-sm">
           <li>Create a dataset and add audio: upload files or <strong>import from YouTube</strong></li>
           <li><strong>Optional:</strong> Click "✂️ Segment" to split long audio into speech segments using VAD</li>
-          <li>Click "🎤 Transcribe All" to run Whisper v2 on pending files</li>
+          <li>Click "🎤 Transcribe All" to run both Whisper and Qwen3 ASR on pending files (processes in background via Celery)</li>
           <li>Click "Annotate" to review and correct transcriptions</li>
           <li>Export results as CSV or JSONL when done</li>
         </ol>

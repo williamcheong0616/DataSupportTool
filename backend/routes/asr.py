@@ -190,14 +190,14 @@ async def upload_audio_files(
             db.refresh(audio_file)
             uploaded.append(audio_file.id)
             
-            # Transcribe inline using local Whisper
+            # Queue transcription via Celery
             if auto_transcribe:
+                from backend.tasks import transcribe_audio_task
                 try:
-                    service = TranscriptionService(db)
-                    service.transcribe_single(audio_file.id)
-                    task_ids.append(audio_file.id)  # Track transcribed file IDs
+                    task = transcribe_audio_task.delay(audio_file.id, "whisper")
+                    task_ids.append(task.id)
                 except Exception as e:
-                    logger.warning(f"Auto-transcribe failed for file {audio_file.id}: {e}")
+                    logger.warning(f"Auto-transcribe queue failed for file {audio_file.id}: {e}")
         
         logger.info(f"Uploaded {len(uploaded)} files to dataset {dataset_id}", extra={
             "file_ids": uploaded,
@@ -310,12 +310,12 @@ def import_youtube_audio(
                     created_files.append(audio_file.id)
                     
                     if auto_transcribe:
+                        from backend.tasks import transcribe_audio_task
                         try:
-                            service = TranscriptionService(db)
-                            service.transcribe_single(audio_file.id)
-                            task_ids.append(audio_file.id)
+                            task = transcribe_audio_task.delay(audio_file.id, "whisper")
+                            task_ids.append(task.id)
                         except Exception as e:
-                            logger.warning(f"Auto-transcribe failed for file {audio_file.id}: {e}")
+                            logger.warning(f"Auto-transcribe queue failed for file {audio_file.id}: {e}")
                 
                 db.commit()
                 
@@ -359,12 +359,12 @@ def import_youtube_audio(
             created_files.append(audio_file.id)
             
             if auto_transcribe:
+                from backend.tasks import transcribe_audio_task
                 try:
-                    service = TranscriptionService(db)
-                    service.transcribe_single(audio_file.id)
-                    task_ids.append(audio_file.id)
+                    task = transcribe_audio_task.delay(audio_file.id, "whisper")
+                    task_ids.append(task.id)
                 except Exception as e:
-                    logger.warning(f"Auto-transcribe failed for file {audio_file.id}: {e}")
+                    logger.warning(f"Auto-transcribe queue failed for file {audio_file.id}: {e}")
             
             logger.info(f"Added YouTube audio without segmentation", extra={
                 "file_id": audio_file.id,
@@ -388,27 +388,38 @@ def import_youtube_audio(
 @router.post("/files/{file_id}/transcribe")
 def manual_transcribe(
     file_id: int,
+    engine: str = Query("whisper", enum=["whisper", "qwen3"], description="ASR engine to use"),
     db: Session = Depends(get_db)
 ):
     """
-    Transcribe a single audio file using local MLX-Whisper.
+    Transcribe a single audio file via Celery background worker.
     
-    Runs transcription inline (synchronously) using the local Whisper model.
-    No Redis/Celery required.
+    Dispatches transcription to a Celery worker using the specified engine.
+    Returns immediately with a task ID for status polling.
     
     Args:
         file_id: Audio file ID to transcribe
+        engine: ASR engine ('whisper' or 'qwen3')
         
     Returns:
-        Transcription result with transcript, language, and confidence
+        Task ID for status polling
     """
-    with RequestLogger(f"Manual transcribe file {file_id}", file_id=file_id):
-        service = TranscriptionService(db)
-        try:
-            result = service.transcribe_single(file_id)
-            return result
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+    from backend.tasks import transcribe_audio_task
+    
+    with RequestLogger(f"Queue transcribe file {file_id}", file_id=file_id, engine=engine):
+        audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+        if not audio_file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        task = transcribe_audio_task.delay(file_id, engine)
+        
+        return {
+            "status": "queued",
+            "task_id": task.id,
+            "file_id": file_id,
+            "engine": engine,
+            "message": f"Transcription queued with {engine}"
+        }
 
 
 @router.post("/datasets/{dataset_id}/transcribe-all")
@@ -418,18 +429,21 @@ def batch_transcribe(
     db: Session = Depends(get_db)
 ):
     """
-    Transcribe all pending files in a dataset using local MLX-Whisper.
+    Transcribe all pending files in a dataset via Celery background workers.
     
-    Runs transcription inline (synchronously) for each pending file.
-    No Redis/Celery required.
+    Runs BOTH Whisper and Qwen3 on every file to provide dual perspectives
+    for annotation. Each file is processed independently by workers.
+    Returns immediately with a task ID for status polling.
     
     Args:
         dataset_id: Dataset ID
         file_ids: Optional list of specific file IDs to transcribe
         
     Returns:
-        Batch transcription summary with per-file results
+        Batch task status with task ID
     """
+    from backend.tasks import batch_transcribe_task
+    
     with RequestLogger(f"Batch transcribe dataset {dataset_id}",
                        dataset_id=dataset_id,
                        file_ids=file_ids):
@@ -437,28 +451,114 @@ def batch_transcribe(
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
-        service = TranscriptionService(db)
-        result = service.transcribe_batch(dataset_id, file_ids)
-        return result
+        # Count pending files for immediate feedback
+        pending_query = db.query(AudioFile).filter(
+            AudioFile.dataset_id == dataset_id,
+            AudioFile.status == TranscriptionStatus.PENDING
+        )
+        if file_ids:
+            pending_query = pending_query.filter(AudioFile.id.in_(file_ids))
+        pending_count = pending_query.count()
+        
+        if pending_count == 0:
+            return {
+                "status": "no_files",
+                "message": "No pending files to transcribe",
+                "files_processed": 0
+            }
+        
+        task = batch_transcribe_task.delay(dataset_id, file_ids)
+        
+        return {
+            "status": "queued",
+            "task_id": task.id,
+            "dataset_id": dataset_id,
+            "pending_count": pending_count,
+            "engines": ["whisper", "qwen3"],
+            "message": f"Queued {pending_count} files for dual-engine (Whisper + Qwen3) transcription"
+        }
 
 
 @router.post("/files/{file_id}/retranscribe")
 def retranscribe_audio(
     file_id: int,
+    engine: str = Query("whisper", enum=["whisper", "qwen3"], description="ASR engine to use"),
     db: Session = Depends(get_db)
 ):
     """
-    Clear existing transcription and re-transcribe an audio file using local MLX-Whisper.
+    Clear existing transcription and re-transcribe via Celery background worker.
     
-    Useful for re-running transcription with updated models or settings.
+    Clears the transcript for the specified engine and queues re-transcription.
+    
+    Args:
+        file_id: Audio file ID to re-transcribe
+        engine: ASR engine ('whisper' or 'qwen3')
     """
-    with RequestLogger(f"Retranscribe file {file_id}", file_id=file_id):
-        service = TranscriptionService(db)
-        try:
-            result = service.retranscribe(file_id)
-            return result
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+    with RequestLogger(f"Retranscribe file {file_id}", file_id=file_id, engine=engine):
+        audio_file = db.query(AudioFile).filter(AudioFile.id == file_id).first()
+        if not audio_file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Clear existing transcription for specified engine
+        if engine == "qwen3":
+            audio_file.qwen3_transcript = None
+            audio_file.qwen3_language = None
+            audio_file.qwen3_confidence = None
+            audio_file.qwen3_transcribed_at = None
+        else:
+            audio_file.whisper_transcript = None
+            audio_file.whisper_language = None
+            audio_file.whisper_confidence = None
+            audio_file.corrected_transcript = None
+            audio_file.transcribed_at = None
+        
+        audio_file.status = TranscriptionStatus.PENDING
+        db.commit()
+        
+        # Queue re-transcription
+        from backend.tasks import transcribe_audio_task
+        task = transcribe_audio_task.delay(file_id, engine)
+        
+        return {
+            "status": "queued",
+            "task_id": task.id,
+            "file_id": file_id,
+            "engine": engine,
+            "message": f"Re-transcription queued with {engine}"
+        }
+
+
+# ==================== TASK STATUS ====================
+
+@router.get("/tasks/{task_id}/status")
+def get_task_status(task_id: str):
+    """
+    Get the status of a Celery transcription task.
+    
+    Used for polling after dispatching transcription via Celery.
+    
+    Args:
+        task_id: Celery task ID
+        
+    Returns:
+        Task status with result if completed
+    """
+    from backend.celery_app import celery_app
+    
+    result = celery_app.AsyncResult(task_id)
+    
+    response = {
+        "task_id": task_id,
+        "status": result.status,  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+    }
+    
+    if result.ready():
+        if result.successful():
+            response["result"] = result.result
+        else:
+            response["error"] = str(result.result)
+    
+    return response
 
 
 # ==================== AUDIO FILE MANAGEMENT ====================
@@ -515,6 +615,10 @@ def list_audio_files(
             "whisper_language": f.whisper_language,
             "whisper_confidence": f.whisper_confidence,
             "transcribed_at": f.transcribed_at.isoformat() if f.transcribed_at else None,
+            "qwen3_transcript": f.qwen3_transcript,
+            "qwen3_language": f.qwen3_language,
+            "qwen3_confidence": f.qwen3_confidence,
+            "qwen3_transcribed_at": f.qwen3_transcribed_at.isoformat() if f.qwen3_transcribed_at else None,
             "corrected_transcript": f.corrected_transcript,
             "status": f.status.value,
             "annotated_by": f.annotated_by,

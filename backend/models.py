@@ -108,6 +108,12 @@ class AudioFile(Base):
     whisper_confidence = Column(Float, nullable=True)
     transcribed_at = Column(DateTime, nullable=True)
     
+    # Qwen3 transcription
+    qwen3_transcript = Column(Text, nullable=True)
+    qwen3_language = Column(String(50), nullable=True)
+    qwen3_confidence = Column(Float, nullable=True)
+    qwen3_transcribed_at = Column(DateTime, nullable=True)
+    
     # Annotated transcription
     corrected_transcript = Column(Text, nullable=True)
     

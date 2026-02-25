@@ -47,10 +47,12 @@ echo "  ✅ Migrations applied"
 # ── 5. Start Celery worker (background) ─────────────────────
 echo ""
 echo "🔄 Starting Celery worker..."
-celery -A backend.celery_app:celery_app worker \
+# macOS: use --pool=solo to avoid fork() crashes with MLX/Metal
+# Linux/production: can use --pool=prefork --concurrency=2
+OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A backend.celery_app:celery_app worker \
     --loglevel=info \
     --queues=celery,transcription \
-    --concurrency=2 \
+    --pool=solo \
     &
 CELERY_PID=$!
 echo "  ✅ Celery worker started (PID: $CELERY_PID)"

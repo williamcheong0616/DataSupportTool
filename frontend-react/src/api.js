@@ -156,10 +156,10 @@ export const getAudioFiles = (datasetId, status = null, limit = 50, offset = 0) 
 export const getAudioFile = (id) => api.get(`/asr/files/${id}`)
 export const getAudioUrl = (id) => `${API_BASE}/asr/files/${id}/audio`
 // Transcription now always uses Celery background tasks
-export const transcribeAudio = (id) => 
-  api.post(`/asr/files/${id}/transcribe`)
-export const retranscribeAudio = (id) => 
-  api.post(`/asr/files/${id}/retranscribe`)
+export const transcribeAudio = (id, engine = 'whisper') => 
+  api.post(`/asr/files/${id}/transcribe?engine=${engine}`)
+export const retranscribeAudio = (id, engine = 'whisper') => 
+  api.post(`/asr/files/${id}/retranscribe?engine=${engine}`)
 export const deleteAudioFile = (id) => api.delete(`/asr/files/${id}`)
 export const fuseAudioFiles = (fileIds, outputFilename = null) => {
   const params = new URLSearchParams()
@@ -173,7 +173,7 @@ export const annotateTranscript = (id, transcript, annotator = 'anonymous') =>
   })
 export const updateFileStatus = (id, status) => api.post(`/asr/files/${id}/status?status=${status}`)
 
-// Batch Transcription - always uses Celery background tasks to avoid API blocking
+// Batch Transcription - runs BOTH Whisper + Qwen3 via Celery background tasks
 export const batchTranscribe = (datasetId, fileIds = null) => {
   const params = new URLSearchParams()
   if (fileIds && fileIds.length > 0) {
@@ -206,8 +206,21 @@ export const importYoutubeAudio = (datasetId, youtubeUrl, autoSegment = true, ch
   return api.post(`/asr/datasets/${datasetId}/youtube?${params}`)
 }
 
-// Task Status (Celery)
-export const getTaskStatus = (taskId) => api.get(`/tasks/${taskId}/status`)
+// Task Status (Celery) - uses ASR router prefix
+export const getTaskStatus = (taskId) => api.get(`/asr/tasks/${taskId}/status`)
+
+// Poll a Celery task until completion - returns final result
+export const pollTaskUntilDone = async (taskId, intervalMs = 2000, maxAttempts = 300) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    const res = await getTaskStatus(taskId)
+    const { status, result, error } = res.data
+    if (status === 'SUCCESS') return result
+    if (status === 'FAILURE') throw new Error(error || 'Task failed')
+    // Keep polling for PENDING, STARTED, RETRY
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  }
+  throw new Error('Task polling timed out')
+}
 
 
 // === BR PIPELINE ===

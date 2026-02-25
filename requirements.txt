@@ -37,3 +37,6 @@ aiofiles>=23.2.1
 
 # Logging
 python-json-logger>=2.0.7
+
+# ASR - Qwen3
+qwen-asr>=0.1.0
