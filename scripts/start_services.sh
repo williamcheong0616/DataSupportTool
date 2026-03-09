@@ -38,13 +38,7 @@ else
     exit 1
 fi
 
-# ── 4. Run Alembic migrations ────────────────────────────────
-echo ""
-echo "📋 Running database migrations..."
-alembic upgrade head
-echo "  ✅ Migrations applied"
-
-# ── 5. Start Celery worker (background) ─────────────────────
+# ── 4. Start Celery worker (background) ─────────────────────
 echo ""
 echo "🔄 Starting Celery worker..."
 # macOS: use --pool=solo to avoid fork() crashes with MLX/Metal
@@ -57,7 +51,7 @@ OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A backend.celery_app:celery_app 
 CELERY_PID=$!
 echo "  ✅ Celery worker started (PID: $CELERY_PID)"
 
-# ── 6. Start FastAPI ────────────────────────────────────────
+# ── 5. Start FastAPI ────────────────────────────────────────
 echo ""
 echo "🌐 Starting FastAPI server..."
 python run_api.py &

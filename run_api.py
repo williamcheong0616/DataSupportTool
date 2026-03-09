@@ -7,5 +7,7 @@ if __name__ == "__main__":
         "backend.api:app",
         host=API_HOST,
         port=API_PORT,
-        reload=True
+        reload=True,
+        reload_dirs=["backend", "config.py"],
+        reload_excludes=[".conda", "node_modules", "data", "logs", "__pycache__"],
     )
