@@ -124,7 +124,13 @@ function TextDatasets() {
     reader.onload = (event) => {
       const content = event.target.result
       try {
-        if (file.name.endsWith('.json')) {
+        if (file.name.endsWith('.jsonl')) {
+          const firstLine = content.split('\n').find(l => l.trim())
+          if (firstLine) {
+            const firstItem = JSON.parse(firstLine)
+            setHeaders(Object.keys(firstItem))
+          }
+        } else if (file.name.endsWith('.json')) {
           const data = JSON.parse(content)
           const firstItem = Array.isArray(data) ? data[0] : data
           setHeaders(Object.keys(firstItem))
@@ -376,11 +382,11 @@ function TextDatasets() {
             <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Upload Data File</h2>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Select JSON or CSV File
+                Select JSON, JSONL, or CSV File
               </label>
               <input
                 type="file"
-                accept=".json,.csv"
+                accept=".json,.jsonl,.csv"
                 onChange={handleFileSelect}
                 className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
               />
@@ -436,7 +442,7 @@ function TextDatasets() {
       {datasets.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-gray-500 dark:text-gray-400">
           <p className="text-xl mb-4">No datasets yet</p>
-          <p>Create a dataset and upload your JSON or CSV file to get started.</p>
+          <p>Create a dataset and upload your JSON, JSONL, or CSV file to get started.</p>
         </div>
       ) : (
         <div className="grid gap-4">

@@ -104,7 +104,8 @@ class BRPipelineOrchestrator:
             BRRecordStage.pipeline_run_id == pipeline_run_id
         ).all()
         
-        for record_stage in record_stages:
+        total = len(record_stages)
+        for idx, record_stage in enumerate(record_stages, 1):
             text_record = self.db.query(TextRecord).filter(
                 TextRecord.id == record_stage.text_record_id
             ).first()
@@ -120,6 +121,9 @@ class BRPipelineOrchestrator:
             record_stage.current_stage = BRPipelineStage.BR_DETECTION
             
             self.db.commit()
+            
+            if idx % 25 == 0 or idx == total:
+                logger.info(f"Pipeline {pipeline_run_id} Stage 1: {idx}/{total} records processed")
         
         # Update pipeline run
         pipeline_run = self.db.query(BRPipelineRun).filter(
@@ -137,7 +141,8 @@ class BRPipelineOrchestrator:
             BRRecordStage.current_stage == BRPipelineStage.BR_DETECTION
         ).all()
         
-        for record_stage in record_stages:
+        total = len(record_stages)
+        for idx, record_stage in enumerate(record_stages, 1):
             text_record = self.db.query(TextRecord).filter(
                 TextRecord.id == record_stage.text_record_id
             ).first()
@@ -155,6 +160,9 @@ class BRPipelineOrchestrator:
             record_stage.current_stage = BRPipelineStage.TEXT_RESTRUCTURE
             
             self.db.commit()
+            
+            if idx % 25 == 0 or idx == total:
+                logger.info(f"Pipeline {pipeline_run_id} Stage 2: {idx}/{total} records restructured")
         
         # Update pipeline run
         pipeline_run = self.db.query(BRPipelineRun).filter(
@@ -415,7 +423,8 @@ class BRPipelineOrchestrator:
         
         record_stages = query.all()
         
-        for record_stage in record_stages:
+        total = len(record_stages)
+        for idx, record_stage in enumerate(record_stages, 1):
             text_record = self.db.query(TextRecord).filter(
                 TextRecord.id == record_stage.text_record_id
             ).first()
@@ -431,6 +440,9 @@ class BRPipelineOrchestrator:
             record_stage.current_stage = BRPipelineStage.BR_DETECTION
             
             self.db.commit()
+            
+            if idx % 25 == 0 or idx == total:
+                logger.info(f"Stage 1 progress: {idx}/{total} records")
         
         logger.info(f"Stage 1 completed for {len(record_stages)} records")
         return len(record_stages)
@@ -482,7 +494,8 @@ class BRPipelineOrchestrator:
         
         record_stages = query.all()
         
-        for record_stage in record_stages:
+        total = len(record_stages)
+        for idx, record_stage in enumerate(record_stages, 1):
             text_record = self.db.query(TextRecord).filter(
                 TextRecord.id == record_stage.text_record_id
             ).first()
@@ -503,6 +516,9 @@ class BRPipelineOrchestrator:
             record_stage.current_stage = BRPipelineStage.TEXT_RESTRUCTURE
             
             self.db.commit()
+            
+            if idx % 25 == 0 or idx == total:
+                logger.info(f"Stage 2 progress: {idx}/{total} records")
         
         logger.info(f"Stage 2 completed for {len(record_stages)} records")
         return len(record_stages)
@@ -546,8 +562,9 @@ class BRPipelineOrchestrator:
         
         consecutive_failures = 0
         max_failures = 3
+        total = len(record_stages)
         
-        for record_stage in record_stages:
+        for idx, record_stage in enumerate(record_stages, 1):
             try:
                 # Generate 3 questions in Bahasa Rojak style
                 questions = await self._generate_questions(record_stage.restructured_text, count=3)
@@ -567,6 +584,9 @@ class BRPipelineOrchestrator:
                 record_stage.current_stage = BRPipelineStage.QUESTION_GENERATION
                 
                 self.db.commit()
+                
+                if idx % 25 == 0 or idx == total:
+                    logger.info(f"Stage 3 progress: {idx}/{total} records")
                 
             except Exception as e:
                 logger.error(f"Failed to generate questions for record {record_stage.id}: {e}")

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getBRResponseRecords, generateBRResponse, editBRResponseProblems } from '../api'
+import { getBRResponseRecords, generateBRResponse, generateBRResponseBatch, editBRResponseProblems, getOllamaModels } from '../api'
 
 function BRModelResponses() {
   const { pipelineId } = useParams()
@@ -21,7 +21,36 @@ function BRModelResponses() {
   const [dsName, setDsName] = useState('')
   const perPage = 10
 
+  // Model selection
+  const [availableModels, setAvailableModels] = useState([])
+  const [selectedModels, setSelectedModels] = useState(['', '', ''])
+  const [modelsLoading, setModelsLoading] = useState(true)
+  const [batchGenerating, setBatchGenerating] = useState(false)
+  const [batchProgress, setBatchProgress] = useState(null) // { current, total }
+
   useEffect(() => { fetchRecords() }, [pipelineId, page])
+  useEffect(() => { fetchAvailableModels() }, [])
+
+  async function fetchAvailableModels() {
+    setModelsLoading(true)
+    try {
+      const res = await getOllamaModels()
+      const models = res.data.models || []
+      setAvailableModels(models)
+      // Default: set all 3 to first available model (or empty)
+      if (models.length > 0) {
+        const defaultModel = models[0].name
+        setSelectedModels([
+          models[0]?.name || '',
+          models[1]?.name || models[0]?.name || '',
+          models[2]?.name || models[0]?.name || ''
+        ])
+      }
+    } catch (err) {
+      console.error('Failed to fetch Ollama models:', err)
+    }
+    setModelsLoading(false)
+  }
 
   async function fetchRecords() {
     setLoading(true)
@@ -39,16 +68,64 @@ function BRModelResponses() {
     setLoading(false)
   }
 
+  function getModelConfigs() {
+    return selectedModels.map((modelId, i) => ({
+      name: `Model-${String.fromCharCode(65 + i)} (${modelId})`,
+      model_id: modelId
+    }))
+  }
+
   async function generate(id) {
     setGenerating(g => ({ ...g, [id]: true }))
     try {
-      const res = await generateBRResponse(id)
+      const models = selectedModels.every(m => m) ? getModelConfigs() : null
+      const res = await generateBRResponse(id, models)
       setRecords(prev => prev.map(r => r.id === id ? { ...r, model_responses: res.data.responses, completed: true } : r))
       setCompleted(c => c + 1)
     } catch (err) {
       alert('Generation failed: ' + (err.response?.data?.detail || err.message))
     }
     setGenerating(g => ({ ...g, [id]: false }))
+  }
+
+  async function batchGenerate() {
+    if (!selectedModels.every(m => m)) {
+      alert('Please select all 3 models before generating.')
+      return
+    }
+
+    const pendingCount = total - completed
+    if (pendingCount === 0) {
+      alert('No pending records to generate.')
+      return
+    }
+
+    if (!confirm(`Generate responses for ${pendingCount} pending records using:\n• ${selectedModels[0]}\n• ${selectedModels[1]}\n• ${selectedModels[2]}\n\nThis processes all records per model before switching to the next. Continue?`)) {
+      return
+    }
+
+    setBatchGenerating(true)
+    setBatchProgress({ current: 0, total: pendingCount })
+
+    try {
+      const models = getModelConfigs()
+      const res = await generateBRResponseBatch(pipelineId, models)
+      alert(`✓ Batch generation complete!\n${res.data.processed} records processed with ${res.data.models_used.length} models.`)
+      fetchRecords()
+    } catch (err) {
+      alert('Batch generation failed: ' + (err.response?.data?.detail || err.message))
+    }
+
+    setBatchGenerating(false)
+    setBatchProgress(null)
+  }
+
+  function updateSelectedModel(index, value) {
+    setSelectedModels(prev => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
   }
 
   function startEdit(recordId, modelName, problems) {
@@ -135,7 +212,7 @@ function BRModelResponses() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Stage 4: Model Responses</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">Generate responses from 3 base models for each validated question</p>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Generate responses from 3 selected models for each validated question</p>
           </div>
           <div className="flex gap-2">
             <button onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">📥 Export CSV</button>
@@ -153,6 +230,56 @@ function BRModelResponses() {
             <Link to={`/br-pipeline/questions/${pipelineId}`} className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300">3. Questions</Link>
             <span className="text-gray-400">→</span>
             <span className="px-3 py-1 text-sm bg-indigo-600 text-white rounded">4. Model Responses</span>
+          </div>
+        </div>
+
+        {/* Model Selection Panel */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🤖 Model Selection</h2>
+            {modelsLoading && <span className="text-sm text-gray-400">Loading models...</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {['A', 'B', 'C'].map((label, i) => (
+              <div key={label}>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Model {label}
+                </label>
+                <select
+                  value={selectedModels[i]}
+                  onChange={(e) => updateSelectedModel(i, e.target.value)}
+                  disabled={modelsLoading || batchGenerating}
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  <option value="">-- Select model --</option>
+                  {availableModels.map(m => (
+                    <option key={`${label}-${m.name}`} value={m.name}>
+                      {m.name} ({m.size_gb} GB)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
+              {total - completed > 0 && ` · ${total - completed} pending records`}
+            </p>
+            <button
+              onClick={batchGenerate}
+              disabled={batchGenerating || !selectedModels.every(m => m) || (total - completed) === 0}
+              className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium flex items-center gap-2"
+            >
+              {batchGenerating ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Generating... {batchProgress ? `(${batchProgress.current}/${batchProgress.total})` : ''}
+                </>
+              ) : (
+                <>🤖 Generate All Responses ({total - completed} pending)</>
+              )}
+            </button>
           </div>
         </div>
 

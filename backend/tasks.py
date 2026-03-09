@@ -53,7 +53,7 @@ def transcribe_audio_task(self, audio_file_id: int, engine: str = "whisper") -> 
         
         # Transcribe using the specified engine
         if engine == "qwen3":
-            from backend.qwen3_asr import transcribe_audio_qwen3_simple
+            from backend.qwen3_asr import transcribe_audio_qwen3_simple, offload_model as offload_qwen3
             logger.info(f"Transcribing with Qwen3-ASR: {audio_file.filename}")
             result = transcribe_audio_qwen3_simple(audio_file.file_path)
             
@@ -61,8 +61,11 @@ def transcribe_audio_task(self, audio_file_id: int, engine: str = "whisper") -> 
             audio_file.qwen3_language = result.get("language")
             audio_file.qwen3_confidence = result.get("confidence")
             audio_file.qwen3_transcribed_at = datetime.now(timezone.utc)
+            
+            # Offload model from VRAM to free resources for other models
+            offload_qwen3()
         elif USE_LOCAL_WHISPER:
-            from backend.whisper import transcribe_audio_simple
+            from backend.whisper import transcribe_audio_simple, offload_model as offload_whisper
             logger.info(f"Transcribing locally with Whisper: {audio_file.filename}")
             result = transcribe_audio_simple(audio_file.file_path)
             
@@ -70,6 +73,9 @@ def transcribe_audio_task(self, audio_file_id: int, engine: str = "whisper") -> 
             audio_file.whisper_language = result.get("language")
             audio_file.whisper_confidence = result.get("confidence")
             audio_file.transcribed_at = datetime.now(timezone.utc)
+            
+            # Offload model from VRAM to free resources for other models
+            offload_whisper()
         else:
             # Fall back to Whisper API
             import httpx

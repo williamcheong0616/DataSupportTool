@@ -197,3 +197,21 @@ class StageExecutionResponse(BaseModel):
 class MergeRecordsRequest(BaseModel):
     record_ids: List[int]  # IDs of records to merge (order matters)
     separator: str = " "  # How to join the texts
+
+
+# ===== Stage 4: Batch Generation Schemas =====
+
+class ModelSelection(BaseModel):
+    """A user-selected model for response generation."""
+    name: str        # Display name e.g. "Model-A (gemma3:4b)"
+    model_id: str    # Ollama model id e.g. "gemma3:4b"
+
+
+class BatchGenerateRequest(BaseModel):
+    """Request body for batch-generating responses with 3 selected models."""
+    models: List[ModelSelection]  # Exactly 3 models
+
+
+class SingleGenerateRequest(BaseModel):
+    """Optional request body for single-record generate with custom models."""
+    models: Optional[List[ModelSelection]] = None  # If None, use defaults

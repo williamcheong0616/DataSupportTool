@@ -332,8 +332,11 @@ export const selectBRQuestion = (recordId, questionIndex, validatedBy) =>
 export const getBRResponseRecords = (pipelineId, page = 1, perPage = 10) =>
   api.get(`/br-pipeline/responses/${pipelineId}?page=${page}&per_page=${perPage}`)
 
-export const generateBRResponse = (recordId) =>
-  api.post(`/br-pipeline/responses/${recordId}/generate`)
+export const generateBRResponse = (recordId, models = null) =>
+  api.post(`/br-pipeline/responses/${recordId}/generate`, models ? { models } : null)
+
+export const generateBRResponseBatch = (pipelineId, models) =>
+  api.post(`/br-pipeline/responses/${pipelineId}/generate-all`, { models })
 
 export const editBRResponseProblems = (recordId, modelName, problems, editedBy = 'annotator') =>
   api.post(`/br-pipeline/responses/${recordId}/edit-problems`, {

@@ -20,6 +20,28 @@ _qwen3_model = None
 _qwen3_device = None
 
 
+def offload_model():
+    """Offload Qwen3-ASR model from VRAM/memory to free resources for other models."""
+    global _qwen3_model, _qwen3_device
+    
+    if _qwen3_model is not None:
+        logger.info("Offloading Qwen3-ASR model from VRAM")
+        del _qwen3_model
+        _qwen3_model = None
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
+    
+    _qwen3_device = None
+    
+    import gc
+    gc.collect()
+    logger.info("Qwen3-ASR model offloaded")
+
+
 def detect_device() -> str:
     """
     Auto-detect the best available device for Qwen3-ASR.

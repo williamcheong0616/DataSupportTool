@@ -5,9 +5,38 @@ Handles communication with Ollama for BR detection, text restructuring, and ques
 import requests
 import logging
 import json
+import time
+import gc
 from typing import List, Dict, Any, Optional
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
+
+# Throttle: minimum seconds between consecutive Ollama API calls
+OLLAMA_CALL_DELAY = 0.3
+# After this many calls, force a longer pause to let Ollama GC/recover
+OLLAMA_BATCH_PAUSE_EVERY = 50
+OLLAMA_BATCH_PAUSE_SECS = 3.0
+
+
+def _create_http_session() -> requests.Session:
+    """Create an HTTP session with connection pooling and automatic retries."""
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[502, 503, 504],
+        allowed_methods=["POST", "GET"],
+    )
+    adapter = HTTPAdapter(
+        max_retries=retry_strategy,
+        pool_connections=1,
+        pool_maxsize=2,
+    )
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
 
 class OllamaService:
@@ -18,13 +47,36 @@ class OllamaService:
         self.model_name = model_name
         self.generate_url = f"{base_url}/api/generate"
         self.chat_url = f"{base_url}/api/chat"
+        self._session = _create_http_session()
+        self._call_count = 0
+        self._last_call_time = 0.0
+    
+    def _throttle(self):
+        """Rate-limit calls to prevent Ollama from freezing under sustained load."""
+        now = time.monotonic()
+        elapsed = now - self._last_call_time
+        if elapsed < OLLAMA_CALL_DELAY:
+            time.sleep(OLLAMA_CALL_DELAY - elapsed)
+        
+        self._call_count += 1
+        
+        # Periodic longer pause to let Ollama free GPU/CPU resources
+        if self._call_count % OLLAMA_BATCH_PAUSE_EVERY == 0:
+            logger.info(f"Ollama throttle: {self._call_count} calls done, pausing {OLLAMA_BATCH_PAUSE_SECS}s")
+            gc.collect()
+            time.sleep(OLLAMA_BATCH_PAUSE_SECS)
+        
+        self._last_call_time = time.monotonic()
     
     def _call_generate(self, prompt: str, system: Optional[str] = None, temperature: float = 0.7) -> str:
-        """Call Ollama generate API."""
+        """Call Ollama generate API with throttling and connection reuse."""
+        self._throttle()
+        
         payload = {
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": "10m",
             "options": {
                 "temperature": temperature
             }
@@ -34,13 +86,23 @@ class OllamaService:
             payload["system"] = system
         
         try:
-            response = requests.post(self.generate_url, json=payload, timeout=120)
+            response = self._session.post(self.generate_url, json=payload, timeout=120)
             response.raise_for_status()
             result = response.json()
             return result.get("response", "").strip()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Ollama API error: {e}")
-            raise Exception(f"Failed to call Ollama: {str(e)}")
+            logger.error(f"Ollama API error (call #{self._call_count}): {e}")
+            # Retry after a cooldown — Ollama may be recovering from resource pressure
+            logger.info("Retrying after 5s cooldown...")
+            time.sleep(5)
+            try:
+                response = self._session.post(self.generate_url, json=payload, timeout=180)
+                response.raise_for_status()
+                result = response.json()
+                return result.get("response", "").strip()
+            except requests.exceptions.RequestException as e2:
+                logger.error(f"Ollama API retry also failed: {e2}")
+                raise Exception(f"Failed to call Ollama after retry: {str(e2)}")
     
     def detect_bahasa_rojak(self, text: str) -> tuple[bool, float, str]:
         """
@@ -292,7 +354,7 @@ Answer in Bahasa Rojak:"""
     def check_model_available(self) -> bool:
         """Check if Ollama is running and model is available."""
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            response = self._session.get(f"{self.base_url}/api/tags", timeout=5)
             response.raise_for_status()
             models = response.json().get("models", [])
             model_names = [m.get("name") for m in models]

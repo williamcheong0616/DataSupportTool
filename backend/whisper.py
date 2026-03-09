@@ -31,6 +31,32 @@ _cuda_model = None
 _active_backend: Optional[WhisperBackend] = None
 
 
+def offload_model():
+    """Offload Whisper model from VRAM/memory to free resources for other models."""
+    global _mlx_model, _cuda_model, _active_backend
+    
+    if _cuda_model is not None:
+        logger.info("Offloading faster-whisper model from VRAM")
+        del _cuda_model
+        _cuda_model = None
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
+    
+    if _mlx_model is not None:
+        logger.info("Offloading MLX Whisper model from memory")
+        _mlx_model = None
+    
+    _active_backend = None
+    
+    import gc
+    gc.collect()
+    logger.info("Whisper model offloaded")
+
+
 @dataclass
 class TranscriptionResult:
     """Result of audio transcription."""
