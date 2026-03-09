@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
-import { runBRStage2, mergeBRRecords, getBRStageProgress } from '../api'
-
-const API_BASE_URL = 'http://localhost:8000'
+import { runBRStage2, mergeBRRecords, getBRStageProgress, getBRPipelineStatus, getBRRestructureRecords, updateBRRestructure, autoRestructureBR } from '../api'
 
 function BRRestructure() {
   const { pipelineId } = useParams()
@@ -61,7 +58,7 @@ function BRRestructure() {
 
   const fetchPipelineInfo = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/br-pipeline/status/${pipelineId}`)
+      const res = await getBRPipelineStatus(pipelineId)
       setPipelineInfo(res.data)
     } catch (err) {
       console.error('Failed to fetch pipeline info:', err)
@@ -71,9 +68,7 @@ function BRRestructure() {
   const fetchRecords = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(
-        `${API_BASE_URL}/api/br-pipeline/restructure/${pipelineId}?page=${page}&per_page=${perPage}`
-      )
+      const res = await getBRRestructureRecords(pipelineId, page, perPage)
       setRecords(res.data.records)
       setTotal(res.data.total)
       setTotalPages(res.data.total_pages)
@@ -98,10 +93,7 @@ function BRRestructure() {
 
     setSaving(prev => ({ ...prev, [recordId]: true }))
     try {
-      await axios.patch(
-        `${API_BASE_URL}/api/br-pipeline/restructure/${recordId}`,
-        { restructured_text: record.restructured_text }
-      )
+      await updateBRRestructure(recordId, { restructured_text: record.restructured_text })
       if (!record.was_restructured) {
         setRestructuredCount(prev => prev + 1)
         setRecords(prev => prev.map(r => 
@@ -122,10 +114,7 @@ function BRRestructure() {
 
     setSaving(prev => ({ ...prev, [`keep_${recordId}`]: true }))
     try {
-      await axios.patch(
-        `${API_BASE_URL}/api/br-pipeline/restructure/${recordId}`,
-        { restructured_text: record.original_text }
-      )
+      await updateBRRestructure(recordId, { restructured_text: record.original_text })
       setRecords(prev => prev.map(r => 
         r.id === recordId ? { ...r, restructured_text: record.original_text, was_restructured: true } : r
       ))
@@ -143,9 +132,7 @@ function BRRestructure() {
   const handleAutoRestructure = async (recordId) => {
     setSaving(prev => ({ ...prev, [`auto_${recordId}`]: true }))
     try {
-      const res = await axios.post(
-        `${API_BASE_URL}/api/br-pipeline/restructure/${recordId}/auto`
-      )
+      const res = await autoRestructureBR(recordId)
       setRecords(prev => prev.map(r => 
         r.id === recordId ? { ...r, restructured_text: res.data.restructured_text, was_restructured: true } : r
       ))

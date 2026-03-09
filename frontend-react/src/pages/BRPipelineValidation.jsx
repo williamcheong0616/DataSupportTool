@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
-
-const API_BASE_URL = 'http://localhost:8000'
+import { getBRPendingValidation, validateBRQuestion } from '../api'
 
 function BRPipelineValidation() {
   const navigate = useNavigate()
@@ -21,7 +19,7 @@ function BRPipelineValidation() {
   const fetchPendingRecords = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/br-pipeline/pending-validation`)
+      const res = await getBRPendingValidation()
       setRecords(res.data)
       setCurrentIndex(0)
     } catch (err) {
@@ -42,13 +40,7 @@ function BRPipelineValidation() {
 
     setSubmitting(true)
     try {
-      await axios.post(
-        `${API_BASE_URL}/api/br-pipeline/validate/${currentRecord.id}`,
-        {
-          question_index: questionIndex,
-          validated_by: validatorName
-        }
-      )
+      await validateBRQuestion(currentRecord.id, questionIndex, validatorName)
 
       // Move to next record or finish
       if (currentIndex < records.length - 1) {

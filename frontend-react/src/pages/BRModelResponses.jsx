@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
-
-const API = 'http://localhost:8000'
+import { getBRResponseRecords, generateBRResponse, editBRResponseProblems } from '../api'
 
 function BRModelResponses() {
   const { pipelineId } = useParams()
@@ -28,7 +26,7 @@ function BRModelResponses() {
   async function fetchRecords() {
     setLoading(true)
     try {
-      const res = await axios.get(`${API}/api/br-pipeline/responses/${pipelineId}?page=${page}&per_page=${perPage}`)
+      const res = await getBRResponseRecords(pipelineId, page, perPage)
       setRecords(res.data.records)
       setTotal(res.data.total)
       setPages(res.data.total_pages)
@@ -44,7 +42,7 @@ function BRModelResponses() {
   async function generate(id) {
     setGenerating(g => ({ ...g, [id]: true }))
     try {
-      const res = await axios.post(`${API}/api/br-pipeline/responses/${id}/generate`)
+      const res = await generateBRResponse(id)
       setRecords(prev => prev.map(r => r.id === id ? { ...r, model_responses: res.data.responses, completed: true } : r))
       setCompleted(c => c + 1)
     } catch (err) {
@@ -73,11 +71,7 @@ function BRModelResponses() {
     setSaving(true)
     try {
       const problems = problemText.split('\n').map(s => s.trim()).filter(Boolean)
-      const res = await axios.post(`${API}/api/br-pipeline/responses/${editing.recordId}/edit-problems`, {
-        model_name: editing.modelName,
-        problems,
-        edited_by: 'annotator'
-      })
+      const res = await editBRResponseProblems(editing.recordId, editing.modelName, problems)
       setRecords(prev => prev.map(r => {
         if (r.id === editing.recordId && r.model_responses) {
           const updated = { ...r.model_responses }

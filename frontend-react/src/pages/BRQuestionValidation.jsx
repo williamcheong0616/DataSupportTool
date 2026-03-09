@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
-import { runBRStage3 } from '../api'
-
-const API_BASE_URL = 'http://localhost:8000'
+import { runBRStage3, getBRQuestionRecords, generateBRQuestions, selectBRQuestion } from '../api'
 
 function BRQuestionValidation() {
   const { pipelineId } = useParams()
@@ -29,9 +26,7 @@ function BRQuestionValidation() {
   const fetchRecords = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(
-        `${API_BASE_URL}/api/br-pipeline/questions/${pipelineId}?page=${page}&per_page=${perPage}`
-      )
+      const res = await getBRQuestionRecords(pipelineId, page, perPage)
       setRecords(res.data.records)
       setTotal(res.data.total)
       setTotalPages(res.data.total_pages)
@@ -47,9 +42,7 @@ function BRQuestionValidation() {
   const handleGenerateQuestions = async (recordId) => {
     setGenerating(prev => ({ ...prev, [recordId]: true }))
     try {
-      const res = await axios.post(
-        `${API_BASE_URL}/api/br-pipeline/questions/${recordId}/generate`
-      )
+      const res = await generateBRQuestions(recordId)
       setRecords(prev => prev.map(r => 
         r.id === recordId ? { ...r, generated_questions: res.data.questions } : r
       ))
@@ -70,13 +63,7 @@ function BRQuestionValidation() {
 
     setSaving(prev => ({ ...prev, [recordId]: true }))
     try {
-      await axios.post(
-        `${API_BASE_URL}/api/br-pipeline/questions/${recordId}/select`,
-        {
-          question_index: questionIndex,
-          validated_by: validatorName
-        }
-      )
+      await selectBRQuestion(recordId, questionIndex, validatorName)
       
       const record = records.find(r => r.id === recordId)
       setRecords(prev => prev.map(r => 

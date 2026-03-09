@@ -18,6 +18,7 @@ import pandas as pd
 import json
 import io
 import csv
+import math
 
 from backend.database import get_db
 from backend.models import TextDataset, TextRecord, TaskType
@@ -215,10 +216,13 @@ async def upload_text_data(
     # Add records
     records_added = 0
     for _, row in df.iterrows():
+        # Sanitize raw_data: replace NaN/Inf with None for PostgreSQL JSON compatibility
+        raw = row.to_dict()
+        raw = {k: (None if pd.isna(v) or (isinstance(v, float) and not math.isfinite(v)) else v) for k, v in raw.items()}
         record = TextRecord(
             dataset_id=dataset_id,
             original_text=str(row[selected_col]),
-            raw_data=row.to_dict(),
+            raw_data=raw,
         )
         db.add(record)
         records_added += 1

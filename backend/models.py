@@ -30,6 +30,7 @@ class TextDataset(Base):
     
     # Relationships
     records = relationship("TextRecord", back_populates="dataset", cascade="all, delete-orphan")
+    br_pipeline_runs = relationship("BRPipelineRun", back_populates="dataset", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class TextRecord(Base):
@@ -68,6 +69,7 @@ class TextRecord(Base):
     
     # Relationships
     dataset = relationship("TextDataset", back_populates="records")
+    br_record_stages = relationship("BRRecordStage", back_populates="text_record", cascade="all, delete-orphan", passive_deletes=True)
 
 
 # === ASR Annotation Models ===

@@ -26,7 +26,7 @@ class BRPipelineRun(Base):
     __tablename__ = "br_pipeline_runs"
     
     id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, ForeignKey("text_datasets.id"), nullable=False)
+    dataset_id = Column(Integer, ForeignKey("text_datasets.id", ondelete="CASCADE"), nullable=False)
     
     # Pipeline progress
     total_records = Column(Integer, default=0)
@@ -44,7 +44,8 @@ class BRPipelineRun(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
-    record_stages = relationship("BRRecordStage", back_populates="pipeline_run", cascade="all, delete-orphan")
+    dataset = relationship("TextDataset", back_populates="br_pipeline_runs")
+    record_stages = relationship("BRRecordStage", back_populates="pipeline_run", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class BRRecordStage(Base):
@@ -52,8 +53,8 @@ class BRRecordStage(Base):
     __tablename__ = "br_record_stages"
     
     id = Column(Integer, primary_key=True, index=True)
-    pipeline_run_id = Column(Integer, ForeignKey("br_pipeline_runs.id"), nullable=False)
-    text_record_id = Column(Integer, ForeignKey("text_records.id"), nullable=False)
+    pipeline_run_id = Column(Integer, ForeignKey("br_pipeline_runs.id", ondelete="CASCADE"), nullable=False)
+    text_record_id = Column(Integer, ForeignKey("text_records.id", ondelete="CASCADE"), nullable=False)
     
     # Current state
     current_stage = Column(SQLEnum(BRPipelineStage), default=BRPipelineStage.PENDING)
@@ -93,6 +94,7 @@ class BRRecordStage(Base):
     
     # Relationships
     pipeline_run = relationship("BRPipelineRun", back_populates="record_stages")
+    text_record = relationship("TextRecord", back_populates="br_record_stages")
 
 
 class ModelConfig(Base):

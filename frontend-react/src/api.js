@@ -305,6 +305,43 @@ export const mergeBRRecords = (recordIds, separator = ' ') =>
 export const getBRStageProgress = (pipelineId) =>
   api.get(`/br-pipeline/stage-progress/${pipelineId}`)
 
+// Restructure records
+export const getBRRestructureRecords = (pipelineId, page = 1, perPage = 10) =>
+  api.get(`/br-pipeline/restructure/${pipelineId}?page=${page}&per_page=${perPage}`)
+
+export const updateBRRestructure = (recordId, data) =>
+  api.patch(`/br-pipeline/restructure/${recordId}`, data)
+
+export const autoRestructureBR = (recordId) =>
+  api.post(`/br-pipeline/restructure/${recordId}/auto`)
+
+// Question generation & selection
+export const getBRQuestionRecords = (pipelineId, page = 1, perPage = 10) =>
+  api.get(`/br-pipeline/questions/${pipelineId}?page=${page}&per_page=${perPage}`)
+
+export const generateBRQuestions = (recordId) =>
+  api.post(`/br-pipeline/questions/${recordId}/generate`)
+
+export const selectBRQuestion = (recordId, questionIndex, validatedBy) =>
+  api.post(`/br-pipeline/questions/${recordId}/select`, {
+    question_index: questionIndex,
+    validated_by: validatedBy
+  })
+
+// Model responses
+export const getBRResponseRecords = (pipelineId, page = 1, perPage = 10) =>
+  api.get(`/br-pipeline/responses/${pipelineId}?page=${page}&per_page=${perPage}`)
+
+export const generateBRResponse = (recordId) =>
+  api.post(`/br-pipeline/responses/${recordId}/generate`)
+
+export const editBRResponseProblems = (recordId, modelName, problems, editedBy = 'annotator') =>
+  api.post(`/br-pipeline/responses/${recordId}/edit-problems`, {
+    model_name: modelName,
+    problems,
+    edited_by: editedBy
+  })
+
 
 // === SETTINGS ===
 

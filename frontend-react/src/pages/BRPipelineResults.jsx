@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'axios'
-
-const API_BASE_URL = 'http://localhost:8000'
+import { getBRPipelineResults } from '../api'
 
 function BRPipelineResults() {
   const { pipelineId } = useParams()
@@ -18,7 +16,7 @@ function BRPipelineResults() {
   const fetchResults = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/br-pipeline/results/${pipelineId}`)
+      const res = await getBRPipelineResults(pipelineId)
       setResults(res.data)
     } catch (err) {
       console.error('Failed to fetch results:', err)
