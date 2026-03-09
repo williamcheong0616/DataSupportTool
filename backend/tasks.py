@@ -119,6 +119,12 @@ def transcribe_audio_task(self, audio_file_id: int, engine: str = "whisper") -> 
         audio_file.status = TranscriptionStatus.PENDING
         db.commit()
         return {"status": "error", "message": "Max retries exceeded", "file_id": audio_file_id}
+    except (ImportError, ModuleNotFoundError) as e:
+        # Don't retry on missing packages — they won't install themselves
+        logger.error(f"Import error for {engine} engine: {e}")
+        audio_file.status = TranscriptionStatus.PENDING
+        db.commit()
+        return {"status": "error", "message": f"Engine '{engine}' unavailable: {e}", "file_id": audio_file_id}
     except Exception as e:
         # Retry on any error
         try:

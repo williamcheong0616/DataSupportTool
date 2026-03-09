@@ -98,6 +98,7 @@ def download_youtube_audio(
             'preferredcodec': format,
             'preferredquality': '192',
         }],
+        'ffmpeg_location': '/usr/bin',
         'quiet': True,
         'no_warnings': True,
     }

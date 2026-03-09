@@ -88,7 +88,7 @@ def get_qwen3_model(model_name: str = "Qwen/Qwen3-ASR-1.7B"):
         
     except ImportError as e:
         logger.error(f"qwen-asr package not installed: {e}")
-        raise RuntimeError(
+        raise ImportError(
             "qwen-asr package is required for Qwen3 transcription. "
             "Install with: pip install qwen-asr"
         ) from e

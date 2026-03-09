@@ -14,7 +14,7 @@ fi
 
 # ── 2. Start infrastructure (PostgreSQL, Redis, Flower) ──────
 echo "📦 Starting Docker containers..."
-docker-compose up -d
+docker compose up -d
 
 echo "⏳ Waiting for services to be healthy..."
 sleep 5
@@ -24,14 +24,14 @@ echo ""
 echo "✅ Infrastructure Status:"
 echo "─────────────────────────"
 
-if docker-compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
+if docker compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
     echo "  ✅ PostgreSQL: Running on port 5432"
 else
     echo "  ❌ PostgreSQL: Not ready"
     exit 1
 fi
 
-if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
     echo "  ✅ Redis: Running on port 6379"
 else
     echo "  ❌ Redis: Not ready"
@@ -71,4 +71,4 @@ echo "  Flower (Celery): http://localhost:5555"
 echo ""
 echo "💡 To stop:"
 echo "  kill $API_PID $CELERY_PID   # Stop API + Celery"
-echo "  docker-compose down          # Stop infrastructure"
+echo "  docker compose down          # Stop infrastructure"

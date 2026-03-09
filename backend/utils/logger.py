@@ -92,9 +92,21 @@ class RequestLogger:
             log.success("Processing completed", result_count=10)
     """
     
+    # Reserved LogRecord attribute names that cannot be used in extra
+    RESERVED_KEYS = {
+        'name', 'msg', 'args', 'created', 'filename', 'funcName', 'levelname',
+        'levelno', 'lineno', 'module', 'msecs', 'pathname', 'process',
+        'processName', 'relativeCreated', 'stack_info', 'exc_info', 'exc_text',
+        'thread', 'threadName', 'taskName', 'message'
+    }
+    
     def __init__(self, operation: str, **context):
         self.operation = operation
-        self.context = context
+        # Sanitize context keys: prefix reserved keys with 'ctx_'
+        self.context = {
+            (f"ctx_{k}" if k in self.RESERVED_KEYS else k): v
+            for k, v in context.items()
+        }
         self.request_id = str(uuid.uuid4())[:8]
         self.logger = logging.getLogger("datasupporttool")
         self.start_time = None
