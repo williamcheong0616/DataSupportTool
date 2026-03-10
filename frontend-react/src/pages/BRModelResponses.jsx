@@ -26,10 +26,13 @@ function BRModelResponses() {
   const [selectedModels, setSelectedModels] = useState(['', '', ''])
   const [modelsLoading, setModelsLoading] = useState(true)
   const [batchGenerating, setBatchGenerating] = useState(false)
-  const [batchProgress, setBatchProgress] = useState(null) // { current, total }
+  const [batchProgress, setBatchProgress] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [jumpPage, setJumpPage] = useState('')
 
-  useEffect(() => { fetchRecords() }, [pipelineId, page])
+  useEffect(() => { fetchRecords() }, [pipelineId, page, statusFilter])
   useEffect(() => { fetchAvailableModels() }, [])
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, [page])
 
   async function fetchAvailableModels() {
     setModelsLoading(true)
@@ -55,7 +58,7 @@ function BRModelResponses() {
   async function fetchRecords() {
     setLoading(true)
     try {
-      const res = await getBRResponseRecords(pipelineId, page, perPage)
+      const res = await getBRResponseRecords(pipelineId, page, perPage, statusFilter)
       setRecords(res.data.records)
       setTotal(res.data.total)
       setPages(res.data.total_pages)
@@ -126,6 +129,20 @@ function BRModelResponses() {
       next[index] = value
       return next
     })
+  }
+
+  function changeFilter(f) {
+    setStatusFilter(f)
+    setPage(1)
+  }
+
+  function handleJumpPage(e) {
+    e.preventDefault()
+    const p = parseInt(jumpPage, 10)
+    if (p >= 1 && p <= pages) {
+      goPage(p)
+      setJumpPage('')
+    }
   }
 
   function startEdit(recordId, modelName, problems) {
@@ -231,6 +248,26 @@ function BRModelResponses() {
             <span className="text-gray-400">→</span>
             <span className="px-3 py-1 text-sm bg-indigo-600 text-white rounded">4. Model Responses</span>
           </div>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Filter:</span>
+          {['all', 'pending', 'completed'].map(f => (
+            <button
+              key={f}
+              onClick={() => changeFilter(f)}
+              className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                statusFilter === f
+                  ? f === 'all' ? 'bg-indigo-600 text-white'
+                    : f === 'pending' ? 'bg-orange-500 text-white'
+                    : 'bg-green-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
         </div>
 
         {/* Model Selection Panel */}
@@ -452,6 +489,25 @@ function BRModelResponses() {
             <span className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">Page {page} / {pages}</span>
             <button onClick={() => goPage(page + 1)} disabled={page === pages} className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50">Next</button>
             <button onClick={() => goPage(pages)} disabled={page === pages} className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50">Last</button>
+            {/* Jump to page */}
+            <form onSubmit={handleJumpPage} className="flex items-center gap-1 ml-3 border-l border-gray-300 dark:border-gray-600 pl-3">
+              <label className="text-sm text-gray-500 dark:text-gray-400">Go to:</label>
+              <input
+                type="number"
+                min={1}
+                max={pages}
+                value={jumpPage}
+                onChange={(e) => setJumpPage(e.target.value)}
+                placeholder="#"
+                className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                type="submit"
+                className="px-2 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              >
+                Go
+              </button>
+            </form>
           </div>
         </div>
       </div>

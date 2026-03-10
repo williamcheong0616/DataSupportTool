@@ -306,8 +306,8 @@ export const getBRStageProgress = (pipelineId) =>
   api.get(`/br-pipeline/stage-progress/${pipelineId}`)
 
 // Restructure records
-export const getBRRestructureRecords = (pipelineId, page = 1, perPage = 10) =>
-  api.get(`/br-pipeline/restructure/${pipelineId}?page=${page}&per_page=${perPage}`)
+export const getBRRestructureRecords = (pipelineId, page = 1, perPage = 10, status = 'all') =>
+  api.get(`/br-pipeline/restructure/${pipelineId}?page=${page}&per_page=${perPage}&status=${status}`)
 
 export const updateBRRestructure = (recordId, data) =>
   api.patch(`/br-pipeline/restructure/${recordId}`, data)
@@ -316,8 +316,8 @@ export const autoRestructureBR = (recordId) =>
   api.post(`/br-pipeline/restructure/${recordId}/auto`)
 
 // Question generation & selection
-export const getBRQuestionRecords = (pipelineId, page = 1, perPage = 10) =>
-  api.get(`/br-pipeline/questions/${pipelineId}?page=${page}&per_page=${perPage}`)
+export const getBRQuestionRecords = (pipelineId, page = 1, perPage = 10, status = 'all') =>
+  api.get(`/br-pipeline/questions/${pipelineId}?page=${page}&per_page=${perPage}&status=${status}`)
 
 export const generateBRQuestions = (recordId) =>
   api.post(`/br-pipeline/questions/${recordId}/generate`)
@@ -329,8 +329,8 @@ export const selectBRQuestion = (recordId, questionIndex, validatedBy) =>
   })
 
 // Model responses
-export const getBRResponseRecords = (pipelineId, page = 1, perPage = 10) =>
-  api.get(`/br-pipeline/responses/${pipelineId}?page=${page}&per_page=${perPage}`)
+export const getBRResponseRecords = (pipelineId, page = 1, perPage = 10, status = 'all') =>
+  api.get(`/br-pipeline/responses/${pipelineId}?page=${page}&per_page=${perPage}&status=${status}`)
 
 export const generateBRResponse = (recordId, models = null) =>
   api.post(`/br-pipeline/responses/${recordId}/generate`, models ? { models } : null)

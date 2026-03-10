@@ -29,6 +29,7 @@ function BRRestructure() {
   const [restructuredCount, setRestructuredCount] = useState(0)
   const perPage = 10
   const [jumpPage, setJumpPage] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   // Active card index for keyboard navigation
   const [activeIndex, setActiveIndex] = useState(0)
@@ -47,7 +48,7 @@ function BRRestructure() {
 
   useEffect(() => {
     fetchRecords()
-  }, [pipelineId, page])
+  }, [pipelineId, page, statusFilter])
 
   // Poll progress when pipeline is running
   useEffect(() => {
@@ -135,7 +136,7 @@ function BRRestructure() {
   const fetchRecords = async () => {
     setLoading(true)
     try {
-      const res = await getBRRestructureRecords(pipelineId, page, perPage)
+      const res = await getBRRestructureRecords(pipelineId, page, perPage, statusFilter)
       setRecords(res.data.records)
       setTotal(res.data.total)
       setTotalPages(res.data.total_pages)
@@ -262,6 +263,12 @@ function BRRestructure() {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage)
     }
+  }
+
+  const changeFilter = (f) => {
+    setStatusFilter(f)
+    setPage(1)
+    setActiveIndex(0)
   }
 
   const handleJumpPage = (e) => {
@@ -426,6 +433,26 @@ function BRRestructure() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Status Filter + Merge Bar */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Filter:</span>
+          {['all', 'pending', 'completed'].map(f => (
+            <button
+              key={f}
+              onClick={() => changeFilter(f)}
+              className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                statusFilter === f
+                  ? f === 'all' ? 'bg-indigo-600 text-white'
+                    : f === 'pending' ? 'bg-orange-500 text-white'
+                    : 'bg-green-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
         </div>
 
         {/* Merge Bar (shown when in merge mode with selections) */}

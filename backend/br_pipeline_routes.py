@@ -778,6 +778,7 @@ def get_restructure_records(
     pipeline_run_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
+    status: str = Query("all", description="Filter: all, pending, completed"),
     db: Session = Depends(get_db)
 ):
     """Get records for text restructuring with pagination. Only shows Bahasa Rojak records."""
@@ -797,8 +798,16 @@ def get_restructure_records(
         BRRecordStage.restructured_text != None
     ).count()
     
+    # Apply status filter for pagination query
+    page_filter = base_filter
+    if status == "pending":
+        page_filter = base_filter.filter(BRRecordStage.restructured_text == None)
+    elif status == "completed":
+        page_filter = base_filter.filter(BRRecordStage.restructured_text != None)
+    
+    filtered_total = page_filter.count()
     offset = (page - 1) * per_page
-    record_stages = base_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
+    record_stages = page_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
     
     text_record_ids = [rs.text_record_id for rs in record_stages]
     text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
@@ -817,7 +826,7 @@ def get_restructure_records(
         for rs in record_stages
     ]
     
-    total_pages = max(1, (total + per_page - 1) // per_page)
+    total_pages = max(1, (filtered_total + per_page - 1) // per_page)
     
     return RestructureListResponse(
         records=records,
@@ -1009,6 +1018,7 @@ def get_question_records(
     pipeline_run_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
+    status: str = Query("all", description="Filter: all, pending, completed"),
     db: Session = Depends(get_db)
 ):
     """Get records for question validation with pagination.
@@ -1032,8 +1042,16 @@ def get_question_records(
         BRRecordStage.selected_question_index != None
     ).count()
     
+    # Apply status filter for pagination query
+    page_filter = base_filter
+    if status == "pending":
+        page_filter = base_filter.filter(BRRecordStage.selected_question_index == None)
+    elif status == "completed":
+        page_filter = base_filter.filter(BRRecordStage.selected_question_index != None)
+    
+    filtered_total = page_filter.count()
     offset = (page - 1) * per_page
-    record_stages = base_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
+    record_stages = page_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
     
     # Fetch original text from TextRecord for each record
     records = []
@@ -1053,7 +1071,7 @@ def get_question_records(
             )
         )
     
-    total_pages = (total + per_page - 1) // per_page
+    total_pages = max(1, (filtered_total + per_page - 1) // per_page)
     
     return QuestionListResponse(
         records=records,
@@ -1159,6 +1177,7 @@ def get_response_records(
     pipeline_run_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
+    status: str = Query("all", description="Filter: all, pending, completed"),
     db: Session = Depends(get_db)
 ):
     """Get records with selected questions for response generation."""
@@ -1174,14 +1193,20 @@ def get_response_records(
     
     total = base_query.count()
     
-    completed_count = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id,
-        BRRecordStage.selected_question != None,
+    completed_count = base_query.filter(
         BRRecordStage.model_responses != None
     ).count()
     
+    # Apply status filter for pagination query
+    page_filter = base_query
+    if status == "pending":
+        page_filter = base_query.filter(BRRecordStage.model_responses == None)
+    elif status == "completed":
+        page_filter = base_query.filter(BRRecordStage.model_responses != None)
+    
+    filtered_total = page_filter.count()
     offset = (page - 1) * per_page
-    record_stages = base_query.offset(offset).limit(per_page).all()
+    record_stages = page_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
     
     records = [
         ResponseRecordResponse(
@@ -1195,7 +1220,7 @@ def get_response_records(
         for rs in record_stages
     ]
     
-    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    total_pages = max(1, (filtered_total + per_page - 1) // per_page)
     
     # Get dataset info
     from backend.models import TextDataset
