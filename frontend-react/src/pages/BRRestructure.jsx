@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { runBRStage2, mergeBRRecords, getBRStageProgress, getBRPipelineStatus, getBRRestructureRecords, updateBRRestructure, autoRestructureBR } from '../api'
 
@@ -28,6 +28,18 @@ function BRRestructure() {
   const [total, setTotal] = useState(0)
   const [restructuredCount, setRestructuredCount] = useState(0)
   const perPage = 10
+  const [jumpPage, setJumpPage] = useState('')
+
+  // Active card index for keyboard navigation
+  const [activeIndex, setActiveIndex] = useState(0)
+  const containerRef = useRef(null)
+  const cardRefs = useRef([])
+
+  // Scroll to top on page change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setActiveIndex(0)
+  }, [page])
 
   useEffect(() => {
     fetchPipelineInfo()
@@ -55,6 +67,61 @@ function BRRestructure() {
     }, 3000)
     return () => clearInterval(interval)
   }, [polling, pipelineId])
+
+  // Scroll active card into view
+  useEffect(() => {
+    if (cardRefs.current[activeIndex]) {
+      cardRefs.current[activeIndex].scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [activeIndex])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      // Don't capture when typing in input/textarea or modal is open
+      const tag = e.target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || showRerunModal) return
+
+      const activeRecord = records[activeIndex]
+      if (!activeRecord) return
+
+      switch (e.key.toLowerCase()) {
+        case 'a': // Keep Original
+          e.preventDefault()
+          handleKeepOriginal(activeRecord.id)
+          break
+        case 'w': // Auto-Restructure
+          e.preventDefault()
+          handleAutoRestructure(activeRecord.id)
+          break
+        case 'd': // Save
+          e.preventDefault()
+          if (activeRecord.restructured_text) handleSave(activeRecord.id)
+          break
+        case 's': // Next page
+          e.preventDefault()
+          if (page < totalPages) goToPage(page + 1)
+          break
+        case 'p': // Previous page
+          e.preventDefault()
+          if (page > 1) goToPage(page - 1)
+          break
+        case 'arrowdown':
+        case 'j': // Next card
+          e.preventDefault()
+          setActiveIndex(prev => Math.min(prev + 1, records.length - 1))
+          break
+        case 'arrowup':
+        case 'k': // Previous card
+          e.preventDefault()
+          setActiveIndex(prev => Math.max(prev - 1, 0))
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [records, activeIndex, page, totalPages, showRerunModal])
 
   const fetchPipelineInfo = async () => {
     try {
@@ -197,6 +264,15 @@ function BRRestructure() {
     }
   }
 
+  const handleJumpPage = (e) => {
+    e.preventDefault()
+    const p = parseInt(jumpPage, 10)
+    if (p >= 1 && p <= totalPages) {
+      goToPage(p)
+      setJumpPage('')
+    }
+  }
+
   if (loading && records.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -206,7 +282,7 @@ function BRRestructure() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6" ref={containerRef}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -262,6 +338,19 @@ function BRRestructure() {
             >
               4. Model Responses
             </Link>
+          </div>
+        </div>
+
+        {/* Keyboard Shortcuts Help */}
+        <div className="bg-gray-800 dark:bg-gray-900 rounded-lg shadow p-3 mb-6">
+          <div className="flex items-center gap-4 flex-wrap text-xs text-gray-300">
+            <span className="font-semibold text-gray-100">⌨ Hotkeys:</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">A</kbd> Keep Original</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">W</kbd> Auto-Restructure</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">D</kbd> Save</span>
+            <span className="border-l border-gray-600 pl-4"><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">↑</kbd><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono ml-1">↓</kbd> Navigate cards</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">S</kbd> Next page</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">P</kbd> Prev page</span>
           </div>
         </div>
 
@@ -368,21 +457,32 @@ function BRRestructure() {
           </div>
         )}
 
-        {/* Records */}
+        {/* Records as cards */}
         <div className="space-y-4 mb-6">
           {records.map((record, idx) => {
             const isMerged = record.restructured_text?.startsWith('[MERGED into record')
             const isSelected = selectedIds.includes(record.id)
             const selectionIndex = selectedIds.indexOf(record.id)
+            const isActive = idx === activeIndex
+            const isDone = record.was_restructured && !isActive
             
             return (
               <div 
-                key={record.id} 
-                className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 ${
-                  isMerged ? 'opacity-50' : ''
-                } ${isSelected ? 'ring-2 ring-amber-500' : ''}`}
+                key={record.id}
+                ref={el => cardRefs.current[idx] = el}
+                onClick={() => setActiveIndex(idx)}
+                className={`rounded-lg shadow transition-all duration-200 cursor-pointer
+                  ${isActive 
+                    ? 'bg-white dark:bg-gray-800 ring-2 ring-indigo-500 scale-[1.01] shadow-lg' 
+                    : isDone
+                      ? 'bg-gray-50 dark:bg-gray-800/60 opacity-60 hover:opacity-80'
+                      : 'bg-white dark:bg-gray-800 hover:shadow-md'
+                  }
+                  ${isMerged ? 'opacity-40' : ''}
+                  ${isSelected ? 'ring-2 ring-amber-500' : ''}
+                  p-5`}
               >
-                <div className="flex items-start gap-4 mb-4">
+                <div className="flex items-start gap-4 mb-3">
                   {/* Merge checkbox */}
                   {mergeMode && !isMerged && (
                     <div className="flex flex-col items-center gap-1 pt-1">
@@ -399,17 +499,28 @@ function BRRestructure() {
                       )}
                     </div>
                   )}
-                  
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400 w-8">
-                    #{(page - 1) * perPage + idx + 1}
+
+                  {/* Card number + active indicator */}
+                  <div className="flex items-center gap-2">
+                    {isActive && (
+                      <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                    )}
+                    <div className={`text-sm font-medium ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      #{(page - 1) * perPage + idx + 1}
+                    </div>
                   </div>
                   
                   <div className="flex-1">
-                    {/* Language badge */}
+                    {/* Language badge + status */}
                     <div className="flex items-center gap-2 mb-3">
                       {record.detected_language && (
                         <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">
                           {record.detected_language}
+                        </span>
+                      )}
+                      {record.was_restructured && (
+                        <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
+                          ✓ Done
                         </span>
                       )}
                       {isMerged && (
@@ -452,25 +563,25 @@ function BRRestructure() {
                 {!isMerged && (
                   <div className="flex justify-end gap-2">
                     <button
-                      onClick={() => handleKeepOriginal(record.id)}
+                      onClick={(e) => { e.stopPropagation(); handleKeepOriginal(record.id) }}
                       disabled={saving[`keep_${record.id}`]}
                       className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                     >
-                      {saving[`keep_${record.id}`] ? 'Saving...' : 'Keep Original'}
+                      {saving[`keep_${record.id}`] ? 'Saving...' : '(A) Keep Original'}
                     </button>
                     <button
-                      onClick={() => handleAutoRestructure(record.id)}
+                      onClick={(e) => { e.stopPropagation(); handleAutoRestructure(record.id) }}
                       disabled={saving[`auto_${record.id}`]}
                       className="px-3 py-1 text-sm bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50"
                     >
-                      {saving[`auto_${record.id}`] ? 'Processing...' : 'Auto-Restructure'}
+                      {saving[`auto_${record.id}`] ? 'Processing...' : '(W) Auto-Restructure'}
                     </button>
                     <button
-                      onClick={() => handleSave(record.id)}
+                      onClick={(e) => { e.stopPropagation(); handleSave(record.id) }}
                       disabled={saving[record.id] || !record.restructured_text}
                       className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                     >
-                      {saving[record.id] ? 'Saving...' : 'Save'}
+                      {saving[record.id] ? 'Saving...' : '(D) Save'}
                     </button>
                   </div>
                 )}
@@ -481,7 +592,7 @@ function BRRestructure() {
 
         {/* Pagination */}
         {total > 0 && (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg shadow p-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               Showing {(page - 1) * perPage + 1} - {Math.min(page * perPage, total)} of {total} BR records
             </div>
@@ -498,7 +609,7 @@ function BRRestructure() {
                 disabled={page === 1}
                 className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Prev
+                (P) Prev
               </button>
               <span className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                 Page {page} of {totalPages}
@@ -508,7 +619,7 @@ function BRRestructure() {
                 disabled={page === totalPages}
                 className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Next
+                (S) Next
               </button>
               <button
                 onClick={() => goToPage(totalPages)}
@@ -517,6 +628,25 @@ function BRRestructure() {
               >
                 Last
               </button>
+              {/* Jump to page */}
+              <form onSubmit={handleJumpPage} className="flex items-center gap-1 ml-3 border-l border-gray-300 dark:border-gray-600 pl-3">
+                <label className="text-sm text-gray-500 dark:text-gray-400">Go to:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={jumpPage}
+                  onChange={(e) => setJumpPage(e.target.value)}
+                  placeholder="#"
+                  className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="submit"
+                  className="px-2 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                  Go
+                </button>
+              </form>
             </div>
           </div>
         )}

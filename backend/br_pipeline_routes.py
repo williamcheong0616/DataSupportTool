@@ -798,7 +798,7 @@ def get_restructure_records(
     ).count()
     
     offset = (page - 1) * per_page
-    record_stages = base_filter.offset(offset).limit(per_page).all()
+    record_stages = base_filter.order_by(BRRecordStage.id).offset(offset).limit(per_page).all()
     
     text_record_ids = [rs.text_record_id for rs in record_stages]
     text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
