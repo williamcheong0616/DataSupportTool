@@ -13,6 +13,9 @@ from celery.exceptions import MaxRetriesExceededError
 from backend.celery_app import celery_app
 from backend.database import SessionLocal
 from backend.models import AudioFile, TranscriptionStatus
+# Import BR pipeline models so SQLAlchemy can resolve cross-module relationships
+# (TextDataset.br_pipeline_runs references BRPipelineRun as a string)
+import backend.br_pipeline_models  # noqa: F401
 
 from config import WHISPER_API_URL
 
