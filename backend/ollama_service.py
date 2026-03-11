@@ -209,31 +209,31 @@ Restructured text (in same language):"""
         Generate multiple questions from the given text in Bahasa Rojak style.
         Questions should be in reverse (generated from responses/text).
         """
-        system = f"""You are an expert at generating questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
+        system = f"""You are an expert at generating grounded QA (Question-Answering) pairs in Bahasa Rojak (Malaysian/Singaporean code-mixed style) for a retail SLM training dataset.
 
 Bahasa Rojak characteristics:
 - Mix of Malay (majority) and English (code-mixing)
-- Use Malaysian/Singaporean slang and shortforms (lah, leh, meh, lor, kan, sikit, macam, ke, ah, etc.)
-- Natural conversational style
-- Casual but detailed expressions
+- Use local slang naturally (lah, siot, weh, kan, sikit, macam, ke, ah, gila, dkt, ori)
+- Natural conversational style, exactly how a local customer would ask a question
 
-Your task: Generate {count} diverse, DETAILED questions based on the provided text/response.
-The questions MUST:
-- Be in Bahasa Rojak style with MALAY as the MAJORITY language, codemixed with English
-- Use slang and shortforms naturally (lah, leh, meh, sikit, macam, ke, ah, betul tak)
-- Be LONGER and MORE DETAILED (at least 10-15 words per question)
-- Highly correlate with and reference specific details from the restructured text
-- Test different aspects of the content in depth
-- Sound like a natural Malaysian/Singaporean asking a detailed question
-- Be fully answerable from the provided text
+Your task: Generate {count} diverse, DETAILED questions based STRICTLY on the provided text/response.
 
-Examples of GOOD Bahasa Rojak questions:
-- "Apa yang dia cakap dalam text tu tentang kesan economy terhadap rakyat Malaysia ah?"
-- "Macam mana government nak implement policy baru ni, ada specific steps ke atau just cakap kosong je?"
-- "Boleh explain sikit tak kenapa situation ni jadi macam tu, ada sebab-sebab tertentu ke or what?"
-- "Betul ke benda yang dia mention about effectiveness of this approach, ada bukti konkrit tak?"
+CRITICAL ANTI-HALLUCINATION RULES:
+1. STRICT GROUNDING: You MUST ONLY ask questions that can be 100% answered using the facts explicitly stated in the provided text. 
+2. DO NOT assume or ask about external factors (e.g., delivery time, warranty, stitching quality) UNLESS the text explicitly mentions them. 
+3. If the text is about 'size' and 'price', your questions must ONLY be about 'size' and 'price'.
+4. If a human cannot find the answer within the text, your question is invalid.
 
-Output ONLY a JSON array of {count} DETAILED questions in Bahasa Rojak, nothing else.
+REQUIREMENTS:
+- MUST be in Bahasa Rojak style with MALAY as the MAJORITY language.
+- MUST be LONGER and MORE DETAILED (at least 10-15 words per question).
+- Combine multiple facts from the text into a single detailed question to test the model's comprehension.
+
+Example of a PERFECT Grounded Bahasa Rojak Question (Based on a text about a thick, cheap shirt for plus-size buyers):
+- "Kain baju ni jenis tebal ke nipis nampak kulit, and cutting dia sesuai tak untuk orang berbadan besar macam I? Selesa tak bila pakai time panas, and berbaloi tak beli dengan harga tu?"
+*(Note: Every single part of this question can be answered by the text!)*
+
+Output ONLY a flat JSON array of {count} DETAILED questions in Bahasa Rojak, nothing else.
 Format: ["Question 1?", "Question 2?", "Question 3?"]"""
 
         prompt = f"""Based on this restructured text/answer, generate {count} diverse, DETAILED questions in Bahasa Rojak style:
@@ -241,13 +241,12 @@ Format: ["Question 1?", "Question 2?", "Question 3?"]"""
 {text}
 
 REQUIREMENTS:
-- Use MALAY as MAJORITY language, codemixed with English
-- Include slang/shortforms (lah, leh, meh, sikit, macam, ke, ah, betul tak)
-- Make questions LONGER (10-15+ words) and DETAILED
-- Reference specific content from the text above
-- NOT too short!
+- FACTUAL GROUNDING: Ensure every single question can be fully answered using ONLY the text provided. Do not ask about unmentioned details.
+- Use MALAY as the MAJORITY language, codemixed with English retail terms.
+- Include local slang/shortforms naturally.
+- Make questions LONGER (10-15+ words) by combining multiple facts from the text into one question.
 
-Output JSON array of DETAILED Bahasa Rojak questions:"""
+Output ONLY a JSON array of DETAILED Bahasa Rojak questions:"""
 
         try:
             response = self._call_generate(prompt, system=system, temperature=0.8)
