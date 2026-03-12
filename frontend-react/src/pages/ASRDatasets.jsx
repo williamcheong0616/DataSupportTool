@@ -12,6 +12,8 @@ import {
   segmentAllFiles,
   importYoutubeAudio,
   getTaskStatus,
+  downloadASRExport,
+  pollTaskUntilDone
 } from '../api'
 
 function ASRDatasets() {
@@ -25,6 +27,7 @@ function ASRDatasets() {
   const [uploading, setUploading] = useState(false)
   const [transcribing, setTranscribing] = useState({})
   const [segmenting, setSegmenting] = useState({})
+  const [exporting, setExporting] = useState({})
   
   // YouTube import state
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -217,21 +220,33 @@ function ASRDatasets() {
   }
 
   const handleExport = async (id, format) => {
+    setExporting({ ...exporting, [id]: true })
     try {
       const dataset = datasets.find(d => d.id === id)
       const datasetName = dataset?.name || 'asr_dataset'
-      const res = await exportASRDataset(id, format)
-      const blob = new Blob([res.data], { type: format === 'csv' ? 'text/csv' : 'application/json' })
+      const initRes = await exportASRDataset(id, format, true) // asZip = true
+      
+      let taskId = initRes.data.task_id
+      
+      // Poll until background process finishes creating ZIP
+      await pollTaskUntilDone(taskId, 2000, 300)
+      
+      // Fetch the actual ZIP file from the download endpoint
+      const res = await downloadASRExport(taskId)
+      
+      const blob = new Blob([res.data], { type: 'application/zip' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       const date = new Date().toISOString().split('T')[0]
       const sanitizedName = datasetName.replace(/[^a-zA-Z0-9]/g, '_')
-      a.download = `${sanitizedName}_${date}_export_asr_transcriptions.${format === 'csv' ? 'csv' : 'jsonl'}`
+      a.download = `${sanitizedName}_${date}_export_asr_${format}.zip`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (err) {
       alert('Failed to export: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setExporting({ ...exporting, [id]: false })
     }
   }
 
@@ -577,15 +592,19 @@ function ASRDatasets() {
                         <>
                           <button
                             onClick={() => handleExport(dataset.id, 'csv')}
-                            className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                            disabled={exporting[dataset.id]}
+                            className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 disabled:opacity-50"
+                            title="Download ZIP containing audio files and CSV transcriptions (Runs in background)"
                           >
-                            CSV
+                            {exporting[dataset.id] ? '⏳ Packing...' : '📦 Export CSV + Audio'}
                           </button>
                           <button
                             onClick={() => handleExport(dataset.id, 'jsonl')}
-                            className="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60"
+                            disabled={exporting[dataset.id]}
+                            className="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50"
+                            title="Download ZIP containing audio files and JSONL transcriptions (Runs in background)"
                           >
-                            JSONL
+                            {exporting[dataset.id] ? '⏳ Packing...' : '📦 Export JSONL + Audio'}
                           </button>
                         </>
                       )}
@@ -612,7 +631,7 @@ function ASRDatasets() {
           <li><strong>Optional:</strong> Click "✂️ Segment" to split long audio into speech segments using VAD</li>
           <li>Click "🎤 Transcribe All" to run both Whisper and Qwen3 ASR on pending files (processes in background via Celery)</li>
           <li>Click "Annotate" to review and correct transcriptions</li>
-          <li>Export results as CSV or JSONL when done</li>
+          <li>Export results as a ZIP file (containing both audio segments and a CSV/JSONL file) when done</li>
         </ol>
       </div>
     </div>

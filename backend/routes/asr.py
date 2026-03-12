@@ -21,6 +21,7 @@ import os
 import io
 import csv
 import json
+import zipfile
 
 from backend.database import get_db
 from backend.models import ASRDataset, AudioFile, TranscriptionStatus
@@ -866,56 +867,94 @@ def update_file_status(
 def export_asr_dataset(
     dataset_id: int,
     format: str = Query("csv", enum=["csv", "jsonl"]),
+    as_zip: bool = Query(False, description="Whether to include audio files in a ZIP archive"),
     db: Session = Depends(get_db)
 ):
     """
     Export ASR dataset as CSV or JSONL.
     
-    Exports: id, filename, whisper_transcript, corrected_transcript, status, annotated_by
+    If as_zip=True, returns a Celery task ID for background zipping:
+    {"task_id": "...", "status": "queued"}
     
-    Args:
-        dataset_id: Dataset to export
-        format: Export format ('csv' or 'jsonl')
-        
-    Returns:
-        Streaming response with file download
+    If as_zip=False, returns immediate raw text stream.
+    
+    Fields: Filename & Location, Whisper Transcription, Qwen Transcription, Corrected Transcription, Timestamp of the Corrected Transcription
     """
     dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
+    if as_zip:
+        from backend.tasks import export_asr_dataset_task
+        task = export_asr_dataset_task.delay(dataset_id, format)
+        return {
+            "status": "queued",
+            "task_id": task.id,
+            "message": "Export zip queued in background"
+        }
+    
     files = db.query(AudioFile).filter(AudioFile.dataset_id == dataset_id).all()
     
+    # Generate the transcription data
     if format == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["id", "filename", "whisper_transcript", "corrected_transcript", "status", "annotated_by"])
+        data_output = io.StringIO()
+        writer = csv.writer(data_output)
+        writer.writerow([
+            "Filename & Location",
+            "Whisper Transcription",
+            "Qwen Transcription",
+            "Corrected Transcription",
+            "Timestamp of the Corrected Transcription"
+        ])
         for f in files:
-            writer.writerow([f.id, f.filename, f.whisper_transcript, f.corrected_transcript, f.status.value, f.annotated_by])
-        
-        output.seek(0)
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={dataset.name}_transcripts.csv"}
-        )
-    else:
+            writer.writerow([
+                f.filename,
+                f.whisper_transcript,
+                f.qwen3_transcript,
+                f.corrected_transcript,
+                f.annotated_at.isoformat() if f.annotated_at else ""
+            ])
+        data_content = data_output.getvalue()
+        data_filename = f"{dataset.name}_transcripts.csv"
+        media_type = "text/csv"
+    else:  # jsonl
         lines = []
         for f in files:
             lines.append(json.dumps({
-                "id": f.id,
-                "filename": f.filename,
-                "whisper_transcript": f.whisper_transcript,
-                "corrected_transcript": f.corrected_transcript,
-                "status": f.status.value,
-                "annotated_by": f.annotated_by,
+                "Filename & Location": f.filename,
+                "Whisper Transcription": f.whisper_transcript,
+                "Qwen Transcription": f.qwen3_transcript,
+                "Corrected Transcription": f.corrected_transcript,
+                "Timestamp of the Corrected Transcription": f.annotated_at.isoformat() if f.annotated_at else ""
             }, ensure_ascii=False))
+        data_content = "\n".join(lines)
+        data_filename = f"{dataset.name}_transcripts.jsonl"
+        media_type = "application/jsonl"
         
-        return StreamingResponse(
-            iter(["\n".join(lines)]),
-            media_type="application/jsonl",
-            headers={"Content-Disposition": f"attachment; filename={dataset.name}_transcripts.jsonl"}
-        )
+    return StreamingResponse(
+        iter([data_content]),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={data_filename}"}
+    )
+
+
+@router.get("/exports/{task_id}/download")
+def download_export(task_id: str):
+    """
+    Download a completed ZIP export.
+    """
+    export_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "exports")
+    export_path = os.path.join(export_dir, f"export_{task_id}.zip")
+    
+    if not os.path.exists(export_path):
+        raise HTTPException(status_code=404, detail="Export file not found or expired")
+    
+    return FileResponse(
+        export_path,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=export_{task_id}.zip"}
+    )
+
 
 
 # ==================== AUDIO SEGMENTATION ====================

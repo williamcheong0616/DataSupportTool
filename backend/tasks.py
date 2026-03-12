@@ -371,3 +371,100 @@ def batch_segment_task(self, dataset_id: int, chunk_length: int = 30, use_vad: b
         
     finally:
         db.close()
+
+
+@celery_app.task(bind=True)
+def export_asr_dataset_task(self, dataset_id: int, format: str = "csv") -> dict:
+    """
+    Celery task: Export ASR dataset as a ZIP archive.
+    
+    Generates the CSV/JSONL transcription data, bundles it with the physical
+    audio files, and writes the resulting ZIP to disk.
+    
+    Args:
+        dataset_id: The dataset ID to export
+        format: Transcription format ('csv' or 'jsonl')
+        
+    Returns:
+        dict with export path or error
+    """
+    import io
+    import csv
+    import json
+    import zipfile
+    
+    # Use the celery task ID for the filename to ensure uniqueness
+    task_id = self.request.id
+    
+    # Create exports directory if it doesn't exist
+    export_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    
+    db = SessionLocal()
+    try:
+        from backend.models import ASRDataset
+        dataset = db.query(ASRDataset).filter(ASRDataset.id == dataset_id).first()
+        if not dataset:
+            return {"status": "error", "message": "Dataset not found"}
+        
+        files = db.query(AudioFile).filter(AudioFile.dataset_id == dataset_id).all()
+        
+        # 1. Generate the transcription data
+        if format == "csv":
+            data_output = io.StringIO()
+            writer = csv.writer(data_output)
+            writer.writerow([
+                "Filename & Location",
+                "Whisper Transcription",
+                "Qwen Transcription",
+                "Corrected Transcription",
+                "Timestamp of the Corrected Transcription"
+            ])
+            for f in files:
+                writer.writerow([
+                    f.filename,
+                    f.whisper_transcript,
+                    f.qwen3_transcript,
+                    f.corrected_transcript,
+                    f.annotated_at.isoformat() if f.annotated_at else ""
+                ])
+            data_content = data_output.getvalue()
+            data_filename = f"{dataset.name}_transcripts.csv"
+        else:  # jsonl
+            lines = []
+            for f in files:
+                lines.append(json.dumps({
+                    "Filename & Location": f.filename,
+                    "Whisper Transcription": f.whisper_transcript,
+                    "Qwen Transcription": f.qwen3_transcript,
+                    "Corrected Transcription": f.corrected_transcript,
+                    "Timestamp of the Corrected Transcription": f.annotated_at.isoformat() if f.annotated_at else ""
+                }, ensure_ascii=False))
+            data_content = "\n".join(lines)
+            data_filename = f"{dataset.name}_transcripts.jsonl"
+            
+        # 2. Write to ZIP file on disk
+        export_filename = f"export_{task_id}.zip"
+        export_path = os.path.join(export_dir, export_filename)
+        
+        with zipfile.ZipFile(export_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            # Add transcription data
+            zip_file.writestr(data_filename, data_content)
+            
+            # Add physical audio files
+            for f in files:
+                if f.file_path and os.path.exists(str(f.file_path)):
+                    arcname = os.path.join("audio", f.filename)
+                    zip_file.write(str(f.file_path), arcname)
+                    
+        return {
+            "status": "success",
+            "file_path": export_path,
+            "filename": f"{dataset.name}_export.zip",
+            "message": "Export created successfully"
+        }
+    except Exception as e:
+        logger.error(f"export_asr_dataset_task failed: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()

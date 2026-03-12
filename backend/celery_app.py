@@ -12,7 +12,7 @@ celery_app = Celery(
     "data_pipeline",
     broker=REDIS_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["backend.tasks"]
+    include=["backend.tasks", "backend.br_pipeline_tasks"]
 )
 
 # Celery configuration
@@ -43,6 +43,9 @@ celery_app.conf.update(
         "backend.tasks.batch_transcribe_task": {"queue": "transcription"},
         "backend.tasks.segment_audio_task": {"queue": "transcription"},
         "backend.tasks.batch_segment_task": {"queue": "transcription"},
+        "backend.br_pipeline_tasks.generate_questions_task": {"queue": "br_pipeline"},
+        "backend.br_pipeline_tasks.generate_responses_task": {"queue": "br_pipeline"},
+        "backend.br_pipeline_tasks.batch_generate_responses_task": {"queue": "br_pipeline"},
     },
     
     # Task rate limiting (to avoid overwhelming Whisper API)

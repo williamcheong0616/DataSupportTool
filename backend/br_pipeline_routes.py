@@ -1084,11 +1084,14 @@ def get_question_records(
 
 
 @router.post("/questions/{record_stage_id}/generate")
-async def generate_questions(
+def generate_questions(
     record_stage_id: int,
     db: Session = Depends(get_db)
 ):
-    """Generate 3 questions in Bahasa Rojak for a single record."""
+    """
+    Dispatch question generation to Celery worker.
+    Returns task_id immediately — poll /task-status/{task_id} for results.
+    """
     record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
     
     if not record_stage:
@@ -1097,43 +1100,10 @@ async def generate_questions(
     if not record_stage.restructured_text:
         raise HTTPException(status_code=400, detail="Text must be restructured first")
     
-    # Capture text before closing session to avoid holding DB connection
-    # during long-running Ollama calls
-    restructured_text = record_stage.restructured_text
-    db.close()
+    from backend.br_pipeline_tasks import generate_questions_task
+    task = generate_questions_task.delay(record_stage_id)
     
-    # Call Ollama to generate questions in Bahasa Rojak
-    from backend.ollama_service import get_ollama_service
-    ollama = get_ollama_service()
-    
-    try:
-        questions = await asyncio.to_thread(
-            ollama.generate_questions,
-            restructured_text,
-            count=3
-        )
-    except Exception as e:
-        logger.error(f"Failed to generate questions for record {record_stage_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
-    
-    # Re-open a fresh DB session to save results
-    from backend.database import SessionLocal
-    from datetime import datetime
-    fresh_db = SessionLocal()
-    try:
-        record_stage = fresh_db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
-        if record_stage:
-            record_stage.generated_questions = questions
-            record_stage.questions_generated_at = datetime.utcnow()
-            fresh_db.commit()
-    except Exception as e:
-        fresh_db.rollback()
-        logger.error(f"Failed to save generated questions: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save questions: {str(e)}")
-    finally:
-        fresh_db.close()
-    
-    return {"id": record_stage_id, "questions": questions}
+    return {"id": record_stage_id, "task_id": task.id, "status": "queued"}
 
 
 @router.post("/questions/{record_stage_id}/select")
@@ -1241,12 +1211,15 @@ def get_response_records(
 
 
 @router.post("/responses/{record_stage_id}/generate")
-async def generate_model_responses(
+def generate_model_responses(
     record_stage_id: int,
     body: SingleGenerateRequest = None,
     db: Session = Depends(get_db)
 ):
-    """Generate Bahasa Rojak responses from Ollama for selected models (or defaults)."""
+    """
+    Dispatch model response generation to Celery worker.
+    Returns task_id immediately — poll /task-status/{task_id} for results.
+    """
     record_stage = db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
     
     if not record_stage:
@@ -1255,83 +1228,35 @@ async def generate_model_responses(
     if not record_stage.selected_question:
         raise HTTPException(status_code=400, detail="No question selected yet")
     
-    # Use restructured text as context
     context = record_stage.restructured_text or ""
     if not context:
         raise HTTPException(status_code=400, detail="No context available for response generation")
     
-    # Build model configs from request body or defaults
+    # Build model configs
     if body and body.models:
-        model_configs = [(m.name, m.model_id) for m in body.models]
+        model_configs = [[m.name, m.model_id] for m in body.models]
     else:
         model_configs = [
-            ("Model-A (Gemma3:4b)", "gemma3:4b"),
-            ("Model-B (Gemma3:4b)", "gemma3:4b"),
-            ("Model-C (Gemma3:4b)", "gemma3:4b")
+            ["Model-A (Gemma3:4b)", "gemma3:4b"],
+            ["Model-B (Gemma3:4b)", "gemma3:4b"],
+            ["Model-C (Gemma3:4b)", "gemma3:4b"],
         ]
     
-    # Capture the question before closing the session to avoid holding DB
-    # connection open during long-running Ollama calls (~15s)
-    selected_question = record_stage.selected_question
-    db.close()
+    from backend.br_pipeline_tasks import generate_responses_task
+    task = generate_responses_task.delay(record_stage_id, model_configs)
     
-    # Call Ollama to generate responses in Bahasa Rojak
-    from backend.ollama_service import get_ollama_service
-    
-    responses = {}
-    
-    for model_name, model_id in model_configs:
-        try:
-            ollama = get_ollama_service(model_name=model_id)
-            response_text, problems = await asyncio.to_thread(
-                ollama.generate_model_response,
-                context,
-                selected_question,
-                detect_problems=True
-            )
-            responses[model_name] = {
-                "model_id": model_id,
-                "response": response_text,
-                "problems": problems
-            }
-        except Exception as e:
-            logger.error(f"Failed to generate response for {model_name}: {e}")
-            responses[model_name] = {
-                "model_id": model_id,
-                "response": f"Error: {str(e)}",
-                "problems": ["Generation failed"]
-            }
-    
-    # Re-open a fresh DB session to save results
-    from backend.database import SessionLocal
-    from datetime import datetime
-    fresh_db = SessionLocal()
-    try:
-        record_stage = fresh_db.query(BRRecordStage).filter(BRRecordStage.id == record_stage_id).first()
-        if record_stage:
-            record_stage.model_responses = responses
-            record_stage.responses_generated_at = datetime.utcnow()
-            record_stage.completed = True
-            fresh_db.commit()
-    except Exception as e:
-        fresh_db.rollback()
-        logger.error(f"Failed to save model responses: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save responses: {str(e)}")
-    finally:
-        fresh_db.close()
-    
-    return {"id": record_stage_id, "responses": responses}
+    return {"id": record_stage_id, "task_id": task.id, "status": "queued"}
 
 
 @router.post("/responses/{pipeline_run_id}/generate-all")
-async def batch_generate_model_responses(
+def batch_generate_model_responses(
     pipeline_run_id: int,
     body: BatchGenerateRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Batch-generate responses for all pending records using 3 selected models.
-    Processes all records per model before switching to the next model.
+    Dispatch batch response generation to Celery worker.
+    Returns task_id immediately — poll /task-status/{task_id} for results.
     """
     if len(body.models) != 3:
         raise HTTPException(status_code=400, detail="Exactly 3 models must be provided")
@@ -1340,95 +1265,51 @@ async def batch_generate_model_responses(
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
-    # Get all pending records (have selected_question but no model_responses yet)
-    pending_records = db.query(BRRecordStage).filter(
+    # Check there are pending records
+    pending_count = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
         BRRecordStage.selected_question != None,
-        BRRecordStage.model_responses == None
-    ).all()
+        BRRecordStage.model_responses == None,
+    ).count()
     
-    if not pending_records:
+    if pending_count == 0:
         return {"pipeline_id": pipeline_run_id, "processed": 0, "message": "No pending records"}
     
-    # Capture record data before closing session
-    record_data = []
-    for rs in pending_records:
-        record_data.append({
-            "id": rs.id,
-            "context": rs.restructured_text or "",
-            "question": rs.selected_question
-        })
-    db.close()
+    model_configs = [[m.name, m.model_id] for m in body.models]
     
-    from backend.ollama_service import get_ollama_service
-    from backend.database import SessionLocal
-    from datetime import datetime
+    from backend.br_pipeline_tasks import batch_generate_responses_task
+    task = batch_generate_responses_task.delay(pipeline_run_id, model_configs)
     
-    model_configs = [(m.name, m.model_id) for m in body.models]
-    
-    # Initialize responses dict for each record
-    all_responses = {rd["id"]: {} for rd in record_data}
-    
-    # Process model-by-model: finish all records for one model before switching
-    for model_name, model_id in model_configs:
-        logger.info(f"Batch generate: processing model '{model_name}' ({model_id}) for {len(record_data)} records")
-        ollama = get_ollama_service(model_name=model_id)
-        
-        total_rd = len(record_data)
-        for rd_idx, rd in enumerate(record_data, 1):
-            if not rd["context"] or not rd["question"]:
-                continue
-            try:
-                response_text, problems = await asyncio.to_thread(
-                    ollama.generate_model_response,
-                    rd["context"],
-                    rd["question"],
-                    detect_problems=True
-                )
-                all_responses[rd["id"]][model_name] = {
-                    "model_id": model_id,
-                    "response": response_text,
-                    "problems": problems
-                }
-            except Exception as e:
-                logger.error(f"Batch generate failed for record {rd['id']} model {model_name}: {e}")
-                all_responses[rd["id"]][model_name] = {
-                    "model_id": model_id,
-                    "response": f"Error: {str(e)}",
-                    "problems": ["Generation failed"]
-                }
-            
-            if rd_idx % 25 == 0 or rd_idx == total_rd:
-                logger.info(f"Batch generate '{model_name}': {rd_idx}/{total_rd} records")
-        
-        # After finishing all records for this model, save partial results
-        fresh_db = SessionLocal()
-        try:
-            for rd in record_data:
-                record_stage = fresh_db.query(BRRecordStage).filter(BRRecordStage.id == rd["id"]).first()
-                if record_stage:
-                    record_stage.model_responses = all_responses[rd["id"]]
-                    # Mark complete only after all 3 models are done
-                    if len(all_responses[rd["id"]]) == len(model_configs):
-                        record_stage.responses_generated_at = datetime.utcnow()
-                        record_stage.completed = True
-            fresh_db.commit()
-        except Exception as e:
-            fresh_db.rollback()
-            logger.error(f"Failed to save batch responses for model {model_name}: {e}")
-        finally:
-            fresh_db.close()
-        
-        logger.info(f"Batch generate: completed model '{model_name}'")
-    
-    processed = sum(1 for rd in record_data if len(all_responses[rd["id"]]) == len(model_configs))
     return {
         "pipeline_id": pipeline_run_id,
-        "processed": processed,
-        "total_pending": len(record_data),
+        "task_id": task.id,
+        "status": "queued",
+        "total_pending": pending_count,
         "models_used": [m.name for m in body.models],
-        "message": f"Generated responses for {processed} records using {len(model_configs)} models"
+        "message": f"Queued batch generation for {pending_count} records using {len(model_configs)} models",
     }
+
+
+# ===== Task Status Polling Endpoint =====
+
+@router.get("/task-status/{task_id}")
+def get_task_status(task_id: str):
+    """
+    Poll Celery task status by task_id.
+    Returns state and result when complete.
+    States: PENDING, STARTED, SUCCESS, FAILURE, RETRY
+    """
+    from backend.celery_app import celery_app as app
+    result = app.AsyncResult(task_id)
+    
+    response = {"task_id": task_id, "state": result.state}
+    
+    if result.state == "SUCCESS":
+        response["result"] = result.result
+    elif result.state == "FAILURE":
+        response["error"] = str(result.result)
+    
+    return response
 
 
 @router.post("/responses/{record_stage_id}/edit")

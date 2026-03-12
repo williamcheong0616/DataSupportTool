@@ -140,8 +140,14 @@ export const uploadAudioFiles = (datasetId, files) => {
   })
 }
 
-export const exportASRDataset = (datasetId, format = 'csv') => {
-  return api.get(`/asr/datasets/${datasetId}/export?format=${format}`, {
+export const exportASRDataset = (datasetId, format = 'csv', asZip = true) => {
+  return api.get(`/asr/datasets/${datasetId}/export?format=${format}&as_zip=${asZip}`, {
+    responseType: asZip ? 'json' : 'blob'
+  })
+}
+
+export const downloadASRExport = (taskId) => {
+  return api.get(`/asr/exports/${taskId}/download`, {
     responseType: 'blob'
   })
 }
@@ -344,6 +350,40 @@ export const editBRResponseProblems = (recordId, modelName, problems, editedBy =
     problems,
     edited_by: editedBy
   })
+
+// Task status polling (for Celery background tasks)
+export const getBRTaskStatus = (taskId) =>
+  api.get(`/br-pipeline/task-status/${taskId}`)
+
+/**
+ * Poll a Celery task until it completes or fails.
+ * @param {string} taskId - Celery task ID
+ * @param {object} opts - { interval: ms between polls (default 2000), timeout: max ms (default 600000) }
+ * @returns {Promise<object>} - The task result on success
+ */
+export async function pollBRTask(taskId, opts = {}) {
+  const interval = opts.interval || 2000
+  const timeout = opts.timeout || 600000  // 10 min max
+  const start = Date.now()
+
+  while (Date.now() - start < timeout) {
+    const res = await getBRTaskStatus(taskId)
+    const { state, result, error } = res.data
+
+    if (state === 'SUCCESS') {
+      if (result && result.status === 'error') {
+        throw new Error(result.message || 'Task returned an error')
+      }
+      return result
+    }
+    if (state === 'FAILURE') {
+      throw new Error(error || 'Task failed')
+    }
+    // PENDING / STARTED / RETRY — keep polling
+    await new Promise(r => setTimeout(r, interval))
+  }
+  throw new Error('Task timed out')
+}
 
 
 // === SETTINGS ===

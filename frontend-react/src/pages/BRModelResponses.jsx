@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getBRResponseRecords, generateBRResponse, generateBRResponseBatch, editBRResponseProblems, getOllamaModels } from '../api'
+import { getBRResponseRecords, generateBRResponse, generateBRResponseBatch, editBRResponseProblems, getOllamaModels, pollBRTask } from '../api'
 
 function BRModelResponses() {
   const { pipelineId } = useParams()
@@ -83,7 +83,10 @@ function BRModelResponses() {
     try {
       const models = selectedModels.every(m => m) ? getModelConfigs() : null
       const res = await generateBRResponse(id, models)
-      setRecords(prev => prev.map(r => r.id === id ? { ...r, model_responses: res.data.responses, completed: true } : r))
+      const taskId = res.data.task_id
+      // Poll until the Celery task finishes
+      const result = await pollBRTask(taskId)
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, model_responses: result.responses, completed: true } : r))
       setCompleted(c => c + 1)
     } catch (err) {
       alert('Generation failed: ' + (err.response?.data?.detail || err.message))
@@ -103,7 +106,7 @@ function BRModelResponses() {
       return
     }
 
-    if (!confirm(`Generate responses for ${pendingCount} pending records using:\n• ${selectedModels[0]}\n• ${selectedModels[1]}\n• ${selectedModels[2]}\n\nThis processes all records per model before switching to the next. Continue?`)) {
+    if (!confirm(`Generate responses for ${pendingCount} pending records using:\n• ${selectedModels[0]}\n• ${selectedModels[1]}\n• ${selectedModels[2]}\n\nThis will run in the background. You can close this page and come back.\n\nContinue?`)) {
       return
     }
 
@@ -113,8 +116,40 @@ function BRModelResponses() {
     try {
       const models = getModelConfigs()
       const res = await generateBRResponseBatch(pipelineId, models)
-      alert(`✓ Batch generation complete!\n${res.data.processed} records processed with ${res.data.models_used.length} models.`)
-      fetchRecords()
+      const taskId = res.data.task_id
+
+      if (!taskId) {
+        // No pending records or immediate response
+        alert(res.data.message || 'No pending records')
+        setBatchGenerating(false)
+        setBatchProgress(null)
+        return
+      }
+
+      // Poll task status, refreshing page data periodically
+      const pollInterval = 3000
+      const timeout = 1800000 // 30 min
+      const start = Date.now()
+
+      while (Date.now() - start < timeout) {
+        const statusRes = await (await import('../api')).getBRTaskStatus(taskId)
+        const { state, result, error } = statusRes.data
+
+        if (state === 'SUCCESS') {
+          const processed = result?.processed || 0
+          alert(`✓ Batch generation complete!\n${processed} records processed.`)
+          fetchRecords()
+          break
+        }
+        if (state === 'FAILURE') {
+          alert('Batch generation failed: ' + (error || 'Unknown error'))
+          break
+        }
+
+        // Refresh records to show partial progress
+        await fetchRecords()
+        await new Promise(r => setTimeout(r, pollInterval))
+      }
     } catch (err) {
       alert('Batch generation failed: ' + (err.response?.data?.detail || err.message))
     }

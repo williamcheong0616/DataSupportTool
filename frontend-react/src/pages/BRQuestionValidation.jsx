@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { runBRStage3, getBRQuestionRecords, generateBRQuestions, selectBRQuestion } from '../api'
+import { runBRStage3, getBRQuestionRecords, generateBRQuestions, selectBRQuestion, pollBRTask } from '../api'
 
 function BRQuestionValidation() {
   const { pipelineId } = useParams()
@@ -49,12 +49,15 @@ function BRQuestionValidation() {
     setGenerating(prev => ({ ...prev, [recordId]: true }))
     try {
       const res = await generateBRQuestions(recordId)
+      const taskId = res.data.task_id
+      // Poll until the Celery task finishes
+      const result = await pollBRTask(taskId)
       setRecords(prev => prev.map(r => 
-        r.id === recordId ? { ...r, generated_questions: res.data.questions } : r
+        r.id === recordId ? { ...r, generated_questions: result.questions } : r
       ))
     } catch (err) {
       console.error('Failed to generate questions:', err)
-      alert('Failed to generate questions')
+      alert('Failed to generate questions: ' + (err.message || ''))
     } finally {
       setGenerating(prev => ({ ...prev, [recordId]: false }))
     }

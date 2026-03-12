@@ -33,8 +33,10 @@ function BRRestructure() {
 
   // Active card index for keyboard navigation
   const [activeIndex, setActiveIndex] = useState(0)
+  const prevActiveIndex = useRef(0)
   const containerRef = useRef(null)
   const cardRefs = useRef([])
+  const [copiedId, setCopiedId] = useState(null)
 
   // Scroll to top on page change
   useEffect(() => {
@@ -68,6 +70,18 @@ function BRRestructure() {
     }, 3000)
     return () => clearInterval(interval)
   }, [polling, pipelineId])
+
+  // Auto-save previous record when navigating to a different row
+  useEffect(() => {
+    const prevIdx = prevActiveIndex.current
+    if (prevIdx !== activeIndex && records[prevIdx]) {
+      const prevRecord = records[prevIdx]
+      if (prevRecord.restructured_text && prevRecord.restructured_text.trim() !== '') {
+        handleSave(prevRecord.id)
+      }
+    }
+    prevActiveIndex.current = activeIndex
+  }, [activeIndex])
 
   // Scroll active card into view
   useEffect(() => {
@@ -147,6 +161,37 @@ function BRRestructure() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCopyOriginal = (recordId, text) => {
+    // Use Clipboard API if available (secure context), otherwise fall back to execCommand
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedId(recordId)
+        setTimeout(() => setCopiedId(null), 2000)
+      }).catch(() => {
+        fallbackCopy(recordId, text)
+      })
+    } else {
+      fallbackCopy(recordId, text)
+    }
+  }
+
+  const fallbackCopy = (recordId, text) => {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    try {
+      document.execCommand('copy')
+      setCopiedId(recordId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+    document.body.removeChild(textarea)
   }
 
   const handleRestructuredTextChange = (recordId, value) => {
@@ -561,9 +606,18 @@ function BRRestructure() {
                       <div className="grid grid-cols-2 gap-4">
                         {/* Original Text */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Original Text (preserved)
-                          </label>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Original Text (preserved)
+                            </label>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleCopyOriginal(record.id, record.original_text) }}
+                              className="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                              title="Copy original text to clipboard"
+                            >
+                              {copiedId === record.id ? '✓ Copied!' : '📋 Copy'}
+                            </button>
+                          </div>
                           <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white min-h-[120px] whitespace-pre-wrap">
                             {record.original_text}
                           </div>
