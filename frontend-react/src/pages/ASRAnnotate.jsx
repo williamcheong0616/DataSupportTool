@@ -58,6 +58,10 @@ function ASRAnnotate() {
   const [selected, setSelected] = useState([])
   const [fusing, setFusing] = useState(false)
 
+  // sorting
+  const [sortBy, setSortBy] = useState('created_at')
+  const [sortOrder, setSortOrder] = useState('asc')
+
   const cur = files[idx]
 
   // wavesurfer
@@ -99,10 +103,10 @@ function ASRAnnotate() {
       .catch(() => navigate('/asr'))
   }, [datasetId])
 
-  // fetch files when page/filter changes
+  // fetch files when page/filter/sort changes
   useEffect(() => {
     if (dataset) fetchFiles()
-  }, [dataset, page, filter])
+  }, [dataset, page, filter, sortBy, sortOrder])
 
   // sync transcript
   useEffect(() => {
@@ -114,7 +118,7 @@ function ASRAnnotate() {
     try {
       const status = filter === 'all' ? null : filter
       const offset = (page - 1) * PER_PAGE
-      const res = await getAudioFiles(datasetId, status, PER_PAGE, offset)
+      const res = await getAudioFiles(datasetId, status, PER_PAGE, offset, sortBy, sortOrder)
       const batch = res.data.files || []
 
       setFiles(batch)
@@ -137,6 +141,8 @@ function ASRAnnotate() {
   }
 
   function changeFilter(val) { setFilter(val); setPage(1); setIdx(0) }
+  function changeSort(field) { setSortBy(field); setPage(1); setIdx(0) }
+  function toggleSortOrder() { setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc'); setPage(1); setIdx(0) }
   function goPage(p) { if (p >= 1 && p <= pages) { setPage(p); setIdx(0) } }
 
   function fmtTime(s) {
@@ -344,6 +350,19 @@ function ASRAnnotate() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-500">Sort:</label>
+              <select value={sortBy} onChange={e => changeSort(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="created_at">Date Added</option>
+                <option value="filename">Filename</option>
+                <option value="id">File ID</option>
+              </select>
+              <button onClick={toggleSortOrder}
+                className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                {sortOrder === 'asc' ? 'Asc' : 'Desc'}
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-500">Filter:</label>
               <select value={filter} onChange={e => changeFilter(e.target.value)}

@@ -111,3 +111,48 @@ def get_stats(db: Session = Depends(get_db)):
         "audio_files": audio_files,
         "asr_completed": asr_completed,
     }
+
+
+@router.get("/stats/datasets")
+def get_dataset_stats(db: Session = Depends(get_db)):
+    """
+    Get per-dataset breakdowns for text and ASR datasets.
+    """
+    text_datasets = []
+    for ds in db.query(TextDataset).all():
+        record_count = db.query(TextRecord).filter(TextRecord.dataset_id == ds.id).count()
+        annotated_count = db.query(TextRecord).filter(
+            TextRecord.dataset_id == ds.id,
+            TextRecord.is_annotated == True
+        ).count()
+        text_datasets.append({
+            "id": ds.id,
+            "name": ds.name,
+            "record_count": record_count,
+            "annotated_count": annotated_count,
+            "task_type": ds.task_type,
+        })
+
+    asr_datasets = []
+    for ds in db.query(ASRDataset).all():
+        file_count = db.query(AudioFile).filter(AudioFile.dataset_id == ds.id).count()
+        pending_count = db.query(AudioFile).filter(
+            AudioFile.dataset_id == ds.id,
+            AudioFile.status == TranscriptionStatus.PENDING
+        ).count()
+        completed_count = db.query(AudioFile).filter(
+            AudioFile.dataset_id == ds.id,
+            AudioFile.status == TranscriptionStatus.COMPLETED
+        ).count()
+        asr_datasets.append({
+            "id": ds.id,
+            "name": ds.name,
+            "file_count": file_count,
+            "pending_count": pending_count,
+            "completed_count": completed_count,
+        })
+
+    return {
+        "text_datasets": text_datasets,
+        "asr_datasets": asr_datasets,
+    }

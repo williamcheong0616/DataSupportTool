@@ -72,6 +72,7 @@ api.interceptors.response.use(
 
 // Stats
 export const getStats = () => api.get('/stats')
+export const getDatasetStats = () => api.get('/stats/datasets')
 
 // === TEXT ANNOTATION ===
 
@@ -153,8 +154,8 @@ export const downloadASRExport = (taskId) => {
 }
 
 // Audio Files
-export const getAudioFiles = (datasetId, status = null, limit = 50, offset = 0) => {
-  const params = new URLSearchParams({ limit, offset })
+export const getAudioFiles = (datasetId, status = null, limit = 50, offset = 0, sortBy = 'created_at', sortOrder = 'asc') => {
+  const params = new URLSearchParams({ limit, offset, sort_by: sortBy, sort_order: sortOrder })
   if (status) params.append('status', status)
   return api.get(`/asr/datasets/${datasetId}/files?${params}`)
 }
@@ -353,6 +354,20 @@ export const editBRResponseProblems = (recordId, modelName, problems, editedBy =
     problems,
     edited_by: editedBy
   })
+
+// System Prompt
+export const getSystemPrompt = (pipelineId) =>
+  api.get(`/br-pipeline/system-prompt/${pipelineId}`)
+
+export const updateSystemPrompt = (pipelineId, data) =>
+  api.put(`/br-pipeline/system-prompt/${pipelineId}`, data)
+
+// Search & Similarity
+export const searchBRResponses = (pipelineId, query, page = 1, perPage = 10) =>
+  api.get(`/br-pipeline/responses/${pipelineId}/search?q=${encodeURIComponent(query)}&page=${page}&per_page=${perPage}`)
+
+export const getBRResponseSimilarity = (pipelineId, thresholdHigh = 0.85, thresholdLow = 0.15) =>
+  api.get(`/br-pipeline/responses/${pipelineId}/similarity?threshold_high=${thresholdHigh}&threshold_low=${thresholdLow}`)
 
 // Task status polling (for Celery background tasks)
 export const getBRTaskStatus = (taskId) =>

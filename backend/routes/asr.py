@@ -570,6 +570,8 @@ def list_audio_files(
     status: Optional[TranscriptionStatus] = None,
     limit: int = 50,
     offset: int = 0,
+    sort_by: str = Query("created_at"),
+    sort_order: str = Query("asc"),
     db: Session = Depends(get_db)
 ):
     """
@@ -600,7 +602,10 @@ def list_audio_files(
     filtered_total = query.count()
     total_pages = max(1, (filtered_total + limit - 1) // limit)
     
-    files = query.order_by(AudioFile.created_at).offset(offset).limit(limit).all()
+    ALLOWED_SORT_FIELDS = {"created_at": AudioFile.created_at, "filename": AudioFile.filename, "id": AudioFile.id}
+    sort_col = ALLOWED_SORT_FIELDS.get(sort_by, AudioFile.created_at)
+    sort_col = sort_col.desc() if sort_order == "desc" else sort_col.asc()
+    files = query.order_by(sort_col).offset(offset).limit(limit).all()
     
     # Convert to dicts for JSON serialization
     files_data = []

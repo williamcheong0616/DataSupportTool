@@ -25,6 +25,8 @@ from backend.br_pipeline_schemas import (
     StageExecutionRequest, Stage2ExecutionRequest, StageExecutionResponse,
     MergeRecordsRequest,
     BatchGenerateRequest, SingleGenerateRequest,
+    SystemPromptUpdate, SystemPromptResponse,
+    SimilarityPair, SimilarityResponse,
 )
 
 
@@ -1420,3 +1422,196 @@ def batch_generate_questions(
         "status": "queued",
         "message": "Batch question generation queued"
     }
+
+
+# ===== System Prompt Endpoints =====
+
+@router.get("/system-prompt/{pipeline_run_id}", response_model=SystemPromptResponse)
+def get_system_prompt(pipeline_run_id: int, db: Session = Depends(get_db)):
+    """
+    Get the effective system prompt for a pipeline run.
+    Returns the per-pipeline override if set, otherwise the global default.
+    """
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+
+    from backend.routes.settings import load_settings
+    if pipeline_run.system_prompt:
+        return SystemPromptResponse(
+            pipeline_run_id=pipeline_run_id,
+            system_prompt=pipeline_run.system_prompt,
+            source="pipeline_override",
+        )
+    settings = load_settings()
+    return SystemPromptResponse(
+        pipeline_run_id=pipeline_run_id,
+        system_prompt=settings["response_system_prompt"],
+        source="global_default",
+    )
+
+
+@router.put("/system-prompt/{pipeline_run_id}", response_model=SystemPromptResponse)
+def update_system_prompt(
+    pipeline_run_id: int,
+    body: SystemPromptUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Update (or reset) the per-pipeline system prompt.
+    Pass system_prompt=null/None to reset to the global default.
+    """
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+
+    pipeline_run.system_prompt = body.system_prompt  # None = reset to global
+    db.commit()
+
+    from backend.routes.settings import load_settings
+    if pipeline_run.system_prompt:
+        return SystemPromptResponse(
+            pipeline_run_id=pipeline_run_id,
+            system_prompt=pipeline_run.system_prompt,
+            source="pipeline_override",
+        )
+    settings = load_settings()
+    return SystemPromptResponse(
+        pipeline_run_id=pipeline_run_id,
+        system_prompt=settings["response_system_prompt"],
+        source="global_default",
+    )
+
+
+# ===== Search Endpoint =====
+
+@router.get("/responses/{pipeline_run_id}/search")
+def search_br_responses(
+    pipeline_run_id: int,
+    q: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Full-text search across selected_question and model_responses for a pipeline run.
+    """
+    from sqlalchemy import cast, String
+
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+
+    query = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+    ).filter(
+        BRRecordStage.selected_question.ilike(f"%{q}%") |
+        cast(BRRecordStage.model_responses, String).ilike(f"%{q}%")
+    )
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+    records = query.offset(offset).limit(per_page).all()
+
+    from backend.models import TextDataset
+    dataset = db.query(TextDataset).filter(TextDataset.id == pipeline_run.dataset_id).first()
+
+    completed_count = sum(1 for r in records if r.completed)
+    return {
+        "records": [
+            {
+                "id": r.id,
+                "text_record_id": r.text_record_id,
+                "restructured_text": r.restructured_text,
+                "selected_question": r.selected_question,
+                "model_responses": r.model_responses,
+                "completed": r.completed,
+            }
+            for r in records
+        ],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "completed_count": completed_count,
+        "pipeline_id": pipeline_run_id,
+        "dataset_id": pipeline_run.dataset_id,
+        "dataset_name": dataset.name if dataset else "",
+    }
+
+
+# ===== Similarity Detection Endpoint =====
+
+@router.get("/responses/{pipeline_run_id}/similarity")
+def detect_response_similarity(
+    pipeline_run_id: int,
+    threshold_high: float = Query(0.85, ge=0.0, le=1.0),
+    threshold_low: float = Query(0.15, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+):
+    """
+    Detect overtrained (too similar) and undertrained (too dissimilar) response pairs.
+    Uses Jaccard word-level similarity.
+    """
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+
+    completed_records = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.model_responses != None,
+        BRRecordStage.completed == True,
+    ).all()
+
+    if len(completed_records) < 2:
+        return SimilarityResponse(
+            overtrain_candidates=[], undertrain_candidates=[], total_comparisons=0
+        )
+
+    from backend.similarity import jaccard_similarity
+
+    # Collect (record_id, model_name, response_text) tuples
+    entries = []
+    for rs in completed_records:
+        if not rs.model_responses:
+            continue
+        for model_name, data in rs.model_responses.items():
+            text = data.get("response", "") if isinstance(data, dict) else ""
+            if text and not text.startswith("Error:"):
+                entries.append((rs.id, model_name, text))
+
+    overtrain = []
+    undertrain = []
+    total_comparisons = 0
+
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            id_a, model_a, text_a = entries[i]
+            id_b, model_b, text_b = entries[j]
+            if model_a != model_b:
+                continue
+            sim = jaccard_similarity(text_a, text_b)
+            total_comparisons += 1
+            pair = SimilarityPair(
+                record_id_a=id_a,
+                record_id_b=id_b,
+                model_name=model_a,
+                similarity=round(sim, 4),
+                response_a=text_a[:300],
+                response_b=text_b[:300],
+            )
+            if sim >= threshold_high:
+                overtrain.append(pair)
+            elif sim <= threshold_low:
+                undertrain.append(pair)
+
+    # Sort by similarity descending for overtrain, ascending for undertrain
+    overtrain.sort(key=lambda x: x.similarity, reverse=True)
+    undertrain.sort(key=lambda x: x.similarity)
+
+    return SimilarityResponse(
+        overtrain_candidates=overtrain[:50],
+        undertrain_candidates=undertrain[:50],
+        total_comparisons=total_comparisons,
+    )

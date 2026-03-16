@@ -112,18 +112,32 @@ def generate_responses_task(self, record_stage_id: int, model_configs: list = No
         context = record_stage.restructured_text or ""
         if not context:
             return {"status": "error", "message": "No context available", "id": record_stage_id}
-        
+
         selected_question = record_stage.selected_question
+
+        # Determine effective system prompt (pipeline override → global default)
+        from backend.br_pipeline_models import BRPipelineRun
+        pipeline_run = db.query(BRPipelineRun).filter(
+            BRPipelineRun.id == record_stage.pipeline_run_id
+        ).first()
+        effective_prompt = None
+        if pipeline_run and pipeline_run.system_prompt:
+            effective_prompt = pipeline_run.system_prompt
+        else:
+            from backend.routes.settings import load_settings
+            effective_prompt = load_settings().get("response_system_prompt")
+
         db.close()  # Release DB before long Ollama calls
-        
+
         from backend.ollama_service import get_ollama_service
-        
+
         responses = {}
         for model_name, model_id in model_configs:
             try:
                 ollama = get_ollama_service(model_name=model_id)
                 response_text, problems = ollama.generate_model_response(
-                    context, selected_question, detect_problems=True
+                    context, selected_question, detect_problems=True,
+                    system_prompt=effective_prompt,
                 )
                 responses[model_name] = {
                     "model_id": model_id,
@@ -214,13 +228,24 @@ def batch_generate_responses_task(self, pipeline_run_id: int, model_configs: lis
                 "context": rs.restructured_text or "",
                 "question": rs.selected_question,
             })
+
+        # Determine effective system prompt (pipeline override → global default)
+        from backend.br_pipeline_models import BRPipelineRun
+        pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+        effective_prompt = None
+        if pipeline_run and pipeline_run.system_prompt:
+            effective_prompt = pipeline_run.system_prompt
+        else:
+            from backend.routes.settings import load_settings
+            effective_prompt = load_settings().get("response_system_prompt")
+
         db.close()
-        
+
         from backend.ollama_service import get_ollama_service
-        
+
         all_responses = {rd["id"]: {} for rd in record_data}
         total_rd = len(record_data)
-        
+
         # Process model-by-model
         for model_name, model_id in model_configs:
             logger.info(
@@ -228,13 +253,14 @@ def batch_generate_responses_task(self, pipeline_run_id: int, model_configs: lis
                 f"for {total_rd} records"
             )
             ollama = get_ollama_service(model_name=model_id)
-            
+
             for rd_idx, rd in enumerate(record_data, 1):
                 if not rd["context"] or not rd["question"]:
                     continue
                 try:
                     response_text, problems = ollama.generate_model_response(
-                        rd["context"], rd["question"], detect_problems=True
+                        rd["context"], rd["question"], detect_problems=True,
+                        system_prompt=effective_prompt,
                     )
                     all_responses[rd["id"]][model_name] = {
                         "model_id": model_id,

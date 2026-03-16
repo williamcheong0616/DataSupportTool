@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { getStats } from '../api'
+import { getStats, getDatasetStats } from '../api'
 
 function Dashboard() {
   const [stats, setStats] = useState(null)
+  const [datasetStats, setDatasetStats] = useState(null)
+  const [selectedType, setSelectedType] = useState('all')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -11,8 +13,9 @@ function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const res = await getStats()
-      setStats(res.data)
+      const [statsRes, dsRes] = await Promise.all([getStats(), getDatasetStats()])
+      setStats(statsRes.data)
+      setDatasetStats(dsRes.data)
     } catch (err) {
       console.error('Failed to fetch stats:', err)
     } finally {
@@ -85,6 +88,80 @@ function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Per-Dataset Breakdown */}
+      {datasetStats && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Dataset Breakdown</h2>
+            <select
+              value={selectedType}
+              onChange={e => setSelectedType(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="all">All Datasets</option>
+              <option value="text">Text Datasets</option>
+              <option value="asr">ASR Datasets</option>
+            </select>
+          </div>
+
+          {(selectedType === 'all' || selectedType === 'text') && datasetStats.text_datasets?.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide">Text Datasets</h3>
+              <div className="grid gap-3">
+                {datasetStats.text_datasets.map(ds => {
+                  const pct = ds.record_count > 0 ? Math.round((ds.annotated_count / ds.record_count) * 100) : 0
+                  return (
+                    <div key={ds.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{ds.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{ds.task_type}</span>
+                      </div>
+                      <div className="flex items-center gap-4 ml-4">
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{ds.annotated_count}/{ds.record_count} records</span>
+                        <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                          <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {(selectedType === 'all' || selectedType === 'asr') && datasetStats.asr_datasets?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide">ASR Datasets</h3>
+              <div className="grid gap-3">
+                {datasetStats.asr_datasets.map(ds => {
+                  const pct = ds.file_count > 0 ? Math.round((ds.completed_count / ds.file_count) * 100) : 0
+                  return (
+                    <div key={ds.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{ds.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{ds.pending_count} pending</span>
+                      </div>
+                      <div className="flex items-center gap-4 ml-4">
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{ds.completed_count}/{ds.file_count} files</span>
+                        <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                          <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {(!datasetStats.text_datasets?.length && !datasetStats.asr_datasets?.length) && (
+            <p className="text-gray-500 dark:text-gray-400 text-center py-4">No datasets created yet.</p>
+          )}
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">

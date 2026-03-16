@@ -219,3 +219,32 @@ class BatchGenerateRequest(BaseModel):
 class SingleGenerateRequest(BaseModel):
     """Optional request body for single-record generate with custom models."""
     models: Optional[List[ModelSelection]] = None  # If None, use defaults
+
+
+# ===== System Prompt Schemas =====
+
+class SystemPromptUpdate(BaseModel):
+    system_prompt: Optional[str] = None  # None = reset to global default
+
+
+class SystemPromptResponse(BaseModel):
+    pipeline_run_id: int
+    system_prompt: str
+    source: str  # "pipeline_override" or "global_default"
+
+
+# ===== Similarity Schemas =====
+
+class SimilarityPair(BaseModel):
+    record_id_a: int
+    record_id_b: int
+    model_name: str
+    similarity: float
+    response_a: str
+    response_b: str
+
+
+class SimilarityResponse(BaseModel):
+    overtrain_candidates: List[SimilarityPair]
+    undertrain_candidates: List[SimilarityPair]
+    total_comparisons: int

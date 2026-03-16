@@ -40,6 +40,7 @@ function TextDatasets() {
   const [pipelineList, setPipelineList] = useState([]) // Full list for sidebar
   const [startingPipeline, setStartingPipeline] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [filterText, setFilterText] = useState('')
 
   useEffect(() => {
     fetchDatasets()
@@ -300,12 +301,21 @@ function TextDatasets() {
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Text Datasets</h1>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
-          >
-            + Create Dataset
-          </button>
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="Search datasets..."
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              onClick={() => setShowCreate(true)}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
+            >
+              + Create Dataset
+            </button>
+          </div>
         </div>
 
       {/* Create Modal */}
@@ -446,7 +456,9 @@ function TextDatasets() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {datasets.map((dataset) => (
+          {datasets
+            .filter(d => !filterText || d.name.toLowerCase().includes(filterText.toLowerCase()))
+            .map((dataset) => (
             <div key={dataset.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start">
                 <div>

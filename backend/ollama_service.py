@@ -291,16 +291,17 @@ Output ONLY a JSON array of DETAILED Bahasa Rojak questions:"""
             ][:count]
     
     def generate_model_response(
-        self, 
-        context: str, 
+        self,
+        context: str,
         question: str,
-        detect_problems: bool = True
+        detect_problems: bool = True,
+        system_prompt: str = None,
     ) -> tuple[str, List[str]]:
         """
         Generate a response to a question based on context in Bahasa Rojak style.
         Optionally detect problems in the response (hallucinations, errors).
         """
-        system = """You are a helpful AI assistant that answers questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
+        system = system_prompt or """You are a helpful AI assistant that answers questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
 
 Bahasa Rojak characteristics:
 - Mix of Malay (MAJORITY language) and English

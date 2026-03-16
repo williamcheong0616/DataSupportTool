@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getBRResponseRecords, generateBRResponse, generateBRResponseBatch, editBRResponseProblems, getOllamaModels, pollBRTask } from '../api'
+import { getBRResponseRecords, generateBRResponse, generateBRResponseBatch, editBRResponseProblems, getOllamaModels, pollBRTask,
+  getSystemPrompt, updateSystemPrompt, searchBRResponses, getBRResponseSimilarity } from '../api'
 
 function BRModelResponses() {
   const { pipelineId } = useParams()
@@ -30,7 +31,29 @@ function BRModelResponses() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [jumpPage, setJumpPage] = useState('')
 
-  useEffect(() => { fetchRecords() }, [pipelineId, page, statusFilter])
+  // Search
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMode, setSearchMode] = useState(false)
+  const [searching, setSearching] = useState(false)
+
+  // Similarity
+  const [showSimilarity, setShowSimilarity] = useState(false)
+  const [similarityData, setSimilarityData] = useState(null)
+  const [loadingSimilarity, setLoadingSimilarity] = useState(false)
+
+  // System Prompt
+  const [showPromptModal, setShowPromptModal] = useState(false)
+  const [promptText, setPromptText] = useState('')
+  const [promptSource, setPromptSource] = useState('global_default')
+  const [savingPrompt, setSavingPrompt] = useState(false)
+
+  useEffect(() => {
+    if (searchMode && searchQuery.trim()) {
+      runSearch(searchQuery)
+    } else if (!searchMode) {
+      fetchRecords()
+    }
+  }, [pipelineId, page, statusFilter, searchMode])
   useEffect(() => { fetchAvailableModels() }, [])
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, [page])
 
@@ -195,6 +218,106 @@ function BRModelResponses() {
     setProblemText('')
   }
 
+  // --- System Prompt ---
+  async function openPromptModal() {
+    try {
+      const res = await getSystemPrompt(pipelineId)
+      setPromptText(res.data.system_prompt)
+      setPromptSource(res.data.source)
+    } catch (err) {
+      console.error('Failed to fetch system prompt:', err)
+    }
+    setShowPromptModal(true)
+  }
+
+  async function savePromptOverride() {
+    setSavingPrompt(true)
+    try {
+      const res = await updateSystemPrompt(pipelineId, { system_prompt: promptText })
+      setPromptSource(res.data.source)
+      setShowPromptModal(false)
+    } catch (err) {
+      alert('Failed to save: ' + (err.response?.data?.detail || err.message))
+    }
+    setSavingPrompt(false)
+  }
+
+  async function resetPromptToDefault() {
+    setSavingPrompt(true)
+    try {
+      const res = await updateSystemPrompt(pipelineId, { system_prompt: null })
+      setPromptText(res.data.system_prompt)
+      setPromptSource(res.data.source)
+    } catch (err) {
+      alert('Failed to reset: ' + (err.response?.data?.detail || err.message))
+    }
+    setSavingPrompt(false)
+  }
+
+  // --- Search ---
+  async function runSearch(q) {
+    if (!q.trim()) return
+    setSearching(true)
+    try {
+      const res = await searchBRResponses(pipelineId, q, page, perPage)
+      setRecords(res.data.records)
+      setTotal(res.data.total)
+      setPages(res.data.total_pages)
+      setCompleted(res.data.completed_count)
+    } catch (err) {
+      alert('Search failed: ' + (err.response?.data?.detail || err.message))
+    }
+    setSearching(false)
+  }
+
+  async function handleSearch(e) {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    if (searchMode) {
+      // Already in search mode - just re-run with potentially new query
+      setPage(1)
+      runSearch(searchQuery)
+    } else {
+      setSearchMode(true)
+      setPage(1)
+      // useEffect will fire runSearch when searchMode becomes true
+    }
+  }
+
+  function exitSearch() {
+    setSearchMode(false)
+    setSearchQuery('')
+    setPage(1)
+  }
+
+  // --- Similarity ---
+  async function detectSimilarity() {
+    setLoadingSimilarity(true)
+    setShowSimilarity(true)
+    setSimilarityData(null)
+    try {
+      const res = await getBRResponseSimilarity(pipelineId)
+      setSimilarityData(res.data)
+    } catch (err) {
+      alert('Similarity check failed: ' + (err.response?.data?.detail || err.message))
+      setShowSimilarity(false)
+    }
+    setLoadingSimilarity(false)
+  }
+
+  function highlightText(text, query) {
+    if (!query || !text) return text
+    const idx = text.toLowerCase().indexOf(query.toLowerCase())
+    if (idx === -1) return text
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-yellow-200 dark:bg-yellow-700 rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
+      </>
+    )
+  }
+
   async function saveProblems() {
     if (!editing) return
     setSaving(true)
@@ -305,11 +428,43 @@ function BRModelResponses() {
           ))}
         </div>
 
+        {/* Search Bar */}
+        <form onSubmit={handleSearch} className="flex items-center gap-2 mb-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search questions and responses..."
+            className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+          />
+          <button type="submit" disabled={searching || !searchQuery.trim()}
+            className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+            {searching ? 'Searching...' : 'Search'}
+          </button>
+          {searchMode && (
+            <button type="button" onClick={exitSearch}
+              className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+              Clear
+            </button>
+          )}
+        </form>
+        {searchMode && (
+          <p className="text-sm text-indigo-600 dark:text-indigo-400 mb-4">
+            Showing search results for "{searchQuery}" ({total} found)
+          </p>
+        )}
+
         {/* Model Selection Panel */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🤖 Model Selection</h2>
-            {modelsLoading && <span className="text-sm text-gray-400">Loading models...</span>}
+            <div className="flex items-center gap-2">
+              {modelsLoading && <span className="text-sm text-gray-400">Loading models...</span>}
+              <button onClick={openPromptModal}
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                Edit System Prompt
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {['A', 'B', 'C'].map((label, i) => (
@@ -377,9 +532,77 @@ function BRModelResponses() {
               <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                 <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
               </div>
+              <button onClick={detectSimilarity} disabled={loadingSimilarity}
+                className="ml-4 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">
+                {loadingSimilarity ? 'Analyzing...' : 'Detect Similarity'}
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Similarity Results Panel */}
+        {showSimilarity && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Similarity Analysis</h2>
+              <button onClick={() => setShowSimilarity(false)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            {loadingSimilarity ? (
+              <p className="text-gray-500 py-4 text-center">Analyzing responses...</p>
+            ) : similarityData ? (
+              <>
+                <p className="text-sm text-gray-500 mb-4">{similarityData.total_comparisons} pairs compared (same model, different records)</p>
+                {similarityData.overtrain_candidates.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium text-red-600 dark:text-red-400 mb-2 uppercase tracking-wide">
+                      Overtrain Candidates ({similarityData.overtrain_candidates.length}) — similarity &ge; 0.85
+                    </h3>
+                    <div className="space-y-2">
+                      {similarityData.overtrain_candidates.map((p, i) => (
+                        <div key={i} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm">
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className="font-medium text-red-700 dark:text-red-300">Similarity: {(p.similarity * 100).toFixed(1)}%</span>
+                            <span className="text-gray-500">Records #{p.record_id_a} & #{p.record_id_b}</span>
+                            <span className="text-xs bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 px-2 py-0.5 rounded-full">{p.model_name}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-700 dark:text-gray-300">
+                            <div className="bg-white dark:bg-gray-700 p-2 rounded">{p.response_a}...</div>
+                            <div className="bg-white dark:bg-gray-700 p-2 rounded">{p.response_b}...</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {similarityData.undertrain_candidates.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wide">
+                      Undertrain Candidates ({similarityData.undertrain_candidates.length}) — similarity &le; 0.15
+                    </h3>
+                    <div className="space-y-2">
+                      {similarityData.undertrain_candidates.map((p, i) => (
+                        <div key={i} className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-sm">
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className="font-medium text-yellow-700 dark:text-yellow-300">Similarity: {(p.similarity * 100).toFixed(1)}%</span>
+                            <span className="text-gray-500">Records #{p.record_id_a} & #{p.record_id_b}</span>
+                            <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-2 py-0.5 rounded-full">{p.model_name}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-700 dark:text-gray-300">
+                            <div className="bg-white dark:bg-gray-700 p-2 rounded">{p.response_a}...</div>
+                            <div className="bg-white dark:bg-gray-700 p-2 rounded">{p.response_b}...</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {similarityData.overtrain_candidates.length === 0 && similarityData.undertrain_candidates.length === 0 && (
+                  <p className="text-gray-500 text-center py-4">No similarity issues detected.</p>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
 
         {/* records */}
         <div className="space-y-6 mb-6">
@@ -546,6 +769,45 @@ function BRModelResponses() {
           </div>
         </div>
       </div>
+
+      {/* System Prompt Modal */}
+      {showPromptModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit System Prompt</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Source: <span className={promptSource === 'pipeline_override' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500'}>{promptSource === 'pipeline_override' ? 'Pipeline Override' : 'Global Default'}</span></p>
+              </div>
+              <button onClick={() => setShowPromptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={promptText}
+                onChange={e => setPromptText(e.target.value)}
+                rows={12}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 resize-none"
+              />
+            </div>
+            <div className="flex items-center justify-between p-5 border-t border-gray-200 dark:border-gray-700">
+              <button onClick={resetPromptToDefault} disabled={savingPrompt || promptSource === 'global_default'}
+                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+                Reset to Default
+              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setShowPromptModal(false)}
+                  className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">
+                  Cancel
+                </button>
+                <button onClick={savePromptOverride} disabled={savingPrompt}
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                  {savingPrompt ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

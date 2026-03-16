@@ -38,6 +38,9 @@ class BRPipelineRun(Base):
     status = Column(String(50), default="pending")  # pending, running, completed, failed
     error_message = Column(Text, nullable=True)
     
+    # Per-pipeline system prompt override (None = use global default)
+    system_prompt = Column(Text, nullable=True)
+
     # Timestamps
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
