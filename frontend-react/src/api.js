@@ -108,6 +108,12 @@ export const getTextRecords = (datasetId, annotated = null, limit = 50, offset =
 export const getTextRecord = (id) => api.get(`/text/records/${id}`)
 export const deleteTextRecord = (id) => api.delete(`/text/records/${id}`)
 
+export const getResponsePool = (q = '', limit = 100, offset = 0) => {
+  const params = new URLSearchParams({ limit, offset })
+  if (q) params.append('q', q)
+  return api.get(`/text/response-pool?${params}`)
+}
+
 // Annotations
 export const annotateBahasaRojak = (recordId, isBahasaRojak, annotator = 'anonymous') =>
   api.post(`/text/records/${recordId}/annotate/bahasa-rojak?annotator=${annotator}`, {

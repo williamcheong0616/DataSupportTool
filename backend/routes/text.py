@@ -531,3 +531,94 @@ def export_text_dataset(
             media_type="application/jsonl",
             headers={"Content-Disposition": f"attachment; filename={dataset.name}.jsonl"}
         )
+
+
+# ==================== CROSS-DATASET RESPONSE POOL ====================
+
+@router.get("/response-pool")
+def get_response_pool(
+    q: Optional[str] = Query(None, description="Search query to filter texts"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Aggregate all original texts and BR pipeline model responses from every
+    text dataset into a single searchable pool.
+
+    Useful for detecting cross-dataset overlap that could cause over- or
+    under-training.
+
+    Args:
+        q: Optional search string (case-insensitive substring match)
+        limit: Page size (default 100, max 500)
+        offset: Pagination offset
+
+    Returns:
+        Paginated list of entries with type, dataset info, and text content
+    """
+    from backend.br_pipeline_models import BRRecordStage
+
+    results = []
+    query_lower = q.lower() if q else None
+
+    # --- original texts ---
+    text_records = (
+        db.query(TextRecord, TextDataset)
+        .join(TextDataset, TextRecord.dataset_id == TextDataset.id)
+        .all()
+    )
+    for record, dataset in text_records:
+        text = record.original_text or ""
+        if query_lower and query_lower not in text.lower():
+            continue
+        results.append({
+            "type": "original_text",
+            "dataset_id": dataset.id,
+            "dataset_name": dataset.name,
+            "record_id": record.id,
+            "text": text,
+            "model_name": None,
+            "question": None,
+        })
+
+    # --- BR pipeline model responses ---
+    stages = (
+        db.query(BRRecordStage, TextRecord, TextDataset)
+        .join(TextRecord, BRRecordStage.text_record_id == TextRecord.id)
+        .join(TextDataset, TextRecord.dataset_id == TextDataset.id)
+        .filter(BRRecordStage.model_responses.isnot(None))
+        .all()
+    )
+    for stage, record, dataset in stages:
+        if not stage.model_responses:
+            continue
+        for model_name, resp_data in stage.model_responses.items():
+            response_text = (
+                resp_data.get("response", "") if isinstance(resp_data, dict) else str(resp_data)
+            )
+            if not response_text:
+                continue
+            if query_lower and query_lower not in response_text.lower():
+                continue
+            results.append({
+                "type": "model_response",
+                "dataset_id": dataset.id,
+                "dataset_name": dataset.name,
+                "record_id": record.id,
+                "text": response_text,
+                "model_name": model_name,
+                "question": stage.selected_question,
+            })
+
+    total = len(results)
+    original_count = sum(1 for r in results if r["type"] == "original_text")
+    model_response_count = total - original_count
+
+    return {
+        "results": results[offset: offset + limit],
+        "total": total,
+        "original_count": original_count,
+        "model_response_count": model_response_count,
+        "query": q,
+    }

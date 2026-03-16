@@ -315,6 +315,13 @@ function TextDatasets() {
             >
               + Create Dataset
             </button>
+            <button
+              onClick={() => navigate('/text/response-pool')}
+              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition flex items-center gap-1"
+              title="View all original texts and model responses across every dataset"
+            >
+              🔍 Response Pool
+            </button>
           </div>
         </div>
 
