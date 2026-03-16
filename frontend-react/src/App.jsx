@@ -11,6 +11,7 @@ import BRClassification from './pages/BRClassification'
 import BRRestructure from './pages/BRRestructure'
 import BRQuestionValidation from './pages/BRQuestionValidation'
 import BRModelResponses from './pages/BRModelResponses'
+import TextResponsePool from './pages/TextResponsePool'
 import Settings from './pages/Settings'
 
 function App() {
@@ -122,6 +123,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/text" element={<TextDatasets />} />
+            <Route path="/text/response-pool" element={<TextResponsePool />} />
             <Route path="/text/:datasetId/annotate" element={<TextAnnotate />} />
             <Route path="/br-pipeline/validate" element={<BRPipelineValidation />} />
             <Route path="/br-pipeline/results/:pipelineId" element={<BRPipelineResults />} />
