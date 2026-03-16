@@ -319,55 +319,34 @@ def run_stage_2_individually(
         raise HTTPException(status_code=500, detail=f"Stage 2 failed: {str(e)}")
 
 
-@router.post("/run-stage3", response_model=StageExecutionResponse)
+@router.post("/run-stage3")
 def run_stage_3_individually(
     request: StageExecutionRequest,
     db: Session = Depends(get_db)
 ):
     """
     Run Stage 3 (Question Generation in Bahasa Rojak) individually.
-    Returns immediately - processing runs in background.
+    Returns immediately - processing runs in background via Celery.
     
     This stage generates 3 questions in BAHASA ROJAK style:
     - Questions are generated in reverse (from the text/responses)
-    - Uses Malay-English code-mixing (e.g., "Apa benda yang dia cakap about this ah?")
-    - Includes slang and shortforms (lah, leh, meh, lor, sikit, etc.)
-    - Natural conversational Malaysian/Singaporean style
+    - Uses Malay-English code-mixing
+    - Includes slang and shortforms
     
     Parameters:
-    - record_ids: If provided, only runs for those specific records
-    - force_rerun: If True, reruns even for records already processed in Stage 3
-    
-    Default behavior (no record_ids, force_rerun=False): Runs only for records that completed Stage 2.
+    - record_ids: Optional specific records (currently not strictly supported by the batch Celery task but included for API signature compatibility)
+    - force_rerun: Optional
     """
     try:
-        # Get record count for response
-        if request.record_ids:
-            count = len(request.record_ids)
-        else:
-            from backend.br_pipeline_models import BRRecordStage, BRPipelineStage
-            query = db.query(BRRecordStage).filter(
-                BRRecordStage.pipeline_run_id == request.pipeline_run_id
-            )
-            if not request.force_rerun:
-                query = query.filter(BRRecordStage.current_stage == BRPipelineStage.TEXT_RESTRUCTURE)
-            count = query.count()
+        from backend.br_pipeline_tasks import batch_generate_questions_task
+        task = batch_generate_questions_task.delay(request.pipeline_run_id)
         
-        # Start in background thread
-        start_stage_in_background(
-            lambda orch, pid, **kw: orch.run_stage_3(pid, **kw),
-            request.pipeline_run_id,
-            record_ids=request.record_ids,
-            force_rerun=request.force_rerun
-        )
-        
-        rerun_text = " (rerun)" if request.force_rerun else ""
-        return StageExecutionResponse(
-            pipeline_run_id=request.pipeline_run_id,
-            stage="Stage 3: Question Generation (Bahasa Rojak)",
-            records_processed=count,
-            message=f"Started{rerun_text} generating Bahasa Rojak questions for ~{count} records in background"
-        )
+        return {
+            "pipeline_run_id": request.pipeline_run_id,
+            "stage": "Stage 3: Question Generation (Bahasa Rojak)",
+            "task_id": task.id,
+            "message": f"Started generating Bahasa Rojak questions in background task {task.id}"
+        }
     except Exception as e:
         logger.error(f"Stage 3 execution failed: {e}")
         raise HTTPException(status_code=500, detail=f"Stage 3 failed: {str(e)}")
@@ -787,10 +766,18 @@ def get_restructure_records(
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
     # Only count/show records classified as Bahasa Rojak
-    base_filter = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id,
-        BRRecordStage.is_bahasa_rojak == True
-    )
+    if status == "discarded":
+        base_filter = db.query(BRRecordStage).filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id,
+            BRRecordStage.is_bahasa_rojak == True,
+            BRRecordStage.is_discarded == True
+        )
+    else:
+        base_filter = db.query(BRRecordStage).filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id,
+            BRRecordStage.is_bahasa_rojak == True,
+            BRRecordStage.is_discarded == False
+        )
     
     total = base_filter.count()
     
@@ -821,7 +808,8 @@ def get_restructure_records(
             restructured_text=rs.restructured_text,
             was_restructured=rs.restructured_text is not None,
             is_bahasa_rojak=rs.is_bahasa_rojak,
-            detected_language=rs.detected_language
+            detected_language=rs.detected_language,
+            is_discarded=rs.is_discarded
         )
         for rs in record_stages
     ]
@@ -851,12 +839,16 @@ def update_restructured_text(
         raise HTTPException(status_code=404, detail="Record stage not found")
     
     from datetime import datetime
-    record_stage.restructured_text = request.restructured_text
-    record_stage.restructured_at = datetime.utcnow()
+    if request.restructured_text is not None:
+        record_stage.restructured_text = request.restructured_text
+        record_stage.restructured_at = datetime.utcnow()
+    
+    if request.is_discarded is not None:
+        record_stage.is_discarded = request.is_discarded
     
     db.commit()
     
-    return {"id": record_stage.id, "message": "Restructured text saved"}
+    return {"id": record_stage.id, "message": "Record updated successfully"}
 
 
 @router.post("/restructure/{record_stage_id}/auto")
@@ -1401,3 +1393,30 @@ def edit_model_problems(
         "updated_response": responses[edit_request.model_name]
     }
 
+
+@router.post("/questions/{pipeline_run_id}/generate-all")
+def batch_generate_questions(
+    pipeline_run_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Dispatch batch question generation to Celery worker.
+    Generates questions for all records in the pipeline run that:
+    - are Bahasa Rojak
+    - have restructured_text
+    - are not discarded
+    - have no generated questions yet
+    """
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+        
+    from backend.br_pipeline_tasks import batch_generate_questions_task
+    task = batch_generate_questions_task.delay(pipeline_run_id)
+    
+    return {
+        "pipeline_id": pipeline_run_id,
+        "task_id": task.id,
+        "status": "queued",
+        "message": "Batch question generation queued"
+    }

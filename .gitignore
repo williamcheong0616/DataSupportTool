@@ -100,3 +100,4 @@ secrets/
 *.temp
 *_old.py
 *_backup.*
+alembic/versions/ab8fd6c9ff22_add_is_discarded_to_brrecordstage.py

@@ -325,6 +325,9 @@ export const autoRestructureBR = (recordId) =>
 export const getBRQuestionRecords = (pipelineId, page = 1, perPage = 10, status = 'all') =>
   api.get(`/br-pipeline/questions/${pipelineId}?page=${page}&per_page=${perPage}&status=${status}`)
 
+export const generateBRQuestionsBatch = (pipelineId) =>
+  api.post(`/br-pipeline/questions/${pipelineId}/generate-all`)
+
 export const generateBRQuestions = (recordId) =>
   api.post(`/br-pipeline/questions/${recordId}/generate`)
 

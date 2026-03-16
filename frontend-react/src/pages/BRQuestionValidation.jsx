@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { runBRStage3, getBRQuestionRecords, generateBRQuestions, selectBRQuestion, pollBRTask } from '../api'
+import { runBRStage3, getBRQuestionRecords, generateBRQuestions, generateBRQuestionsBatch, selectBRQuestion, pollBRTask } from '../api'
 
 function BRQuestionValidation() {
   const { pipelineId } = useParams()
@@ -121,15 +121,62 @@ function BRQuestionValidation() {
     setRerunning(true)
     try {
       const res = await runBRStage3(pipelineId, null, true)
-      alert(`✓ Stage 3 started in background!\n\n${res.data.message}\n\nRefresh this page to see updated results.`)
-      // Optionally refresh after a delay
-      setTimeout(() => {
+      const taskId = res.data.task_id
+      alert(`✓ Stage 3 started in background!\n\n${res.data.message}\n\nThe page will periodically refresh.`)
+      
+      const interval = setInterval(() => {
         fetchRecords()
-      }, 2000)
+      }, 5000)
+      
+      pollBRTask(taskId, { interval: 3000, timeout: 1800000 })
+        .then(result => {
+          clearInterval(interval)
+          alert(`✓ Stage 3 background task complete!`)
+          fetchRecords()
+          setRerunning(false)
+        })
+        .catch(err => {
+          clearInterval(interval)
+          alert('Stage 3 task finished with error context or timeout: ' + err.message)
+          fetchRecords()
+          setRerunning(false)
+        })
     } catch (err) {
       console.error('Failed to rerun stage:', err)
       alert('Failed to start Stage 3: ' + (err.response?.data?.detail || err.message))
-    } finally {
+      setRerunning(false)
+    }
+  }
+
+  const handleGenerateAllQuestions = async () => {
+    if (!confirm('Generate questions for ALL pending records?\n\nThis sends a background task that may take some time. Proceed?')) return
+    
+    setRerunning(true)
+    try {
+      const res = await generateBRQuestionsBatch(pipelineId)
+      const taskId = res.data.task_id
+      alert('✓ Background generation started! The page will periodically refresh.')
+      
+      const interval = setInterval(() => {
+        fetchRecords()
+      }, 5000)
+      
+      pollBRTask(taskId, { interval: 3000, timeout: 1800000 })
+        .then(result => {
+          clearInterval(interval)
+          alert(`✓ Batch generation complete! Processed: ${result.processed}, Errors: ${result.errors}`)
+          fetchRecords()
+          setRerunning(false)
+        })
+        .catch(err => {
+          clearInterval(interval)
+          alert('Batch task finished with error context or timeout: ' + err.message)
+          fetchRecords()
+          setRerunning(false)
+        })
+    } catch (err) {
+      console.error('Failed to start batch generation:', err)
+      alert('Failed to start batch generation: ' + (err.message || ''))
       setRerunning(false)
     }
   }

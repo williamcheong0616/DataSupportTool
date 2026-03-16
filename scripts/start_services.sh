@@ -45,7 +45,7 @@ echo "🔄 Starting Celery worker..."
 # Linux/production: can use --pool=prefork --concurrency=2
 OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A backend.celery_app:celery_app worker \
     --loglevel=info \
-    --queues=celery,transcription \
+    --queues=celery,transcription,br_pipeline \
     --pool=solo \
     &
 CELERY_PID=$!

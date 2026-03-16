@@ -61,6 +61,7 @@ class ModelConfigCreate(BaseModel):
 class ClassificationUpdateRequest(BaseModel):
     is_bahasa_rojak: Optional[bool] = None
     detected_language: Optional[str] = None
+    is_discarded: Optional[bool] = False
 
 
 class ClassificationRecordResponse(BaseModel):
@@ -92,6 +93,7 @@ class RestructureRecordResponse(BaseModel):
     was_restructured: bool
     is_bahasa_rojak: Optional[bool] = None
     detected_language: Optional[str] = None
+    is_discarded: Optional[bool] = False
 
 
 class RestructureListResponse(BaseModel):
@@ -104,7 +106,8 @@ class RestructureListResponse(BaseModel):
 
 
 class RestructureUpdateRequest(BaseModel):
-    restructured_text: str
+    restructured_text: Optional[str] = None
+    is_discarded: Optional[bool] = None
 
 
 # ===== Stage 3: Question Schemas =====
@@ -115,6 +118,7 @@ class QuestionRecordResponse(BaseModel):
     original_text: Optional[str] = None
     restructured_text: Optional[str]
     detected_language: Optional[str] = None
+    is_discarded: Optional[bool] = False
     is_bahasa_rojak: Optional[bool] = None
     generated_questions: Optional[List[str]]
     selected_question_index: Optional[int]

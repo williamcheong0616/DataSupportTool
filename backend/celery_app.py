@@ -44,6 +44,7 @@ celery_app.conf.update(
         "backend.tasks.segment_audio_task": {"queue": "transcription"},
         "backend.tasks.batch_segment_task": {"queue": "transcription"},
         "backend.br_pipeline_tasks.generate_questions_task": {"queue": "br_pipeline"},
+        "backend.br_pipeline_tasks.batch_generate_questions_task": {"queue": "br_pipeline"},
         "backend.br_pipeline_tasks.generate_responses_task": {"queue": "br_pipeline"},
         "backend.br_pipeline_tasks.batch_generate_responses_task": {"queue": "br_pipeline"},
     },

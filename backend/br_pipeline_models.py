@@ -68,6 +68,7 @@ class BRRecordStage(Base):
     # Stage 2: Text Restructuring
     restructured_text = Column(Text, nullable=True)
     skip_restructure = Column(Boolean, default=False)  # User choice to skip restructuring
+    is_discarded = Column(Boolean, default=False)  # Soft delete flag
     restructure_metadata = Column(JSON, nullable=True)  # Store MCQ consolidation info
     restructured_at = Column(DateTime, nullable=True)
     

@@ -301,3 +301,70 @@ def batch_generate_responses_task(self, pipeline_run_id: int, model_configs: lis
             db.close()
         except Exception:
             pass
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=30)
+def batch_generate_questions_task(self, pipeline_run_id: int) -> dict:
+    """
+    Celery task: Batch-generate questions for all pending records (where questions are not generated yet, text is restructured, and record is not discarded).
+    """
+    db = SessionLocal()
+    try:
+        pending_records = db.query(BRRecordStage).filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id,
+            BRRecordStage.restructured_text != None,
+            BRRecordStage.generated_questions == None,
+            BRRecordStage.is_bahasa_rojak == True,
+            BRRecordStage.is_discarded == False
+        ).all()
+        
+        if not pending_records:
+            return {"status": "success", "message": "No pending records found"}
+        
+        record_ids = [r.id for r in pending_records]
+        db.close()
+        
+        from backend.ollama_service import get_ollama_service
+        ollama = get_ollama_service()
+        
+        results = []
+        errors = []
+        
+        for stage_id in record_ids:
+            fresh_db = SessionLocal()
+            try:
+                record = fresh_db.query(BRRecordStage).filter(BRRecordStage.id == stage_id).first()
+                if not record or not record.restructured_text:
+                    continue
+                
+                text = record.restructured_text
+                questions = ollama.generate_questions(text, count=3)
+                
+                record.generated_questions = questions
+                record.questions_generated_at = datetime.utcnow()
+                fresh_db.commit()
+                results.append({"id": stage_id})
+            except Exception as e:
+                fresh_db.rollback()
+                logger.error(f"Failed generating questions for record {stage_id}: {e}")
+                errors.append({"id": stage_id, "error": str(e)})
+            finally:
+                fresh_db.close()
+                
+        return {
+            "status": "success",
+            "message": f"Generated questions for {len(results)} records",
+            "processed": len(results),
+            "errors": len(errors),
+            "pipeline_id": pipeline_run_id
+        }
+    except Exception as e:
+        logger.error(f"batch_generate_questions_task failed: {e}")
+        try:
+            raise self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {"status": "error", "message": str(e)}
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass

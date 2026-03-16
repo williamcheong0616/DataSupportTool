@@ -105,9 +105,13 @@ function BRRestructure() {
           e.preventDefault()
           handleKeepOriginal(activeRecord.id)
           break
-        case 'w': // Auto-Restructure
+        case 'w': // Discard
           e.preventDefault()
-          handleAutoRestructure(activeRecord.id)
+          handleDiscard(activeRecord.id)
+          break
+        case 'r': // Restore
+          e.preventDefault()
+          if (activeRecord.is_discarded) handleRestore(activeRecord.id)
           break
         case 'd': // Save
           e.preventDefault()
@@ -242,21 +246,35 @@ function BRRestructure() {
     }
   }
 
-  const handleAutoRestructure = async (recordId) => {
-    setSaving(prev => ({ ...prev, [`auto_${recordId}`]: true }))
+  const handleDiscard = async (recordId) => {
+    setSaving(prev => ({ ...prev, [`discard_${recordId}`]: true }))
     try {
-      const res = await autoRestructureBR(recordId)
+      await updateBRRestructure(recordId, { is_discarded: true })
       setRecords(prev => prev.map(r => 
-        r.id === recordId ? { ...r, restructured_text: res.data.restructured_text, was_restructured: true } : r
+        r.id === recordId ? { ...r, is_discarded: true } : r
       ))
-      if (!records.find(r => r.id === recordId)?.was_restructured) {
-        setRestructuredCount(prev => prev + 1)
-      }
+      fetchRecords() // Refresh to apply filters correctly
     } catch (err) {
-      console.error('Failed to auto-restructure:', err)
-      alert('Failed to auto-restructure')
+      console.error('Failed to discard:', err)
+      alert('Failed to discard')
     } finally {
-      setSaving(prev => ({ ...prev, [`auto_${recordId}`]: false }))
+      setSaving(prev => ({ ...prev, [`discard_${recordId}`]: false }))
+    }
+  }
+
+  const handleRestore = async (recordId) => {
+    setSaving(prev => ({ ...prev, [`restore_${recordId}`]: true }))
+    try {
+      await updateBRRestructure(recordId, { is_discarded: false })
+      setRecords(prev => prev.map(r => 
+        r.id === recordId ? { ...r, is_discarded: false } : r
+      ))
+      fetchRecords() // Refresh to apply filters correctly
+    } catch (err) {
+      console.error('Failed to restore:', err)
+      alert('Failed to restore')
+    } finally {
+      setSaving(prev => ({ ...prev, [`restore_${recordId}`]: false }))
     }
   }
 
@@ -398,7 +416,8 @@ function BRRestructure() {
           <div className="flex items-center gap-4 flex-wrap text-xs text-gray-300">
             <span className="font-semibold text-gray-100">⌨ Hotkeys:</span>
             <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">A</kbd> Keep Original</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">W</kbd> Auto-Restructure</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">W</kbd> Discard</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">R</kbd> Restore</span>
             <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">D</kbd> Save</span>
             <span className="border-l border-gray-600 pl-4"><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">↑</kbd><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono ml-1">↓</kbd> Navigate cards</span>
             <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">S</kbd> Next page</span>
@@ -483,7 +502,7 @@ function BRRestructure() {
         {/* Status Filter + Merge Bar */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Filter:</span>
-          {['all', 'pending', 'completed'].map(f => (
+          {['all', 'pending', 'completed', 'discarded'].map(f => (
             <button
               key={f}
               onClick={() => changeFilter(f)}
@@ -491,6 +510,7 @@ function BRRestructure() {
                 statusFilter === f
                   ? f === 'all' ? 'bg-indigo-600 text-white'
                     : f === 'pending' ? 'bg-orange-500 text-white'
+                    : f === 'discarded' ? 'bg-red-600 text-white'
                     : 'bg-green-600 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
@@ -595,6 +615,11 @@ function BRRestructure() {
                           ✓ Done
                         </span>
                       )}
+                      {record.is_discarded && (
+                        <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">
+                          ✗ Discarded
+                        </span>
+                      )}
                       {isMerged && (
                         <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
                           {record.restructured_text}
@@ -643,27 +668,39 @@ function BRRestructure() {
                 {/* Actions */}
                 {!isMerged && (
                   <div className="flex justify-end gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleKeepOriginal(record.id) }}
-                      disabled={saving[`keep_${record.id}`]}
-                      className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
-                      {saving[`keep_${record.id}`] ? 'Saving...' : '(A) Keep Original'}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleAutoRestructure(record.id) }}
-                      disabled={saving[`auto_${record.id}`]}
-                      className="px-3 py-1 text-sm bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50"
-                    >
-                      {saving[`auto_${record.id}`] ? 'Processing...' : '(W) Auto-Restructure'}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleSave(record.id) }}
-                      disabled={saving[record.id] || !record.restructured_text}
-                      className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {saving[record.id] ? 'Saving...' : '(D) Save'}
-                    </button>
+                    {record.is_discarded ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRestore(record.id) }}
+                        disabled={saving[`restore_${record.id}`]}
+                        className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 disabled:opacity-50"
+                      >
+                        {saving[`restore_${record.id}`] ? 'Restoring...' : '(R) Restore'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleKeepOriginal(record.id) }}
+                          disabled={saving[`keep_${record.id}`]}
+                          className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+                        >
+                          {saving[`keep_${record.id}`] ? 'Saving...' : '(A) Keep Original'}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDiscard(record.id) }}
+                          disabled={saving[`discard_${record.id}`]}
+                          className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/60 disabled:opacity-50"
+                        >
+                          {saving[`discard_${record.id}`] ? 'Discarding...' : '(W) Discard'}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSave(record.id) }}
+                          disabled={saving[record.id] || !record.restructured_text}
+                          className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {saving[record.id] ? 'Saving...' : '(D) Save'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
