@@ -16,16 +16,19 @@ A modern web application for managing **ASR (Automatic Speech Recognition)** and
 - **Smart Segmentation**: 
   - Silero VAD for natural speech boundaries (≤30s kept whole, >30s split)
   - Fixed-length segmentation (15s/30s/60s/120s intervals)
-- **Whisper Transcription**: On-device transcription using MLX Whisper v2
+  - **Whisper Transcription**: On-device transcription using MLX Whisper v2 (also supports scalable batch Celery tasks)
 - **Waveform Visualization**: Interactive audio player with WaveSurfer.js
-- **Annotation Interface**: Review and correct transcriptions with keyboard shortcuts
-- **Export**: CSV and JSONL formats for training data
+- **Annotation Interface**: Review and correct transcriptions with keyboard shortcuts and **Find & Replace** functionality (Ctrl+H)
+- **Export**: CSV, JSONL, and bundled ZIP formats (processed entirely in background tasks)
 
-### 📝 Text Datasets
-- **Data Collection**: Upload CSV/JSON or manually add records
-- **Annotation**: Review and annotate text data
-- **Validation**: Track completion and quality metrics
-- **Export**: Multiple export formats
+### 📝 Text Datasets & BR Pipeline
+- **Bahasa Rojak Pipeline**: 4-stage automated processing (Detection, Restructuring, Question Generation, Model Responses)
+- **Dashboard Tracking**: Track live completion of Text records precisely through the custom 4-stage pipeline visually on the Dashboard.
+- **Validation Interface**: Rapid keyboard shortcuts for human validation (navigate, select, generate questions instantly via hotkeys like j/k, P/S, q, a, b, d)
+- **Stage Exports**: Export Stage 2 (Restructure) as CSV and Stage 3 (Questions) as JSONL specifically formatted for model finetuning
+
+### 🛡️ Backup & Maintenance
+- **Automated Backup**: Native `backup.sh` script handles `pg_dump` and `tar` compression locally with custom `rclone` cloud-sync.
 
 ### 🌓 Dark Mode
 - System-wide dark mode toggle
@@ -116,9 +119,12 @@ DataSupportTool/
 │   └── vite.config.js         # Vite configuration
 ├── data/                      # Auto-created (audio files, uploads)
 ├── scripts/                   # Utility scripts
+│   ├── backup.sh              # Automated database and file tarball backup to Google Drive
 │   ├── init_production_db.py  # Initialize production database
 │   └── start_services.sh      # Start all services
 ├── config.py                  # Configuration
+├── docker-compose.yml         # Container configuration for Postgres/Redis
+├── BACKUP_SETUP.md            # Extensive setup guide for backup automation and config
 ├── requirements.txt           # Python dependencies
 ├── run_api.py                 # Start FastAPI backend
 └── README.md
