@@ -104,3 +104,4 @@ alembic/versions/ab8fd6c9ff22_add_is_discarded_to_brrecordstage.py
 alembic/versions/004_add_system_prompt.py
 *.tar.gz
 backups/data_backup_20260320_203147.tar.gz
+*.sql 
