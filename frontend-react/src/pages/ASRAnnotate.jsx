@@ -62,6 +62,12 @@ function ASRAnnotate() {
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState('asc')
 
+  // find & replace
+  const [showFindReplace, setShowFindReplace] = useState(false)
+  const [findText, setFindText] = useState('')
+  const [replaceText, setReplaceText] = useState('')
+  const [caseSensitive, setCaseSensitive] = useState(false)
+
   const cur = files[idx]
 
   // wavesurfer
@@ -279,6 +285,30 @@ function ASRAnnotate() {
   function onKeyDown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); markComplete() }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save() }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'h') { e.preventDefault(); setShowFindReplace(prev => !prev) }
+  }
+
+  // Find & Replace helpers
+  const matchCount = (() => {
+    if (!findText || !transcript) return 0
+    try {
+      const flags = caseSensitive ? 'g' : 'gi'
+      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return (transcript.match(new RegExp(escaped, flags)) || []).length
+    } catch {
+      return 0
+    }
+  })()
+
+  function doReplaceAll() {
+    if (!findText) return
+    try {
+      const flags = caseSensitive ? 'g' : 'gi'
+      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      setTranscript(prev => prev.replace(new RegExp(escaped, flags), replaceText))
+    } catch {
+      // ignore invalid regex
+    }
   }
 
   // global keyboard shortcuts
@@ -618,9 +648,16 @@ function ASRAnnotate() {
                   <div className="flex items-center justify-between mt-4">
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+S</kbd> save · 
-                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+Enter</kbd> complete
+                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+Enter</kbd> complete · 
+                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+H</kbd> find/replace
                     </div>
                     <div className="flex space-x-2">
+                      <button onClick={() => setShowFindReplace(prev => !prev)}
+                        className={`px-4 py-2 border rounded-lg transition ${showFindReplace
+                          ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300'
+                          : 'border-gray-300 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                        🔍 Find & Replace
+                      </button>
                       <button onClick={save} disabled={saving}
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
                         {saving ? 'Saving...' : 'Save'}
@@ -631,6 +668,49 @@ function ASRAnnotate() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Find & Replace Panel */}
+                  {showFindReplace && (
+                    <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold text-amber-900 dark:text-amber-200">🔍 Find & Replace</h3>
+                        <button onClick={() => setShowFindReplace(false)}
+                          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 text-sm">✕ Close</button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Find</label>
+                          <input type="text" value={findText} onChange={e => setFindText(e.target.value)}
+                            placeholder="Word to find..."
+                            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-amber-500" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Replace with</label>
+                          <input type="text" value={replaceText} onChange={e => setReplaceText(e.target.value)}
+                            placeholder="Replacement text..."
+                            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-amber-500" />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300 cursor-pointer">
+                            <input type="checkbox" checked={caseSensitive} onChange={e => setCaseSensitive(e.target.checked)}
+                              className="w-4 h-4 text-amber-600 rounded" />
+                            Case sensitive
+                          </label>
+                          {findText && (
+                            <span className="text-sm text-amber-600 dark:text-amber-400">
+                              {matchCount} match{matchCount !== 1 ? 'es' : ''} found
+                            </span>
+                          )}
+                        </div>
+                        <button onClick={doReplaceAll} disabled={!findText || matchCount === 0}
+                          className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                          Replace All ({matchCount})
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* record navigation */}

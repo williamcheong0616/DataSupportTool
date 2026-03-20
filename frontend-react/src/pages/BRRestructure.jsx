@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { runBRStage2, mergeBRRecords, getBRStageProgress, getBRPipelineStatus, getBRRestructureRecords, updateBRRestructure, autoRestructureBR } from '../api'
+import { runBRStage2, mergeBRRecords, getBRStageProgress, getBRPipelineStatus, getBRRestructureRecords, updateBRRestructure, exportBRRestructureCSV, autoRestructureBR } from '../api'
 
 function BRRestructure() {
   const { pipelineId } = useParams()
@@ -351,6 +351,24 @@ function BRRestructure() {
     )
   }
 
+  const handleExportCSV = async () => {
+    try {
+      const res = await exportBRRestructureCSV(pipelineId)
+      const blob = new Blob([res.data], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `pipeline_${pipelineId}_restructure.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export CSV:', err)
+      alert('Failed to export CSV: ' + (err.message || ''))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6" ref={containerRef}>
       <div className="max-w-7xl mx-auto">
@@ -365,6 +383,12 @@ function BRRestructure() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportCSV}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
+              📥 Export CSV
+            </button>
             <button
               onClick={() => setShowRerunModal(true)}
               disabled={rerunning}

@@ -828,6 +828,57 @@ def get_restructure_records(
     )
 
 
+@router.get("/restructure/{pipeline_run_id}/export-csv")
+def export_restructure_csv(
+    pipeline_run_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Export restructured text records as CSV.
+    Only includes non-discarded records classified as Bahasa Rojak.
+    """
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    # Get relevant records
+    record_stages = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.is_discarded == False
+    ).order_by(BRRecordStage.id).all()
+    
+    # Fetch original text
+    text_record_ids = [rs.text_record_id for rs in record_stages]
+    text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
+    text_map = {tr.id: tr.original_text for tr in text_records}
+    
+    # Build CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['record_id', 'original_text', 'restructured_text'])
+    
+    for rs in record_stages:
+        orig = text_map.get(rs.text_record_id, "")
+        rest = rs.restructured_text if rs.restructured_text else ""
+        writer.writerow([rs.id, orig, rest])
+    
+    # Create streaming response
+    buffer = io.BytesIO(output.getvalue().encode('utf-8'))
+    
+    return StreamingResponse(
+        buffer,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=pipeline_{pipeline_run_id}_restructure.csv"
+        }
+    )
+
+
 @router.patch("/restructure/{record_stage_id}")
 def update_restructured_text(
     record_stage_id: int,
@@ -1422,6 +1473,61 @@ def batch_generate_questions(
         "status": "queued",
         "message": "Batch question generation queued"
     }
+
+
+@router.get("/questions/{pipeline_run_id}/export-jsonl")
+def export_questions_jsonl(
+    pipeline_run_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Export validated question records as JSONL for fine-tuning.
+    
+    Only includes records where a question has been selected (validated).
+    Each line is a JSON object:
+    {"id": 1, "conversations": [{"role": "user", "content": "<question>"}, {"role": "assistant", "content": "<restructured_text>"}]}
+    """
+    import json
+    from fastapi.responses import StreamingResponse
+    import io
+
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    
+    # Get all validated records (those with a selected question)
+    records = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.selected_question != None,
+        BRRecordStage.restructured_text != None,
+    ).order_by(BRRecordStage.id).all()
+    
+    # Build JSONL content
+    lines = []
+    for idx, record in enumerate(records, start=1):
+        entry = {
+            "id": idx,
+            "conversations": [
+                {"role": "user", "content": record.selected_question},
+                {"role": "assistant", "content": record.restructured_text},
+            ]
+        }
+        lines.append(json.dumps(entry, ensure_ascii=False))
+    
+    content = "\n".join(lines)
+    if content:
+        content += "\n"
+    
+    buffer = io.BytesIO(content.encode("utf-8"))
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": f"attachment; filename=pipeline_{pipeline_run_id}_questions.jsonl"
+        }
+    )
 
 
 # ===== System Prompt Endpoints =====

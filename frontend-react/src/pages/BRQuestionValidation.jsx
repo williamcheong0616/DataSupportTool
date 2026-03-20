@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { runBRStage3, getBRQuestionRecords, generateBRQuestions, generateBRQuestionsBatch, selectBRQuestion, pollBRTask } from '../api'
+import { runBRStage3, getBRQuestionRecords, generateBRQuestions, generateBRQuestionsBatch, selectBRQuestion, exportBRQuestionsJSONL, pollBRTask } from '../api'
 
 function BRQuestionValidation() {
   const { pipelineId } = useParams()
@@ -21,13 +21,92 @@ function BRQuestionValidation() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [jumpPage, setJumpPage] = useState('')
 
+  // Active card index for keyboard navigation
+  const [activeIndex, setActiveIndex] = useState(0)
+  const containerRef = useRef(null)
+  const cardRefs = useRef([])
+
   useEffect(() => {
     fetchRecords()
   }, [pipelineId, page, statusFilter])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    setActiveIndex(0)
   }, [page])
+
+  // Scroll active card into view
+  useEffect(() => {
+    if (cardRefs.current[activeIndex]) {
+      cardRefs.current[activeIndex].scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [activeIndex])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      // Don't capture when typing in input/textarea or if no records
+      const tag = e.target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      const activeRecord = records[activeIndex]
+      if (!activeRecord) return
+
+      switch (e.key.toLowerCase()) {
+        case 'q': { // Generate/Regenerate Questions
+          e.preventDefault()
+          const hasRestructured = activeRecord.restructured_text && activeRecord.restructured_text.trim() !== ''
+          if (!generating[activeRecord.id] && hasRestructured) {
+            handleGenerateQuestions(activeRecord.id)
+          }
+          break
+        }
+        case 'a': { // Select Question 1
+          e.preventDefault()
+          if (activeRecord.generated_questions?.length >= 1 && !saving[activeRecord.id]) {
+            handleSelectQuestion(activeRecord.id, 0)
+          }
+          break
+        }
+        case 'b': { // Select Question 2
+          e.preventDefault()
+          if (activeRecord.generated_questions?.length >= 2 && !saving[activeRecord.id]) {
+            handleSelectQuestion(activeRecord.id, 1)
+          }
+          break
+        }
+        case 'd': { // Select Question 3
+          e.preventDefault()
+          if (activeRecord.generated_questions?.length >= 3 && !saving[activeRecord.id]) {
+            handleSelectQuestion(activeRecord.id, 2)
+          }
+          break
+        }
+        case 's': // Next page
+          e.preventDefault()
+          if (page < totalPages) goToPage(page + 1)
+          break
+        case 'p': // Previous page
+          e.preventDefault()
+          if (page > 1) goToPage(page - 1)
+          break
+        case 'arrowdown':
+        case 'j': // Next card
+          e.preventDefault()
+          setActiveIndex(prev => Math.min(prev + 1, records.length - 1))
+          break
+        case 'arrowup':
+        case 'k': // Previous card
+          e.preventDefault()
+          setActiveIndex(prev => Math.max(prev - 1, 0))
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [records, activeIndex, page, totalPages, generating, saving])
+
 
   const fetchRecords = async () => {
     setLoading(true)
@@ -181,6 +260,24 @@ function BRQuestionValidation() {
     }
   }
 
+  const handleExportJSONL = async () => {
+    try {
+      const res = await exportBRQuestionsJSONL(pipelineId)
+      const blob = new Blob([res.data], { type: 'application/x-ndjson' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `pipeline_${pipelineId}_questions.jsonl`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export JSONL:', err)
+      alert('Failed to export JSONL: ' + (err.message || ''))
+    }
+  }
+
   if (loading && records.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -203,6 +300,12 @@ function BRQuestionValidation() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportJSONL}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
+              📥 Export JSONL
+            </button>
             <button
               onClick={handleRerunStage}
               disabled={rerunning}
@@ -302,6 +405,20 @@ function BRQuestionValidation() {
           </div>
         </div>
 
+        {/* Keyboard Shortcuts Help */}
+        <div className="bg-gray-800 dark:bg-gray-900 rounded-lg shadow p-3 mb-6">
+          <div className="flex items-center gap-4 flex-wrap text-xs text-gray-300">
+            <span className="font-semibold text-gray-100">⌨ Hotkeys (on active block):</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">Q</kbd> Gen/Regen questions</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">A</kbd> Select Q1</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">B</kbd> Select Q2</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">D</kbd> Select Q3</span>
+            <span className="border-l border-gray-600 pl-4"><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">↑</kbd><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono ml-1">↓</kbd> Navigate cards</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">S</kbd> Next page</span>
+            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">P</kbd> Prev page</span>
+          </div>
+        </div>
+
         {/* Status Filter */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Filter:</span>
@@ -324,11 +441,31 @@ function BRQuestionValidation() {
 
         {/* Records */}
         <div className="space-y-4 mb-6">
-          {records.map((record, idx) => (
-            <div key={record.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          {records.map((record, idx) => {
+            const isActive = idx === activeIndex;
+            const isDone = record.selected_question_index !== null && record.selected_question_index !== undefined;
+
+            return (
+            <div 
+              key={record.id} 
+              ref={el => cardRefs.current[idx] = el}
+              onClick={() => setActiveIndex(idx)}
+              className={`rounded-lg shadow p-6 transition-all duration-200 cursor-pointer
+                ${isActive 
+                  ? 'bg-white dark:bg-gray-800 ring-2 ring-indigo-500 scale-[1.01] shadow-lg' 
+                  : isDone
+                    ? 'bg-gray-50 dark:bg-gray-800/60 opacity-70 hover:opacity-90'
+                    : 'bg-white dark:bg-gray-800 hover:shadow-md'
+                }`}
+            >
               <div className="flex items-start gap-4 mb-4">
-                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 w-8">
-                  #{(page - 1) * perPage + idx + 1}
+                <div className="flex items-center gap-2 w-12">
+                  {isActive && (
+                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                  )}
+                  <div className={`text-sm font-medium ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    #{(page - 1) * perPage + idx + 1}
+                  </div>
                 </div>
                 <div className="flex-1">
                   {/* Language Badge */}
@@ -390,46 +527,102 @@ function BRQuestionValidation() {
                       </div>
                     </div>
                     
-                    {record.generated_questions && record.generated_questions.length > 0 ? (
-                      <div className="space-y-2">
-                        {record.generated_questions.map((question, qIdx) => (
-                          <div
-                            key={qIdx}
-                            onClick={() => handleSelectQuestion(record.id, qIdx)}
-                            className={`p-3 rounded border cursor-pointer transition ${
-                              record.selected_question_index === qIdx
-                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-                            } ${saving[record.id] ? 'opacity-50 pointer-events-none' : ''}`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
-                                record.selected_question_index === qIdx
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-                              }`}>
-                                {qIdx + 1}
+                    {generating[record.id] ? (
+                      <div className="py-8 text-center bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
+                        <div className="animate-spin text-3xl mb-2 text-indigo-500">&#9203;</div>
+                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Generating Questions...
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Using local LLM API for restructuring text logic. This may take 6-10 seconds per item.
+                        </div>
+                      </div>
+                    ) : record.generated_questions && record.generated_questions.length > 0 ? (
+                      <div className="space-y-3">
+                        {record.generated_questions.map((question, qIdx) => {
+                          const isSelected = record.selected_question_index === qIdx
+                          const isOtherSelected = record.selected_question_index !== null && record.selected_question_index !== qIdx
+                          const actionLabels = ['A', 'B', 'D']; // For Q1, Q2, Q3
+
+                          return (
+                            <div 
+                              key={qIdx}
+                              className={`p-4 rounded-lg border transition-all ${
+                                isSelected
+                                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-sm'
+                                  : isOtherSelected
+                                    ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60'
+                                    : 'border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold flex-shrink-0 mt-0.5 ${
+                                  isSelected 
+                                    ? 'bg-green-500 text-white' 
+                                    : 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300'
+                                }`}>
+                                  Q{qIdx + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <div className={`text-sm ${
+                                    isSelected 
+                                      ? 'text-green-900 dark:text-green-100 font-medium' 
+                                      : 'text-gray-800 dark:text-gray-200'
+                                  }`}>
+                                    {question}
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  {!saving[record.id] && !isSelected && (
+                                    <button
+                                      onClick={() => handleSelectQuestion(record.id, qIdx)}
+                                      className="px-4 py-1.5 text-xs font-semibold bg-white dark:bg-gray-700 border border-indigo-300 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-50 dark:hover:bg-gray-600 transition-colors"
+                                    >
+                                      ({actionLabels[qIdx] || qIdx + 1}) Select
+                                    </button>
+                                  )}
+                                  {isSelected && (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 rounded-full">
+                                      ✓ Selected
+                                    </span>
+                                  )}
+                                  {saving[record.id] && !isSelected && (
+                                    <span className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400">
+                                      Saving...
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex-1 text-sm text-gray-900 dark:text-white">
-                                {question}
-                              </div>
-                              {record.selected_question_index === qIdx && (
-                                <span className="text-green-600 dark:text-green-400 text-sm">✓ Selected</span>
-                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : (
-                      <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-center text-gray-500 dark:text-gray-400">
-                        No questions generated yet. Click "Generate 3 Questions" to create them.
+                      <div className="py-8 text-center bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 border-dashed">
+                        <div className="text-gray-500 dark:text-gray-400 mb-4">
+                          No questions generated for this record yet.
+                        </div>
+                        <button
+                          onClick={() => handleGenerateQuestions(record.id)}
+                          disabled={generating[record.id] || !record.restructured_text}
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
+                        >
+                          {generating[record.id] ? '(Q) Generating...' : '(Q) Generate Questions'}
+                        </button>
+                        {!record.restructured_text && (
+                          <div className="text-xs text-red-500 mt-2">
+                            Restructured text is required to generate questions. <br/>
+                            Go back to Stage 2 to restructure this record.
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Pagination */}
@@ -450,7 +643,7 @@ function BRQuestionValidation() {
               disabled={page === 1}
               className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Prev
+              (P) Prev
             </button>
             <span className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
               Page {page} of {totalPages}
@@ -460,7 +653,7 @@ function BRQuestionValidation() {
               disabled={page === totalPages}
               className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next
+              (S) Next
             </button>
             <button
               onClick={() => goToPage(totalPages)}
@@ -490,6 +683,17 @@ function BRQuestionValidation() {
             </form>
           </div>
         </div>
+
+        {total === 0 && !loading && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
+            <div className="text-gray-500 dark:text-gray-400 text-lg">
+              No pending questions found for this pipeline.
+            </div>
+            <p className="text-gray-400 dark:text-gray-500 mt-2">
+              If you haven't run Stage 3 yet, click "Rerun Stage 3" above to start generating questions.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

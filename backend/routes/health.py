@@ -14,6 +14,7 @@ from backend.database import get_db, engine
 from backend.models import (
     TextDataset, TextRecord, ASRDataset, AudioFile, TranscriptionStatus
 )
+from backend.br_pipeline_models import BRPipelineRun, BRRecordStage
 from backend.schemas import AnnotationStats
 from config import REDIS_URL
 
@@ -95,9 +96,12 @@ def get_stats(db: Session = Depends(get_db)):
         AnnotationStats: Comprehensive statistics object
     """
     text_records = db.query(TextRecord).count()
-    text_annotated = db.query(TextRecord).filter(
-        TextRecord.is_annotated == True
+    
+    # Calculate pipeline completed across all datasets
+    pipeline_completed = db.query(BRRecordStage).filter(
+        BRRecordStage.model_responses != None
     ).count()
+
     audio_files = db.query(AudioFile).count()
     asr_completed = db.query(AudioFile).filter(
         AudioFile.status == TranscriptionStatus.COMPLETED
@@ -106,7 +110,7 @@ def get_stats(db: Session = Depends(get_db)):
     return {
         "text_datasets": db.query(TextDataset).count(),
         "text_records": text_records,
-        "text_annotated": text_annotated,
+        "text_annotated": pipeline_completed,
         "asr_datasets": db.query(ASRDataset).count(),
         "audio_files": audio_files,
         "asr_completed": asr_completed,
@@ -121,16 +125,26 @@ def get_dataset_stats(db: Session = Depends(get_db)):
     text_datasets = []
     for ds in db.query(TextDataset).all():
         record_count = db.query(TextRecord).filter(TextRecord.dataset_id == ds.id).count()
-        annotated_count = db.query(TextRecord).filter(
-            TextRecord.dataset_id == ds.id,
-            TextRecord.is_annotated == True
-        ).count()
+        latest_run = db.query(BRPipelineRun).filter(
+            BRPipelineRun.dataset_id == ds.id
+        ).order_by(BRPipelineRun.id.desc()).first()
+        
+        annotated_count = 0
+        has_pipeline = False
+        if latest_run:
+            has_pipeline = True
+            annotated_count = db.query(BRRecordStage).filter(
+                BRRecordStage.pipeline_run_id == latest_run.id,
+                BRRecordStage.model_responses != None
+            ).count()
+
         text_datasets.append({
             "id": ds.id,
             "name": ds.name,
-            "record_count": record_count,
+            "record_count": latest_run.total_records if latest_run else record_count,
             "annotated_count": annotated_count,
             "task_type": ds.task_type,
+            "has_pipeline": has_pipeline,
         })
 
     asr_datasets = []

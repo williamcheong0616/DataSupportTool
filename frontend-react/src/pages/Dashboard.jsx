@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react'
-import { getStats, getDatasetStats } from '../api'
+import { Link } from 'react-router-dom'
+import { getStats, getDatasetStats, listBRPipelines } from '../api'
+
+const PIPELINE_STAGES = [
+  { num: 1, key: 'stage_1', path: 'classification', label: 'Classification', icon: '🏷️' },
+  { num: 2, key: 'stage_2', path: 'restructure', label: 'Restructure', icon: '📝' },
+  { num: 3, key: 'stage_3', path: 'questions', label: 'Questions', icon: '❓' },
+  { num: 4, key: 'stage_4', path: 'responses', label: 'Responses', icon: '💬' },
+]
 
 function Dashboard() {
   const [stats, setStats] = useState(null)
   const [datasetStats, setDatasetStats] = useState(null)
+  const [pipelines, setPipelines] = useState({})
   const [selectedType, setSelectedType] = useState('all')
   const [loading, setLoading] = useState(true)
 
@@ -13,14 +22,79 @@ function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const [statsRes, dsRes] = await Promise.all([getStats(), getDatasetStats()])
+      const [statsRes, dsRes, pipelinesRes] = await Promise.all([
+        getStats(), 
+        getDatasetStats(),
+        listBRPipelines().catch(() => ({ data: { pipelines: [] } }))
+      ])
       setStats(statsRes.data)
       setDatasetStats(dsRes.data)
+      
+      const pipelineMap = {}
+      if (pipelinesRes.data?.pipelines) {
+        pipelinesRes.data.pipelines.forEach(p => {
+          if (!pipelineMap[p.dataset_id] || p.id > pipelineMap[p.dataset_id].id) {
+            pipelineMap[p.dataset_id] = p
+          }
+        })
+      }
+      setPipelines(pipelineMap)
     } catch (err) {
       console.error('Failed to fetch stats:', err)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper to render stage progress bar
+  const renderStageProgress = (pipeline) => {
+    if (!pipeline) return null;
+    const currentStage = pipeline.current_stage_num || 1
+    
+    return (
+      <div className="w-48">
+        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-1">
+          <span>Stage {currentStage} of 4</span>
+        </div>
+        <div className="flex gap-1">
+          {PIPELINE_STAGES.map((stage) => {
+            const progress = pipeline.stage_progress?.[stage.key]
+            const pct = progress ? Math.round((progress.done / progress.total) * 100) : 0
+            const isActive = stage.num === currentStage
+            const isComplete = stage.num < currentStage || pct === 100
+            
+            return (
+              <Link
+                key={stage.key}
+                to={`/br-pipeline/${stage.path}/${pipeline.id}`}
+                className={`flex-1 group relative`}
+                title={`${stage.label}: ${progress?.done || 0}/${progress?.total || 0}`}
+              >
+                <div className={`h-2 rounded-full overflow-hidden ${
+                  isActive ? 'bg-amber-200 dark:bg-amber-900/40' : 
+                  isComplete ? 'bg-green-200 dark:bg-green-900/40' : 
+                  'bg-gray-200 dark:bg-gray-700'
+                }`}>
+                  <div 
+                    className={`h-full transition-all ${
+                      isComplete ? 'bg-green-500' : isActive ? 'bg-amber-500' : 'bg-gray-400'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className={`block text-center mt-0.5 text-[10px] ${
+                  isActive ? 'text-amber-600 dark:text-amber-400 font-medium' : 
+                  isComplete ? 'text-green-600 dark:text-green-400' : 
+                  'text-gray-400 dark:text-gray-500'
+                } group-hover:underline`}>
+                  {stage.icon}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -43,6 +117,12 @@ function Dashboard() {
       value: stats?.text_records || 0,
       icon: '📝',
       color: 'bg-green-500',
+    },
+    {
+      title: 'Pipeline Completed',
+      value: stats?.text_annotated || 0,
+      icon: '⚙️',
+      color: 'bg-indigo-500',
     },
     {
       title: 'ASR Datasets',
@@ -115,14 +195,18 @@ function Dashboard() {
                     <div key={ds.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                       <div className="flex-1 min-w-0">
                         <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{ds.name}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{ds.task_type}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {ds.task_type} {ds.has_pipeline === false && '· No pipeline runs'}
+                        </span>
                       </div>
                       <div className="flex items-center gap-4 ml-4">
-                        <span className="text-sm text-gray-600 dark:text-gray-300">{ds.annotated_count}/{ds.record_count} records</span>
-                        <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
+                        {pipelines[ds.id] ? (
+                          renderStageProgress(pipelines[ds.id])
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">
+                            Pipeline Not Started
+                          </span>
+                        )}
                       </div>
                     </div>
                   )

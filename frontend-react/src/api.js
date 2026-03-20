@@ -325,6 +325,11 @@ export const getBRRestructureRecords = (pipelineId, page = 1, perPage = 10, stat
 export const updateBRRestructure = (recordId, data) =>
   api.patch(`/br-pipeline/restructure/${recordId}`, data)
 
+export const exportBRRestructureCSV = (pipelineId) =>
+  api.get(`/br-pipeline/restructure/${pipelineId}/export-csv`, {
+    responseType: 'blob'
+  })
+
 export const autoRestructureBR = (recordId) =>
   api.post(`/br-pipeline/restructure/${recordId}/auto`)
 
@@ -342,6 +347,11 @@ export const selectBRQuestion = (recordId, questionIndex, validatedBy) =>
   api.post(`/br-pipeline/questions/${recordId}/select`, {
     question_index: questionIndex,
     validated_by: validatedBy
+  })
+
+export const exportBRQuestionsJSONL = (pipelineId) =>
+  api.get(`/br-pipeline/questions/${pipelineId}/export-jsonl`, {
+    responseType: 'blob'
   })
 
 // Model responses
