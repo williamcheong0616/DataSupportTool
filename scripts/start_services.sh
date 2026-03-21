@@ -44,6 +44,7 @@ echo "🔄 Starting Celery worker..."
 # macOS: use --pool=solo to avoid fork() crashes with MLX/Metal
 # Linux/production: can use --pool=prefork --concurrency=2
 OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A backend.celery_app:celery_app worker \
+    -n worker_%h \
     --loglevel=info \
     --queues=celery,transcription,br_pipeline \
     --pool=solo \
@@ -54,8 +55,8 @@ echo "  ✅ Celery worker started (PID: $CELERY_PID)"
 # ── 5. Start FastAPI ────────────────────────────────────────
 echo ""
 echo "🌐 Starting FastAPI server..."
-python run_api.py &
-API_PID=$!
+#python run_api.py &
+#API_PID=$!
 sleep 3
 
 echo ""

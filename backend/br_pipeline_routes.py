@@ -1209,15 +1209,15 @@ def get_response_records(
     total = base_query.count()
     
     completed_count = base_query.filter(
-        BRRecordStage.model_responses != None
+        BRRecordStage.completed == True
     ).count()
     
     # Apply status filter for pagination query
     page_filter = base_query
     if status == "pending":
-        page_filter = base_query.filter(BRRecordStage.model_responses == None)
+        page_filter = base_query.filter(BRRecordStage.completed == False)
     elif status == "completed":
-        page_filter = base_query.filter(BRRecordStage.model_responses != None)
+        page_filter = base_query.filter(BRRecordStage.completed == True)
     
     filtered_total = page_filter.count()
     offset = (page - 1) * per_page
@@ -1230,7 +1230,7 @@ def get_response_records(
             restructured_text=rs.restructured_text,
             selected_question=rs.selected_question,
             model_responses=rs.model_responses,
-            completed=rs.model_responses is not None
+            completed=rs.completed
         )
         for rs in record_stages
     ]
@@ -1314,7 +1314,7 @@ def batch_generate_model_responses(
     pending_count = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
         BRRecordStage.selected_question != None,
-        BRRecordStage.model_responses == None,
+        BRRecordStage.completed == False,
     ).count()
     
     if pending_count == 0:

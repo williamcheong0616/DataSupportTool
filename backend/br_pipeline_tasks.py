@@ -151,23 +151,27 @@ def generate_responses_task(self, record_stage_id: int, model_configs: list = No
                     "response": f"Error: {str(e)}",
                     "problems": ["Generation failed"],
                 }
-        
-        # Save results
-        fresh_db = SessionLocal()
-        try:
-            record_stage = fresh_db.query(BRRecordStage).filter(
-                BRRecordStage.id == record_stage_id
-            ).first()
-            if record_stage:
-                record_stage.model_responses = responses
-                record_stage.responses_generated_at = datetime.utcnow()
-                record_stage.completed = True
-                fresh_db.commit()
-        except Exception as e:
-            fresh_db.rollback()
-            raise
-        finally:
-            fresh_db.close()
+            
+            # Save partial results incrementally
+            fresh_db = SessionLocal()
+            try:
+                record_stage = fresh_db.query(BRRecordStage).filter(
+                    BRRecordStage.id == record_stage_id
+                ).first()
+                if record_stage:
+                    existing_responses = record_stage.model_responses or {}
+                    existing_responses.update({model_name: responses[model_name]})
+                    record_stage.model_responses = dict(existing_responses)
+                    
+                    if len(responses) == len(model_configs):
+                        record_stage.responses_generated_at = datetime.utcnow()
+                        record_stage.completed = True
+                    fresh_db.commit()
+            except Exception as e:
+                fresh_db.rollback()
+                logger.error(f"Failed to save partial response for {model_name}: {e}")
+            finally:
+                fresh_db.close()
         
         return {
             "status": "success",
@@ -209,7 +213,7 @@ def batch_generate_responses_task(self, pipeline_run_id: int, model_configs: lis
         pending_records = db.query(BRRecordStage).filter(
             BRRecordStage.pipeline_run_id == pipeline_run_id,
             BRRecordStage.selected_question != None,
-            BRRecordStage.model_responses == None,
+            BRRecordStage.completed == False,
         ).all()
         
         if not pending_records:
@@ -282,25 +286,26 @@ def batch_generate_responses_task(self, pipeline_run_id: int, model_configs: lis
                     logger.info(
                         f"Batch generate '{model_name}': {rd_idx}/{total_rd} records"
                     )
-            
-            # Save partial results after each model
-            fresh_db = SessionLocal()
-            try:
-                for rd in record_data:
+                
+                # Save partial results incrementally per-record
+                fresh_db = SessionLocal()
+                try:
                     record_stage = fresh_db.query(BRRecordStage).filter(
                         BRRecordStage.id == rd["id"]
                     ).first()
                     if record_stage:
-                        record_stage.model_responses = all_responses[rd["id"]]
+                        existing_responses = record_stage.model_responses or {}
+                        existing_responses.update({model_name: all_responses[rd["id"]][model_name]})
+                        record_stage.model_responses = dict(existing_responses)
                         if len(all_responses[rd["id"]]) == len(model_configs):
                             record_stage.responses_generated_at = datetime.utcnow()
                             record_stage.completed = True
-                fresh_db.commit()
-            except Exception as e:
-                fresh_db.rollback()
-                logger.error(f"Failed to save batch responses for model {model_name}: {e}")
-            finally:
-                fresh_db.close()
+                    fresh_db.commit()
+                except Exception as e:
+                    fresh_db.rollback()
+                    logger.error(f"Failed to save partial batch response for record {rd['id']} model {model_name}: {e}")
+                finally:
+                    fresh_db.close()
             
             logger.info(f"Batch generate: completed model '{model_name}'")
         

@@ -35,6 +35,7 @@ function BRModelResponses() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [searchTrigger, setSearchTrigger] = useState(0)
 
   // Similarity
   const [showSimilarity, setShowSimilarity] = useState(false)
@@ -48,12 +49,22 @@ function BRModelResponses() {
   const [savingPrompt, setSavingPrompt] = useState(false)
 
   useEffect(() => {
+    let interval;
     if (searchMode && searchQuery.trim()) {
       runSearch(searchQuery)
+      interval = setInterval(() => {
+        runSearch(searchQuery, true)
+      }, 5000)
     } else if (!searchMode) {
       fetchRecords()
+      interval = setInterval(() => {
+        fetchRecords(true)
+      }, 5000)
     }
-  }, [pipelineId, page, statusFilter, searchMode])
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [pipelineId, page, statusFilter, searchMode, searchTrigger])
   useEffect(() => { fetchAvailableModels() }, [])
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, [page])
 
@@ -78,8 +89,8 @@ function BRModelResponses() {
     setModelsLoading(false)
   }
 
-  async function fetchRecords() {
-    setLoading(true)
+  async function fetchRecords(quiet = false) {
+    if (!quiet) setLoading(true)
     try {
       const res = await getBRResponseRecords(pipelineId, page, perPage, statusFilter)
       setRecords(res.data.records)
@@ -89,9 +100,9 @@ function BRModelResponses() {
       setDsName(res.data.dataset_name || 'dataset')
     } catch (err) {
       console.error('Fetch failed:', err)
-      alert('Failed to load response records')
+      if (!quiet) alert('Failed to load response records')
     }
-    setLoading(false)
+    if (!quiet) setLoading(false)
   }
 
   function getModelConfigs() {
@@ -170,7 +181,7 @@ function BRModelResponses() {
         }
 
         // Refresh records to show partial progress
-        await fetchRecords()
+        await fetchRecords(true)
         await new Promise(r => setTimeout(r, pollInterval))
       }
     } catch (err) {
@@ -255,9 +266,9 @@ function BRModelResponses() {
   }
 
   // --- Search ---
-  async function runSearch(q) {
+  async function runSearch(q, quiet = false) {
     if (!q.trim()) return
-    setSearching(true)
+    if (!quiet) setSearching(true)
     try {
       const res = await searchBRResponses(pipelineId, q, page, perPage)
       setRecords(res.data.records)
@@ -265,14 +276,15 @@ function BRModelResponses() {
       setPages(res.data.total_pages)
       setCompleted(res.data.completed_count)
     } catch (err) {
-      alert('Search failed: ' + (err.response?.data?.detail || err.message))
+      if (!quiet) alert('Search failed: ' + (err.response?.data?.detail || err.message))
     }
-    setSearching(false)
+    if (!quiet) setSearching(false)
   }
 
   async function handleSearch(e) {
     e.preventDefault()
     if (!searchQuery.trim()) return
+    setSearchTrigger(t => t + 1)
     if (searchMode) {
       // Already in search mode - just re-run with potentially new query
       setPage(1)

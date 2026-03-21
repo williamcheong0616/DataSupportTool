@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # Throttle: minimum seconds between consecutive Ollama API calls
 OLLAMA_CALL_DELAY = 0.3
 # After this many calls, force a longer pause to let Ollama GC/recover
-OLLAMA_BATCH_PAUSE_EVERY = 50
-OLLAMA_BATCH_PAUSE_SECS = 3.0
+OLLAMA_BATCH_PAUSE_EVERY = 25
+OLLAMA_BATCH_PAUSE_SECS = 5.0
 
 
 def _create_http_session() -> requests.Session:
@@ -61,8 +61,16 @@ class OllamaService:
         self._call_count += 1
         
         # Periodic longer pause to let Ollama free GPU/CPU resources
-        if self._call_count % OLLAMA_BATCH_PAUSE_EVERY == 0:
-            logger.info(f"Ollama throttle: {self._call_count} calls done, pausing {OLLAMA_BATCH_PAUSE_SECS}s")
+        if self._call_count > 0 and self._call_count % OLLAMA_BATCH_PAUSE_EVERY == 0:
+            logger.info(f"Ollama throttle: {self._call_count} calls done. Flushing model from memory and pausing {OLLAMA_BATCH_PAUSE_SECS}s")
+            
+            # Explicitly drop the model from VRAM/RAM immediately
+            try:
+                flush_payload = {"model": self.model_name, "keep_alive": 0}
+                self._session.post(self.generate_url, json=flush_payload, timeout=10)
+            except Exception as e:
+                logger.warning(f"Failed to send flush request to Ollama: {e}")
+                
             gc.collect()
             time.sleep(OLLAMA_BATCH_PAUSE_SECS)
         
@@ -78,7 +86,9 @@ class OllamaService:
             "stream": False,
             "keep_alive": "10m",
             "options": {
-                "temperature": temperature
+                "temperature": temperature,
+                "num_predict": 300,
+                "num_ctx": 4096
             }
         }
         
