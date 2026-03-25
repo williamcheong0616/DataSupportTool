@@ -538,6 +538,7 @@ def export_text_dataset(
 @router.get("/response-pool")
 def get_response_pool(
     q: Optional[str] = Query(None, description="Search query to filter texts"),
+    type_filter: str = Query("all", description="Filter by type: 'all', 'original_text', or 'model_response'"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -611,9 +612,17 @@ def get_response_pool(
                 "question": stage.selected_question,
             })
 
-    total = len(results)
+    # Compute unfiltered counts for display
     original_count = sum(1 for r in results if r["type"] == "original_text")
-    model_response_count = total - original_count
+    model_response_count = len(results) - original_count
+
+    # Apply type filter
+    if type_filter == "original_text":
+        results = [r for r in results if r["type"] == "original_text"]
+    elif type_filter == "model_response":
+        results = [r for r in results if r["type"] == "model_response"]
+
+    total = len(results)
 
     return {
         "results": results[offset: offset + limit],

@@ -108,9 +108,10 @@ export const getTextRecords = (datasetId, annotated = null, limit = 50, offset =
 export const getTextRecord = (id) => api.get(`/text/records/${id}`)
 export const deleteTextRecord = (id) => api.delete(`/text/records/${id}`)
 
-export const getResponsePool = (q = '', limit = 100, offset = 0) => {
+export const getResponsePool = (q = '', limit = 100, offset = 0, typeFilter = 'all') => {
   const params = new URLSearchParams({ limit, offset })
   if (q) params.append('q', q)
+  if (typeFilter && typeFilter !== 'all') params.append('type_filter', typeFilter)
   return api.get(`/text/response-pool?${params}`)
 }
 

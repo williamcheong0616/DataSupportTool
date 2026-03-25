@@ -59,10 +59,10 @@ function TextResponsePool() {
     })
   }, [])
 
-  const fetchPool = useCallback(async (query, newOffset) => {
+  const fetchPool = useCallback(async (query, newOffset, typeFilter = 'all') => {
     setLoading(true)
     try {
-      const res = await getResponsePool(query, PAGE_SIZE, newOffset)
+      const res = await getResponsePool(query, PAGE_SIZE, newOffset, typeFilter)
       const data = res.data
       if (newOffset === 0) {
         setResults(data.results)
@@ -81,10 +81,11 @@ function TextResponsePool() {
     }
   }, [assignColors])
 
-  // Initial load
+  // Fetch on initial load and when filter changes
   useEffect(() => {
-    fetchPool('', 0)
-  }, [])
+    setOffset(0)
+    fetchPool('', 0, filterType)
+  }, [filterType])
 
   // Debounced search: fires 400 ms after user stops typing
   const handleSearchChange = (e) => {
@@ -94,19 +95,17 @@ function TextResponsePool() {
     debounceRef.current = setTimeout(() => {
       setActiveQuery(val)
       setOffset(0)
-      fetchPool(val, 0)
+      fetchPool(val, 0, filterType)
     }, 400)
   }
 
   const handleLoadMore = () => {
     const newOffset = offset + PAGE_SIZE
     setOffset(newOffset)
-    fetchPool(activeQuery, newOffset)
+    fetchPool(activeQuery, newOffset, filterType)
   }
 
-  const displayed = filterType === 'all'
-    ? results
-    : results.filter(r => r.type === filterType)
+  const displayed = results
 
   return (
     <div>
@@ -156,7 +155,7 @@ function TextResponsePool() {
         </div>
         <select
           value={filterType}
-          onChange={e => setFilterType(e.target.value)}
+          onChange={e => { setFilterType(e.target.value); setOffset(0) }}
           className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
         >
           <option value="all">All types</option>
