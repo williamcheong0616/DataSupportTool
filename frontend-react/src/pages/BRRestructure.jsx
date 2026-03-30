@@ -253,7 +253,6 @@ function BRRestructure() {
       setRecords(prev => prev.map(r => 
         r.id === recordId ? { ...r, is_discarded: true } : r
       ))
-      fetchRecords() // Refresh to apply filters correctly
     } catch (err) {
       console.error('Failed to discard:', err)
       alert('Failed to discard')
@@ -269,7 +268,6 @@ function BRRestructure() {
       setRecords(prev => prev.map(r => 
         r.id === recordId ? { ...r, is_discarded: false } : r
       ))
-      fetchRecords() // Refresh to apply filters correctly
     } catch (err) {
       console.error('Failed to restore:', err)
       alert('Failed to restore')
