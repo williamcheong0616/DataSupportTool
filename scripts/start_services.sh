@@ -6,6 +6,20 @@ set -e
 
 echo "🚀 Starting DataSupportTool Services..."
 
+# ── 0. Set Environment Path ───────────────────────────────────
+# Get the absolute path to the project root (one level up from this script)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+# Change to project root to ensure all commands run correctly
+cd "$PROJECT_ROOT"
+
+# Export PYTHONPATH so Celery and Python can find the 'backend' package
+export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
+echo "  📍 Project Root: $PROJECT_ROOT"
+echo "  🐍 PYTHONPATH:   $PYTHONPATH"
+
+
 # ── 1. Check Docker ──────────────────────────────────────────
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker is not running. Please start Docker first."
