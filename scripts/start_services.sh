@@ -12,14 +12,24 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# ── 2. Start infrastructure (PostgreSQL, Redis, Flower) ──────
+# ── 2. Clean up stale state ───────────────────────────────────
+echo "🧹 Cleaning up existing background processes..."
+pkill -f "celery -A" 2>/dev/null || true
+pkill -f "run_api.py" 2>/dev/null || true
+rm -f celerybeat-schedule*
+sleep 2
+
+echo "🧹 Cleaning up existing containers..."
+docker compose down
+
+# ── 3. Start infrastructure (PostgreSQL, Redis, Flower) ──────
 echo "📦 Starting Docker containers..."
 docker compose up -d
 
 echo "⏳ Waiting for services to be healthy..."
 sleep 5
 
-# ── 3. Check infrastructure health ──────────────────────────
+# ── 4. Check infrastructure health ──────────────────────────
 echo ""
 echo "✅ Infrastructure Status:"
 echo "─────────────────────────"
@@ -38,19 +48,20 @@ else
     exit 1
 fi
 
-# ── 4. Start Celery worker (background) ─────────────────────
+# ── 5. Start Celery worker & beat (background) ────────────────
 echo ""
-echo "🔄 Starting Celery worker..."
+echo "🔄 Starting Celery worker & scheduler (beat)..."
 # macOS: use --pool=solo to avoid fork() crashes with MLX/Metal
 # Linux/production: can use --pool=prefork --concurrency=2
 OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A backend.celery_app:celery_app worker \
+    --beat \
     -n worker_%h \
     --loglevel=info \
     --queues=celery,transcription,br_pipeline \
     --pool=solo \
     &
 CELERY_PID=$!
-echo "  ✅ Celery worker started (PID: $CELERY_PID)"
+echo "  ✅ Celery worker + beat started (PID: $CELERY_PID)"
 
 # ── 5. Start FastAPI ────────────────────────────────────────
 echo ""
@@ -68,7 +79,7 @@ echo "📚 Quick Links:"
 echo "  Frontend:        http://localhost:5173"
 echo "  API Docs:        http://localhost:8000/api/docs"
 echo "  Health Check:    http://localhost:8000/api/health"
-echo "  Flower (Celery): http://localhost:5555"
+echo "  Flower (Celery): http://localhost:5556"
 echo ""
 echo "💡 To stop:"
 echo "  kill $API_PID $CELERY_PID   # Stop API + Celery"

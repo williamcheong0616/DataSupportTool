@@ -210,7 +210,7 @@ def check_stale_transcriptions() -> dict:
         
         stale_files = db.query(AudioFile).filter(
             AudioFile.status == TranscriptionStatus.TRANSCRIBING,
-            AudioFile.updated_at < stale_cutoff
+            AudioFile.created_at < stale_cutoff
         ).all()
         
         requeued = []

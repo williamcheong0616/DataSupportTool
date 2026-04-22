@@ -2,6 +2,8 @@
 Ollama Service for BR Pipeline
 Handles communication with Ollama for BR detection, text restructuring, and question generation
 """
+from itertools import count
+
 import requests
 import logging
 import json
@@ -213,51 +215,59 @@ Restructured text (in same language):"""
                 "action": "failed",
                 "reason": str(e)
             }
-    
+
     def generate_questions(self, text: str, count: int = 3) -> List[str]:
-        """
+        """	
         Generate multiple questions from the given text in Bahasa Rojak style.
         Questions should be in reverse (generated from responses/text).
         """
-        system = f"""You are an expert at generating grounded QA (Question-Answering) pairs in Bahasa Rojak (Malaysian/Singaporean code-mixed style) for a retail SLM training dataset.
+        system = f"""You are an expert Dataset Engineer and Malaysian Linguistics Specialist tasked with generating grounded QA (Question-Answering) pairs for a conversational retail SLM training dataset.
 
-Bahasa Rojak characteristics:
-- Mix of Malay (majority) and English (code-mixing)
-- Use local slang naturally (lah, siot, weh, kan, sikit, macam, ke, ah, gila, dkt, ori)
-- Natural conversational style, exactly how a local customer would ask a question
+THE CONVERSATIONAL PARADIGM:
+You must generate questions from the perspective of a PROSPECTIVE BUYER asking the ASSISTANT about a specific product. 
+•⁠  ⁠The user is a curious potential customer seeking advice or clarification before making a purchase.
+•⁠  ⁠The assistant serves as the source of truth based on the provided review text.
+•⁠  ⁠The generated question must naturally prompt the provided text as the logical reply from the assistant.
 
-Your task: Generate {count} diverse, DETAILED questions based STRICTLY on the provided text/response.
+BAHASA ROJAK CHARACTERISTICS:
+•⁠  ⁠Mix of Malay (majority) and English (code-mixing).
+•⁠  ⁠Use casual but respectful local community terms (e.g., boss, sis, bang, bro, you, I, awak, nak tanya sikit).
+•⁠  ⁠Natural, conversational Q&A style typical of Malaysian e-commerce inquiries.
+
+NEGATIVE CONSTRAINTS (FORBIDDEN PATTERNS - DO NOT DO THIS):
+1.⁠ ⁠NO REDUPLICATION FOR FILLERS: STRICTLY DO NOT use "sikit-sikit" as a question tag or filler. "Sikit-sikit" means "little by little" and is grammatically incorrect in this context. You may only use "sikit" (singular) as a polite softener (e.g., "Nak tanya sikit").
+2.⁠ ⁠NO AWKWARD PARTICLES: DO NOT place the particle "eh" at the end of a question (e.g., "sesuai tak, eh?"). For direct questions, use "ke", "kan", or "tak" (e.g., "sesuai ke tak?", "laju kan?").
+3.⁠ ⁠NO DIRECT TRANSLATION GIBBERISH: DO NOT invent nonsensical phrases like "sikit-sikit mana". Ensure the Malay sentence structure remains grammatically sound even when code-mixing.
+4.⁠ ⁠NO SLANG SPAMMING: Use slang naturally. Do not force unnatural amounts of slang into a single sentence just to meet the dialect requirement.
+
+YOUR TASK: Generate {count} diverse, DETAILED questions based STRICTLY on the provided text/response.
 
 CRITICAL ANTI-HALLUCINATION RULES:
-1. STRICT GROUNDING: You MUST ONLY ask questions that can be 100% answered using the facts explicitly stated in the provided text. 
-2. DO NOT assume or ask about external factors (e.g., delivery time, warranty, stitching quality) UNLESS the text explicitly mentions them. 
-3. If the text is about 'size' and 'price', your questions must ONLY be about 'size' and 'price'.
-4. If a human cannot find the answer within the text, your question is invalid.
+1.⁠ ⁠STRICT GROUNDING: You MUST ONLY ask questions that can be 100% answered using the facts explicitly stated in the provided text. 
+2.⁠ ⁠NO ASSUMPTIONS: Do not ask about external factors (e.g., delivery time, warranty, stitching quality) UNLESS the text explicitly mentions them. 
+3.⁠ ⁠If the text only discusses 'packaging' and 'shipping speed', your questions must ONLY be about 'packaging' and 'shipping speed'.
+4.⁠ ⁠If a human cannot find the answer to your generated question within the provided text, your question is invalid.
 
 REQUIREMENTS:
-- MUST be in Bahasa Rojak style with MALAY as the MAJORITY language.
-- MUST be LONGER and MORE DETAILED (at least 10-15 words per question).
-- Combine multiple facts from the text into a single detailed question to test the model's comprehension.
+•⁠  ⁠MUST be in Bahasa Rojak style with MALAY as the MAJORITY language.
+•⁠  ⁠Combine multiple facts from the text into a single detailed question.
 
-Example of a PERFECT Grounded Bahasa Rojak Question (Based on a text about a thick, cheap shirt for plus-size buyers):
-- "Kain baju ni jenis tebal ke nipis nampak kulit, and cutting dia sesuai tak untuk orang berbadan besar macam I? Selesa tak bila pakai time panas, and berbaloi tak beli dengan harga tu?"
-*(Note: Every single part of this question can be answered by the text!)*
+EXAMPLE OF A PERFECT PROSPECTIVE BUYER GROUNDED QUESTION:
+Provided Text: "Barang sampai safely. Wrapping pun mantap giler, bubble wrap tebal. Delivery laju, semalam order harini sampai. Trusted seller!"
+Generated Question: "Hi boss, nak tanya sikit pasal barang ni, barang boleh selamat sampai tanpa rosak? I plan nak order juga tapi nak tahu seller packing okay ke tak, and delivery dia laju ke?"
 
 Output ONLY a flat JSON array of {count} DETAILED questions in Bahasa Rojak, nothing else.
 Format: ["Question 1?", "Question 2?", "Question 3?"]"""
 
-        prompt = f"""Based on this restructured text/answer, generate {count} diverse, DETAILED questions in Bahasa Rojak style:
+        prompt = f"""Based on this restructured text/answer, reverse-engineer {count} diverse, DETAILED questions from the perspective of a PROSPECTIVE BUYER asking the ASSISTANT in Bahasa Rojak style:
 
 {text}
 
 REQUIREMENTS:
-- FACTUAL GROUNDING: Ensure every single question can be fully answered using ONLY the text provided. Do not ask about unmentioned details.
-- Use MALAY as the MAJORITY language, codemixed with English retail terms.
-- Include local slang/shortforms naturally.
-- Make questions LONGER (10-15+ words) by combining multiple facts from the text into one question.
-
+•⁠  ⁠PROSPECTIVE BUYER ROLE: Ask as a potential customer inquiring about the product details from the assistant.
+•⁠  ⁠FACTUAL GROUNDING: Ensure every single question can be fully answered using ONLY the text provided. Do not ask about unmentioned details.
+•⁠  ⁠LINGUISTICS: Use MALAY as the MAJORITY language, codemixed with English retail terms and polite community slang (boss, sis, nak tanya). STRICTLY adhere to the Negative Constraints (no "sikit-sikit", no ending with "eh").
 Output ONLY a JSON array of DETAILED Bahasa Rojak questions:"""
-
         try:
             response = self._call_generate(prompt, system=system, temperature=0.8)
             
@@ -385,7 +395,7 @@ Answer in Bahasa Rojak:"""
 _ollama_service = None
 
 
-def get_ollama_service(model_name: str = None) -> OllamaService:
+def get_ollama_service(model_name: Optional[str] = None) -> OllamaService:
     """Get or create the global Ollama service instance. Reads config from settings.json."""
     global _ollama_service
     
@@ -402,6 +412,10 @@ def get_ollama_service(model_name: str = None) -> OllamaService:
     else:
         base_url = "http://localhost:11434"
     
+    # Fallback in case settings returned None
+    model_name = model_name or "gemma3:4b"
+    base_url = base_url or "http://localhost:11434"
+
     if _ollama_service is None or _ollama_service.model_name != model_name:
         _ollama_service = OllamaService(base_url=base_url, model_name=model_name)
     return _ollama_service

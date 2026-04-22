@@ -178,3 +178,70 @@ def get_qwen3_status():
             "enabled": settings.get("qwen3_enabled", False),
             "error": str(e),
         }
+
+
+# ==================== DATABASE BACKUP ====================
+
+@router.post("/backup")
+def create_database_backup():
+    """
+    Manually trigger a database backup.
+    
+    Creates a pg_dump SQL file in the sql_backups/ directory.
+    
+    Returns:
+        Backup metadata (filename, size, timestamp)
+    """
+    from backend.services.backup_service import create_backup
+    
+    try:
+        result = create_backup(triggered_by="manual")
+        logger.info(f"Manual backup created: {result['filename']}")
+        return {"message": "Backup created successfully", **result}
+    except Exception as e:
+        logger.error(f"Manual backup failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
+
+
+@router.get("/backups")
+def list_database_backups():
+    """
+    List all available database backups, newest first.
+    
+    Returns:
+        List of backup files with metadata
+    """
+    from backend.services.backup_service import list_backups
+    
+    backups = list_backups()
+    return {"backups": backups, "total": len(backups)}
+
+
+@router.get("/backup/download")
+def download_backup(filename: str = Query(..., description="Backup filename to download")):
+    """
+    Download a specific backup file.
+    
+    Args:
+        filename: Name of the backup file (e.g. db_backup_20260410_180000.sql)
+    
+    Returns:
+        SQL file download
+    """
+    from backend.services.backup_service import BACKUP_DIR
+    from fastapi.responses import FileResponse
+    
+    filepath = BACKUP_DIR / filename
+    
+    # Security: prevent directory traversal
+    if ".." in filename or "/" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Backup file not found")
+    
+    return FileResponse(
+        path=str(filepath),
+        filename=filename,
+        media_type="application/sql",
+    )

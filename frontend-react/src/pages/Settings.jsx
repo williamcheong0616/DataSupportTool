@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import {
   getModelConfig, updateModelConfig,
   getOllamaModels, pullOllamaModel,
-  getWhisperStatus
+  getWhisperStatus,
+  createDatabaseBackup, listDatabaseBackups, downloadDatabaseBackup
 } from '../api'
 
 function Settings() {
@@ -16,11 +17,25 @@ function Settings() {
   const [pullModel, setPullModel] = useState('')
   const [msg, setMsg] = useState(null)
   const [username, setUsername] = useState(() => localStorage.getItem('dst_username') || '')
+  const [backingUp, setBackingUp] = useState(false)
+  const [backups, setBackups] = useState([])
+  const [loadingBackups, setLoadingBackups] = useState(false)
 
   const flash = (text, type = 'success') => {
     setMsg({ text, type })
     setTimeout(() => setMsg(null), 4000)
   }
+
+  const loadBackups = useCallback(async () => {
+    setLoadingBackups(true)
+    try {
+      const res = await listDatabaseBackups()
+      setBackups(res.data.backups || [])
+    } catch (e) {
+      // silently fail - backups list is non-critical
+    }
+    setLoadingBackups(false)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,7 +53,8 @@ function Settings() {
       flash('Failed to load settings', 'error')
     }
     setLoading(false)
-  }, [])
+    loadBackups()
+  }, [loadBackups])
 
   useEffect(() => { load() }, [load])
 
@@ -74,6 +90,35 @@ function Settings() {
   const saveUsername = (val) => {
     setUsername(val)
     localStorage.setItem('dst_username', val)
+  }
+
+  const handleBackup = async () => {
+    setBackingUp(true)
+    try {
+      const res = await createDatabaseBackup()
+      flash(`Backup created: ${res.data.filename} (${res.data.size_human})`)
+      loadBackups()
+    } catch (e) {
+      const detail = e.response?.data?.detail || 'Backup failed'
+      flash(detail, 'error')
+    }
+    setBackingUp(false)
+  }
+
+  const handleDownloadBackup = async (filename) => {
+    try {
+      const res = await downloadDatabaseBackup(filename)
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      flash('Download failed', 'error')
+    }
   }
 
   if (loading) {
@@ -258,6 +303,116 @@ function Settings() {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Database Backup */}
+      <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">💾 Database Backup</h2>
+          <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+            Auto-backup daily at 6:00 PM
+          </span>
+        </div>
+
+        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Create a full SQL dump of the database. Backups are saved to <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">sql_backups/</code> and the last 30 are kept.
+        </p>
+
+        <button
+          onClick={handleBackup}
+          disabled={backingUp}
+          className="px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-colors inline-flex items-center gap-2"
+        >
+          {backingUp ? (
+            <>
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Creating Backup...
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Backup Now
+            </>
+          )}
+        </button>
+
+        {/* Backup History */}
+        {backups.length > 0 && (() => {
+          const scheduledBackups = backups.filter(b => b.filename.includes('_10min_') || b.filename.includes('_30min_'));
+          const standardBackups = backups.filter(b => !b.filename.includes('_10min_') && !b.filename.includes('_30min_'));
+
+          const renderTable = (list) => (
+            <div className="overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Filename</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Size</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {list.slice(0, 10).map((b) => (
+                    <tr key={b.filename} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-4 py-2 font-mono text-xs text-gray-900 dark:text-gray-100">{b.filename}</td>
+                      <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{b.size_human}</td>
+                      <td className="px-4 py-2 text-gray-500 dark:text-gray-400">
+                        {new Date(b.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <button
+                          onClick={() => handleDownloadBackup(b.filename)}
+                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 text-xs font-medium"
+                        >
+                          Download
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {list.length === 0 && (
+                    <tr>
+                      <td colSpan="4" className="px-4 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
+                        No backups found in this category.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+
+          return (
+            <div className="mt-8 space-y-6">
+              {/* Scheduled Frequency Snapshots */}
+              <div>
+                <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  High-Frequency Auto-Snapshots ({scheduledBackups.length} stored)
+                </h3>
+                {renderTable(scheduledBackups)}
+              </div>
+
+              {/* Standard Backups */}
+              <div>
+                <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  Full Backups (Daily & Manual) ({standardBackups.length} stored)
+                </h3>
+                {renderTable(standardBackups)}
+              </div>
+
+              {loadingBackups && (
+                <p className="mt-2 text-xs text-gray-400">Loading backups...</p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Save Button */}

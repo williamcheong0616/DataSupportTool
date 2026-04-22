@@ -12,7 +12,7 @@ celery_app = Celery(
     "data_pipeline",
     broker=REDIS_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["backend.tasks", "backend.br_pipeline_tasks"]
+    include=["backend.tasks", "backend.br_pipeline_tasks", "backend.backup_tasks"]
 )
 
 # Celery configuration
@@ -21,7 +21,7 @@ celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    timezone="UTC",
+    timezone="Asia/Kuala_Lumpur",
     enable_utc=True,
     
     # Task execution
@@ -62,10 +62,27 @@ celery_app.conf.update(
 )
 
 # Periodic tasks (Celery Beat schedule)
+from celery.schedules import crontab
+
 celery_app.conf.beat_schedule = {
     "check-stale-transcriptions": {
         "task": "backend.tasks.check_stale_transcriptions",
         "schedule": 300.0,  # Every 5 minutes
+    },
+    "daily-database-backup": {
+        "task": "backend.backup_tasks.scheduled_backup",
+        "schedule": crontab(hour=18, minute=0),  # 6:00 PM daily (Asia/Kuala_Lumpur)
+        "kwargs": {"frequency": "daily"},
+    },
+    "30min-database-backup": {
+        "task": "backend.backup_tasks.scheduled_backup",
+        "schedule": crontab(minute="*/30"),  # Every 30 minutes
+        "kwargs": {"frequency": "30min"},
+    },
+    "10min-database-backup": {
+        "task": "backend.backup_tasks.scheduled_backup",
+        "schedule": crontab(minute="*/10"),  # Every 10 minutes
+        "kwargs": {"frequency": "10min"},
     },
 }
 

@@ -430,4 +430,12 @@ export const pullOllamaModel = (modelName) =>
   api.post(`/settings/models/ollama/pull?model_name=${encodeURIComponent(modelName)}`)
 export const getWhisperStatus = () => api.get('/settings/models/whisper/status')
 
+// Database Backup
+export const createDatabaseBackup = () => api.post('/settings/backup')
+export const listDatabaseBackups = () => api.get('/settings/backups')
+export const downloadDatabaseBackup = (filename) =>
+  api.get(`/settings/backup/download?filename=${encodeURIComponent(filename)}`, {
+    responseType: 'blob'
+  })
+
 export default api
