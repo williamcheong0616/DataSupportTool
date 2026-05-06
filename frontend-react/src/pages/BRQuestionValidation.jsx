@@ -11,6 +11,10 @@ function BRQuestionValidation() {
   const [generating, setGenerating] = useState({})
   const [validatorName, setValidatorName] = useState(localStorage.getItem('validatorName') || '')
   const [rerunning, setRerunning] = useState(false)
+
+  // Export limit modal
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportLimit, setExportLimit] = useState('')
   
   // Pagination
   const [page, setPage] = useState(1)
@@ -260,14 +264,16 @@ function BRQuestionValidation() {
     }
   }
 
-  const handleExportJSONL = async () => {
+  const handleExportJSONL = async (limit = null) => {
+    setShowExportModal(false)
     try {
-      const res = await exportBRQuestionsJSONL(pipelineId)
+      const res = await exportBRQuestionsJSONL(pipelineId, limit || null)
       const blob = new Blob([res.data], { type: 'application/x-ndjson' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `pipeline_${pipelineId}_questions.jsonl`
+      const suffix = limit ? `_top${limit}` : ''
+      a.download = `pipeline_${pipelineId}_questions${suffix}.jsonl`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -300,12 +306,22 @@ function BRQuestionValidation() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleExportJSONL}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-            >
-              📥 Export JSONL
-            </button>
+            {/* Export JSONL split button */}
+            <div className="flex items-center rounded-lg overflow-hidden shadow-sm">
+              <button
+                onClick={() => handleExportJSONL(null)}
+                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 flex items-center gap-2 text-sm"
+              >
+                📥 Export All JSONL
+              </button>
+              <button
+                onClick={() => { setExportLimit(''); setShowExportModal(true) }}
+                className="px-3 py-2 bg-green-700 text-white hover:bg-green-800 border-l border-green-500 text-sm"
+                title="Export limited amount"
+              >
+                🔢
+              </button>
+            </div>
             <button
               onClick={handleRerunStage}
               disabled={rerunning}
@@ -695,6 +711,56 @@ function BRQuestionValidation() {
           </div>
         )}
       </div>
+
+      {/* Export Limit Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Export Limited JSONL</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Enter how many validated QA pairs to export. Records are ordered by ID (oldest first).
+              You have <span className="font-semibold text-green-600 dark:text-green-400">{validatedCount}</span> validated records.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Number of records</label>
+              <input
+                type="number"
+                min={1}
+                max={validatedCount || 9999}
+                value={exportLimit}
+                onChange={e => setExportLimit(e.target.value)}
+                placeholder={`e.g. 100 (max ${validatedCount})`}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const n = parseInt(exportLimit, 10)
+                    if (n >= 1) handleExportJSONL(n)
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  const n = parseInt(exportLimit, 10)
+                  if (!n || n < 1) { alert('Please enter a valid number'); return }
+                  handleExportJSONL(n)
+                }}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+              >
+                📥 Download {exportLimit ? parseInt(exportLimit, 10) || '?' : '?'} Records
+              </button>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

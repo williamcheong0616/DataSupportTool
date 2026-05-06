@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { runBRStage2, mergeBRRecords, getBRStageProgress, getBRPipelineStatus, getBRRestructureRecords, updateBRRestructure, exportBRRestructureCSV, autoRestructureBR } from '../api'
+import { runBRStage2, mergeBRRecords, getBRStageProgress, getBRPipelineStatus, getBRRestructureRecords, updateBRRestructure, exportBRRestructureCSV, autoRestructureBR, searchBRRestructureRecords } from '../api'
 
 function BRRestructure() {
   const { pipelineId } = useParams()
@@ -37,6 +37,17 @@ function BRRestructure() {
   const containerRef = useRef(null)
   const cardRefs = useRef([])
   const [copiedId, setCopiedId] = useState(null)
+
+  // Search side panel state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searchTotal, setSearchTotal] = useState(0)
+  const [searchPage, setSearchPage] = useState(1)
+  const [searchTotalPages, setSearchTotalPages] = useState(1)
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false)
+  const [lastSearchQuery, setLastSearchQuery] = useState('')
+  const searchInputRef = useRef(null)
 
   // Scroll to top on page change
   useEffect(() => {
@@ -341,6 +352,66 @@ function BRRestructure() {
     }
   }
 
+  // ── Search helpers ────────────────────────────────────────────────────────
+  const handleSearch = async (e) => {
+    if (e) e.preventDefault()
+    const q = searchQuery.trim()
+    if (!q) return
+    setIsSearching(true)
+    setSearchPanelOpen(true)
+    setSearchPage(1)
+    setLastSearchQuery(q)
+    try {
+      const res = await searchBRRestructureRecords(pipelineId, q, 1)
+      setSearchResults(res.data.results)
+      setSearchTotal(res.data.total)
+      setSearchTotalPages(res.data.total_pages)
+    } catch (err) {
+      console.error('Search failed:', err)
+      alert('Search failed: ' + (err.message || ''))
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const loadMoreSearchResults = async (nextPage) => {
+    if (!lastSearchQuery || isSearching) return
+    setIsSearching(true)
+    try {
+      const res = await searchBRRestructureRecords(pipelineId, lastSearchQuery, nextPage)
+      setSearchResults(res.data.results)
+      setSearchTotal(res.data.total)
+      setSearchTotalPages(res.data.total_pages)
+      setSearchPage(nextPage)
+    } catch (err) {
+      console.error('Search page failed:', err)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const navigateToRecord = (result) => {
+    // Navigate to the correct page, then set the active card index
+    setSearchPanelOpen(false)
+    if (result.target_page !== page) {
+      setPage(result.target_page)
+      // activeIndex will be set after records reload — store intended index
+      setTimeout(() => setActiveIndex(result.card_index), 300)
+    } else {
+      setActiveIndex(result.card_index)
+    }
+  }
+
+  const highlightText = (text, query) => {
+    if (!query || !text) return text
+    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-gray-900 dark:text-white rounded px-0.5">{part}</mark>
+        : part
+    )
+  }
+
   if (loading && records.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -521,8 +592,8 @@ function BRRestructure() {
           </div>
         </div>
 
-        {/* Status Filter + Merge Bar */}
-        <div className="flex items-center gap-2 mb-4">
+        {/* Status Filter + Merge Bar + Search */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Filter:</span>
           {['all', 'pending', 'completed', 'discarded'].map(f => (
             <button
@@ -540,6 +611,37 @@ function BRRestructure() {
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
+
+          {/* Search bar */}
+          <form onSubmit={handleSearch} className="flex items-center gap-1 ml-auto">
+            <div className="relative">
+              <span className="absolute inset-y-0 left-2 flex items-center text-gray-400 pointer-events-none text-sm">🔍</span>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search original or restructured text…"
+                className="pl-7 pr-3 py-1.5 text-sm w-72 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSearching || !searchQuery.trim()}
+              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              {isSearching ? '⏳' : 'Search'}
+            </button>
+            {searchPanelOpen && (
+              <button
+                type="button"
+                onClick={() => setSearchPanelOpen(false)}
+                className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Close Panel
+              </button>
+            )}
+          </form>
         </div>
 
         {/* Merge Bar (shown when in merge mode with selections) */}
@@ -808,6 +910,149 @@ function BRRestructure() {
           </div>
         )}
       </div>
+
+      {/* ── Search Side Panel ──────────────────────────────────────────────── */}
+      <div
+        className={`fixed top-0 right-0 h-full w-[420px] max-w-full bg-white dark:bg-gray-800 shadow-2xl z-40 flex flex-col transition-transform duration-300 ease-in-out
+          ${searchPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        {/* Panel Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 bg-indigo-600">
+          <div>
+            <h2 className="text-white font-semibold text-base">Search Results</h2>
+            {lastSearchQuery && (
+              <p className="text-indigo-200 text-xs mt-0.5">
+                "{lastSearchQuery}" — {searchTotal} match{searchTotal !== 1 ? 'es' : ''}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setSearchPanelOpen(false)}
+            className="text-white hover:text-indigo-200 text-xl leading-none p-1"
+            title="Close panel"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Search form inside panel for re-searching */}
+        <form onSubmit={handleSearch} className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search again…"
+            className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={isSearching || !searchQuery.trim()}
+            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {isSearching ? '⏳' : '🔍'}
+          </button>
+        </form>
+
+        {/* Results list */}
+        <div className="flex-1 overflow-y-auto">
+          {isSearching && (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-indigo-500 animate-spin text-2xl mr-3">⏳</div>
+              <span className="text-gray-500 dark:text-gray-400">Searching…</span>
+            </div>
+          )}
+
+          {!isSearching && searchResults.length === 0 && lastSearchQuery && (
+            <div className="text-center py-12">
+              <div className="text-4xl mb-3">🔍</div>
+              <p className="text-gray-500 dark:text-gray-400">No matches found for</p>
+              <p className="font-medium text-gray-700 dark:text-gray-200 mt-1">"{lastSearchQuery}"</p>
+            </div>
+          )}
+
+          {!isSearching && searchResults.map((result) => (
+            <div
+              key={result.id}
+              className="border-b border-gray-100 dark:border-gray-700 px-4 py-4 hover:bg-indigo-50 dark:hover:bg-gray-700/60 transition-colors"
+            >
+              {/* Record meta */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  #{result.global_position}
+                </span>
+                {result.detected_language && (
+                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">
+                    {result.detected_language}
+                  </span>
+                )}
+                {result.was_restructured && (
+                  <span className="px-1.5 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
+                    ✓ Done
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-gray-400">Page {result.target_page}</span>
+              </div>
+
+              {/* Original text snippet */}
+              <div className="mb-2">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Original:</p>
+                <p className="text-xs text-gray-800 dark:text-gray-200 line-clamp-3 leading-relaxed">
+                  {highlightText(result.original_text?.slice(0, 300) + (result.original_text?.length > 300 ? '…' : ''), lastSearchQuery)}
+                </p>
+              </div>
+
+              {/* Restructured text snippet if different */}
+              {result.restructured_text && result.restructured_text !== result.original_text && (
+                <div className="mb-2">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Restructured:</p>
+                  <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 leading-relaxed italic">
+                    {highlightText(result.restructured_text?.slice(0, 200) + (result.restructured_text?.length > 200 ? '…' : ''), lastSearchQuery)}
+                  </p>
+                </div>
+              )}
+
+              {/* Navigate button */}
+              <button
+                onClick={() => navigateToRecord(result)}
+                className="mt-1 w-full px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1"
+              >
+                ✏️ Open &amp; Edit this Record
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Panel Pagination */}
+        {searchTotalPages > 1 && !isSearching && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+            <button
+              onClick={() => loadMoreSearchResults(searchPage - 1)}
+              disabled={searchPage === 1}
+              className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {searchPage} / {searchTotalPages}
+            </span>
+            <button
+              onClick={() => loadMoreSearchResults(searchPage + 1)}
+              disabled={searchPage === searchTotalPages}
+              className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Backdrop overlay when panel is open */}
+      {searchPanelOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 z-30"
+          onClick={() => setSearchPanelOpen(false)}
+        />
+      )}
 
       {/* Rerun Modal */}
       {showRerunModal && (

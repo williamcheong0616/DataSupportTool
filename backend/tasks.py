@@ -422,7 +422,7 @@ def export_asr_dataset_task(self, dataset_id: int, format: str = "csv") -> dict:
             ])
             for f in files:
                 writer.writerow([
-                    f.filename,
+                    f.file_path,
                     f.whisper_transcript,
                     f.qwen3_transcript,
                     f.corrected_transcript,
@@ -434,7 +434,7 @@ def export_asr_dataset_task(self, dataset_id: int, format: str = "csv") -> dict:
             lines = []
             for f in files:
                 lines.append(json.dumps({
-                    "Filename & Location": f.filename,
+                    "Filename & Location": f.file_path,
                     "Whisper Transcription": f.whisper_transcript,
                     "Qwen Transcription": f.qwen3_transcript,
                     "Corrected Transcription": f.corrected_transcript,

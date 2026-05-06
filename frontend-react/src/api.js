@@ -334,6 +334,9 @@ export const exportBRRestructureCSV = (pipelineId) =>
 export const autoRestructureBR = (recordId) =>
   api.post(`/br-pipeline/restructure/${recordId}/auto`)
 
+export const searchBRRestructureRecords = (pipelineId, q, page = 1, perPage = 10) =>
+  api.get(`/br-pipeline/restructure/${pipelineId}/search?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`)
+
 // Question generation & selection
 export const getBRQuestionRecords = (pipelineId, page = 1, perPage = 10, status = 'all') =>
   api.get(`/br-pipeline/questions/${pipelineId}?page=${page}&per_page=${perPage}&status=${status}`)
@@ -350,10 +353,12 @@ export const selectBRQuestion = (recordId, questionIndex, validatedBy) =>
     validated_by: validatedBy
   })
 
-export const exportBRQuestionsJSONL = (pipelineId) =>
-  api.get(`/br-pipeline/questions/${pipelineId}/export-jsonl`, {
+export const exportBRQuestionsJSONL = (pipelineId, limit = null) => {
+  const params = limit ? `?limit=${limit}` : ''
+  return api.get(`/br-pipeline/questions/${pipelineId}/export-jsonl${params}`, {
     responseType: 'blob'
   })
+}
 
 // Model responses
 export const getBRResponseRecords = (pipelineId, page = 1, perPage = 10, status = 'all') =>

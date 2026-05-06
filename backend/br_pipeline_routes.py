@@ -879,6 +879,84 @@ def export_restructure_csv(
     )
 
 
+@router.get("/restructure/{pipeline_run_id}/search")
+def search_restructure_records(
+    pipeline_run_id: int,
+    q: str = Query(..., min_length=1, description="Text to search for in original or restructured text"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """
+    Full-text search across original_text and restructured_text for a pipeline run.
+    Returns matching records with their global position (for page-jump navigation).
+    """
+    pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
+    if not pipeline_run:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+
+    search_term = f"%{q}%"
+
+    # All active BR records for position calculation (ordered same as main listing)
+    all_active = db.query(BRRecordStage).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.is_discarded == False,
+    ).order_by(BRRecordStage.id).all()
+
+    id_to_position = {rs.id: idx + 1 for idx, rs in enumerate(all_active)}  # 1-based
+
+    # Search query (join with TextRecord for original_text)
+    matching_stages = db.query(BRRecordStage).join(
+        TextRecord, TextRecord.id == BRRecordStage.text_record_id
+    ).filter(
+        BRRecordStage.pipeline_run_id == pipeline_run_id,
+        BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.is_discarded == False,
+    ).filter(
+        TextRecord.original_text.ilike(search_term) |
+        BRRecordStage.restructured_text.ilike(search_term)
+    ).order_by(BRRecordStage.id).all()
+
+    total = len(matching_stages)
+    offset = (page - 1) * per_page
+    page_results = matching_stages[offset: offset + per_page]
+
+    text_record_ids = [rs.text_record_id for rs in page_results]
+    text_records = db.query(TextRecord).filter(TextRecord.id.in_(text_record_ids)).all()
+    text_map = {tr.id: tr.original_text for tr in text_records}
+
+    perPage = 10  # must match frontend perPage so page/card index are accurate
+    results = []
+    for rs in page_results:
+        position = id_to_position.get(rs.id, 0)  # global 1-based position
+        target_page = max(1, (position - 1) // perPage + 1)
+        card_index = (position - 1) % perPage
+        results.append({
+            "id": rs.id,
+            "text_record_id": rs.text_record_id,
+            "original_text": text_map.get(rs.text_record_id, ""),
+            "restructured_text": rs.restructured_text,
+            "was_restructured": rs.restructured_text is not None,
+            "detected_language": rs.detected_language,
+            "is_discarded": rs.is_discarded,
+            "global_position": position,
+            "target_page": target_page,
+            "card_index": card_index,
+        })
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "query": q,
+    }
+
+
 @router.patch("/restructure/{record_stage_id}")
 def update_restructured_text(
     record_stage_id: int,
@@ -1073,10 +1151,11 @@ def get_question_records(
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
-    # Only count BR records with restructured text (from Stage 2), excluding merged records
+    # Only count BR records with restructured text (from Stage 2), excluding merged and discarded records
     base_filter = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
         BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.is_discarded == False,
         BRRecordStage.restructured_text != None,
         ~BRRecordStage.restructured_text.like("[MERGED into record #%]")
     )
@@ -1478,6 +1557,7 @@ def batch_generate_questions(
 @router.get("/questions/{pipeline_run_id}/export-jsonl")
 def export_questions_jsonl(
     pipeline_run_id: int,
+    limit: int = Query(None, ge=1, description="Max number of records to export (all if omitted)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -1495,13 +1575,17 @@ def export_questions_jsonl(
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
-    # Get all validated records (those with a selected question)
-    records = db.query(BRRecordStage).filter(
+    # Get validated, non-discarded records (those with a selected question)
+    query = db.query(BRRecordStage).filter(
         BRRecordStage.pipeline_run_id == pipeline_run_id,
         BRRecordStage.is_bahasa_rojak == True,
+        BRRecordStage.is_discarded == False,
         BRRecordStage.selected_question != None,
         BRRecordStage.restructured_text != None,
-    ).order_by(BRRecordStage.id).all()
+    ).order_by(BRRecordStage.id)
+    if limit is not None:
+        query = query.limit(limit)
+    records = query.all()
     
     # Build JSONL content
     lines = []
