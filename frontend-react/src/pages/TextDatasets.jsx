@@ -480,21 +480,46 @@ function TextDatasets() {
                       <span>📊 Columns: {dataset.original_headers.join(', ')}</span>
                     )}
                   </div>
-                  {/* Pipeline Status */}
-                  {pipelines[dataset.id] && (
-                    <div className="flex items-center gap-2 mt-2 text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        pipelines[dataset.id].status === 'completed' 
-                          ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
-                          : pipelines[dataset.id].status === 'running'
-                          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                      }`}>
-                        Pipeline: {pipelines[dataset.id].status}
-                      </span>
-                      <span className="text-gray-500 dark:text-gray-400">
-                        ({pipelines[dataset.id].processed_records}/{pipelines[dataset.id].total_records} classified)
-                      </span>
+                  {/* Annotation or Pipeline Progress */}
+                  {pipelines[dataset.id] ? (
+                    <div className="mt-3 w-72 max-w-full">
+                      {/* Detailed Pipeline Progress */}
+                      {renderStageProgress(pipelines[dataset.id])}
+                      <div className="flex items-center gap-2 mt-2 text-sm">
+                        <span className={`px-2 py-0.5 rounded text-xs ${
+                          pipelines[dataset.id].status === 'completed' 
+                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                            : pipelines[dataset.id].status === 'running'
+                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        }`}>
+                          Pipeline: {pipelines[dataset.id].status}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          ({
+                            pipelines[dataset.id].current_stage_num === 1 
+                              ? `${pipelines[dataset.id].stage_progress?.stage_1?.done || 0}/${pipelines[dataset.id].total_records} classified`
+                              : pipelines[dataset.id].current_stage_num === 2
+                              ? `${pipelines[dataset.id].stage_progress?.stage_2?.done || 0}/${pipelines[dataset.id].total_records} restructured`
+                              : pipelines[dataset.id].current_stage_num === 3
+                              ? `${pipelines[dataset.id].stage_progress?.stage_3?.done || 0}/${pipelines[dataset.id].total_records} questions generated`
+                              : `${pipelines[dataset.id].stage_progress?.stage_4?.done || 0}/${pipelines[dataset.id].total_records} completed`
+                          })
+                        </span>
+                      </div>
+                    </div>
+                  ) : dataset.record_count > 0 && (
+                    <div className="mt-3 w-64 max-w-full">
+                      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        <span>Annotation Progress</span>
+                        <span>{Math.round(((dataset.annotated_count || 0) / dataset.record_count) * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-green-500 h-2 rounded-full transition-all"
+                          style={{ width: `${Math.round(((dataset.annotated_count || 0) / dataset.record_count) * 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
                   )}
                 </div>

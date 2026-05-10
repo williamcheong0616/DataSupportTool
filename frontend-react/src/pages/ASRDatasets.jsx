@@ -530,8 +530,13 @@ function ASRDatasets() {
           {datasets
             .filter(d => !filterText || d.name.toLowerCase().includes(filterText.toLowerCase()))
             .map((dataset) => {
-            const progress = dataset.file_count > 0 
+            const annotationProgress = dataset.file_count > 0 
               ? (dataset.completed_count / dataset.file_count) * 100 
+              : 0
+            
+            const transcribedTotal = (dataset.transcribed_count || 0) + (dataset.completed_count || 0)
+            const transcriptionProgress = dataset.file_count > 0 
+              ? (transcribedTotal / dataset.file_count) * 100 
               : 0
 
             return (
@@ -545,21 +550,36 @@ function ASRDatasets() {
                     <div className="flex space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <span>🎵 {dataset.file_count || 0} files</span>
                       <span>⏳ {dataset.pending_count || 0} pending</span>
-                      <span>✅ {dataset.completed_count || 0} completed</span>
+                      <span>🔄 {dataset.transcribed_count || 0} ready</span>
+                      <span>✅ {dataset.completed_count || 0} annotated</span>
                     </div>
                     
-                    {/* Progress Bar */}
+                    {/* Progress Bars */}
                     {dataset.file_count > 0 && (
-                      <div className="mt-3">
-                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                          <span>Progress</span>
-                          <span>{progress.toFixed(0)}%</span>
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            <span>Transcription Progress</span>
+                            <span>{transcriptionProgress.toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${transcriptionProgress}%` }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full transition-all"
-                            style={{ width: `${progress}%` }}
-                          ></div>
+                        <div>
+                          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            <span>Annotation Progress</span>
+                            <span>{annotationProgress.toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all"
+                              style={{ width: `${annotationProgress}%` }}
+                            ></div>
+                          </div>
                         </div>
                       </div>
                     )}

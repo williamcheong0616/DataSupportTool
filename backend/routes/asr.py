@@ -61,6 +61,10 @@ def list_asr_datasets(db: Session = Depends(get_db)):
             AudioFile.dataset_id == ds.id,
             AudioFile.status.in_([TranscriptionStatus.PENDING, TranscriptionStatus.TRANSCRIBING])
         ).count()
+        transcribed_count = db.query(AudioFile).filter(
+            AudioFile.dataset_id == ds.id,
+            AudioFile.status.in_([TranscriptionStatus.TRANSCRIBED, TranscriptionStatus.ANNOTATING])
+        ).count()
         completed_count = db.query(AudioFile).filter(
             AudioFile.dataset_id == ds.id,
             AudioFile.status == TranscriptionStatus.COMPLETED
@@ -69,6 +73,7 @@ def list_asr_datasets(db: Session = Depends(get_db)):
             **ds.__dict__,
             "file_count": file_count,
             "pending_count": pending_count,
+            "transcribed_count": transcribed_count,
             "completed_count": completed_count,
         })
     return result

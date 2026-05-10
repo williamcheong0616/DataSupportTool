@@ -95,6 +95,7 @@ class ASRDatasetResponse(BaseModel):
     description: Optional[str]
     file_count: int = 0
     pending_count: int = 0
+    transcribed_count: int = 0
     completed_count: int = 0
     created_by: Optional[str] = None
     created_at: datetime

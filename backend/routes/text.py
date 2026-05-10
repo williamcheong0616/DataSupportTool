@@ -213,22 +213,45 @@ async def upload_text_data(
         else:
             selected_col = headers[0]
     
-    # Add records
+    # Build a set of original_text values already in this dataset so we can
+    # skip duplicates on upload.  We never overwrite an existing record — the
+    # annotated copy (if any) is always the one that stays.
+    existing_texts: set = {
+        r.original_text
+        for r in db.query(TextRecord.original_text)
+                    .filter(TextRecord.dataset_id == dataset_id)
+                    .all()
+    }
+
     records_added = 0
+    records_skipped = 0
     for _, row in df.iterrows():
+        text_value = str(row[selected_col])
+
+        # Skip rows that are already present in this dataset
+        if text_value in existing_texts:
+            records_skipped += 1
+            continue
+
         # Sanitize raw_data: replace NaN/Inf with None for PostgreSQL JSON compatibility
         raw = row.to_dict()
         raw = {k: (None if pd.isna(v) or (isinstance(v, float) and not math.isfinite(v)) else v) for k, v in raw.items()}
         record = TextRecord(
             dataset_id=dataset_id,
-            original_text=str(row[selected_col]),
+            original_text=text_value,
             raw_data=raw,
         )
         db.add(record)
+        existing_texts.add(text_value)   # prevent intra-file duplicates too
         records_added += 1
-    
+
     db.commit()
-    return {"message": f"Added {records_added} records", "headers": headers}
+    return {
+        "message": f"Added {records_added} records ({records_skipped} duplicates skipped)",
+        "headers": headers,
+        "records_added": records_added,
+        "records_skipped": records_skipped,
+    }
 
 
 # ==================== RECORD LISTING ====================
