@@ -1,752 +1,493 @@
 # DataSupportTool 🎙️📝
 
-A modern web application for managing **ASR (Automatic Speech Recognition)** and **Text** annotation workflows. Create datasets, transcribe audio with Whisper, annotate transcriptions, and export training data—all with a beautiful dark mode interface.
+A self-hosted web platform for building annotated NLP training datasets. Supports two end-to-end workflows: **ASR (speech recognition)** annotation with dual-engine transcription, and a **5-stage Bahasa Rojak pipeline** combining LLM automation with human-in-the-loop validation.
 
 **Tech Stack:**
-- **Frontend**: React 18 + Vite + Tailwind CSS + Dark Mode
-- **Backend**: FastAPI + SQLAlchemy + SQLite
-- **Audio Processing**: MLX Whisper (Apple Silicon optimized), Silero VAD, WaveSurfer.js
-- **Task Queue**: Celery + Redis (optional for async processing)
+- **Frontend**: React 18 + Vite + Tailwind CSS (built SPA served by FastAPI)
+- **Backend**: FastAPI + SQLAlchemy + PostgreSQL
+- **ASR Engines**: Whisper (MLX / standard) + Qwen3 ASR — run in parallel via Celery
+- **LLM Inference**: Ollama (local) or any OpenAI-compatible endpoint
+- **Task Queue**: Celery + Redis (required for async transcription and pipeline tasks)
+- **Infrastructure**: Docker Compose (PostgreSQL 16, Redis 7, Flower monitor)
+
+---
 
 ## ✨ Features
 
-### 🎙️ ASR (Speech Recognition) Datasets
-- **Audio Upload**: Upload MP3, WAV, M4A, FLAC files
-- **YouTube Import**: Direct import from YouTube URLs with auto-segmentation
-- **Smart Segmentation**: 
-  - Silero VAD for natural speech boundaries (≤30s kept whole, >30s split)
-  - Fixed-length segmentation (15s/30s/60s/120s intervals)
-  - **Whisper Transcription**: On-device transcription using MLX Whisper v2 (also supports scalable batch Celery tasks)
-- **Waveform Visualization**: Interactive audio player with WaveSurfer.js
-- **Annotation Interface**: Review and correct transcriptions with keyboard shortcuts and **Find & Replace** functionality (Ctrl+H)
-- **Export**: CSV, JSONL, and bundled ZIP formats (processed entirely in background tasks)
+### 🎙️ ASR Annotation
+- Upload MP3, WAV, M4A, FLAC files or import directly from YouTube (via yt-dlp)
+- **Silero VAD segmentation** — natural speech boundaries (≤30 s kept whole, >30 s split)
+- **Dual transcription**: Whisper + Qwen3 ASR run in parallel as background Celery tasks
+- **WaveSurfer.js annotation UI** — waveform visualisation, speed control, Find & Replace (`Ctrl+H`)
+- Export as **CSV**, **JSONL**, or **ZIP** (audio + annotations bundled)
 
-### 📝 Text Datasets & BR Pipeline
-- **Bahasa Rojak Pipeline**: 4-stage automated processing (Detection, Restructuring, Question Generation, Model Responses)
-- **Dashboard Tracking**: Track live completion of Text records precisely through the custom 4-stage pipeline visually on the Dashboard.
-- **Validation Interface**: Rapid keyboard shortcuts for human validation (navigate, select, generate questions instantly via hotkeys like j/k, P/S, q, a, b, d)
-- **Stage Exports**: Export Stage 2 (Restructure) as CSV and Stage 3 (Questions) as JSONL specifically formatted for model finetuning
+### 📝 Text Annotation & BR Pipeline
+- Upload CSV / JSON text datasets and annotate Bahasa Rojak flag, classification, and questions
+- **5-stage automated pipeline**: BR Detection → Restructuring → Question Generation → Human Validation → Model Responses
+- **Dashboard** shows live per-dataset pipeline completion progress
+- **Keyboard-driven validation UI** — process 60–100 records/hour with `j/k`, `1/2/3`, `q`, `g` hotkeys
+- Export Stage 2 as **CSV**, Stage 3 as **JSONL** (fine-tuning ready)
 
-### 🛡️ Backup & Maintenance
-- **Automated Backup**: Native `backup.sh` script handles `pg_dump` and `tar` compression locally with custom `rclone` cloud-sync.
+### 🛡️ Operations
+- **Automated backup**: `scripts/backup.sh` — `pg_dump` + `rclone` cloud sync
+- **Celery Beat** scheduled tasks: daily backup, 30-min incremental, stale transcription cleanup
+- **Flower** task monitor at `http://localhost:5556`
+- **Dark mode** — system-wide toggle, persisted in `localStorage`
 
-### 🌓 Dark Mode
-- System-wide dark mode toggle
-- Persistent preference with localStorage
-- Eye-friendly design for extended annotation sessions
+---
 
 ## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                    REACT FRONTEND (Vite + Tailwind)               │
-│  ┌──────────┐ ┌────────────┐ ┌────────────┐ ┌─────────────┐    │
-│  │Dashboard │ │ASR Datasets│ │Text Datasets│ │Dark Mode 🌓 │    │
-│  │          │ │  Annotate  │ │  Annotate   │ │             │    │
-│  └──────────┘ └────────────┘ └────────────┘ └─────────────┘    │
-└──────────────────────────────────────────────────────────────────┘
-                              │ HTTP/REST
-                              ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                      FASTAPI BACKEND                              │
-│  ┌────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐  │
-│  │Dataset │ │Audio File│ │Transcribe│ │YouTube │ │Task Queue│  │
-│  │  API   │ │   API    │ │   API    │ │  API   │ │  Status  │  │
-│  └────────┘ └──────────┘ └──────────┘ └────────┘ └──────────┘  │
-└──────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                     AUDIO PROCESSING PIPELINE                     │
-│                                                                   │
-│   ┌──────────────┐    ┌──────────────┐    ┌─────────────┐      │
-│   │ YouTube DL   │───▶│  Silero VAD  │───▶│MLX Whisper  │      │
-│   │ (yt-dlp)     │    │ Segmentation │    │Transcription│      │
-│   └──────────────┘    └──────────────┘    └─────────────┘      │
-│                                                    │              │
-│                                                    ▼              │
-│                                              ┌──────────┐        │
-│                                              │SQLite DB │        │
-│                                              └──────────┘        │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│         Browser  (React 18 SPA — served by FastAPI /*           │
+│  Dashboard · ASR Datasets · Text Datasets · BR Pipeline         │
+│  ASR Annotate · BR Classification/Restructure/Questions/Responses│
+└──────────────────────────────┬──────────────────────────────────┘
+                               │  HTTP / REST  (/api/*)
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   FastAPI  (port 8000)                           │
+│  /api/health   /api/stats                                        │
+│  /api/asr/*    /api/text/*    /api/br-pipeline/*                │
+│  /api/settings/*                                                 │
+│  /*  → serves React SPA (frontend-react/dist/)                  │
+└──────────────┬──────────────────────────────┬───────────────────┘
+               │ SQLAlchemy ORM               │ Celery tasks
+               ▼                              ▼
+┌─────────────────────┐         ┌─────────────────────────────────┐
+│  PostgreSQL  :5432  │         │  Redis  :6379 (broker + result) │
+└─────────────────────┘         └──────────────────┬──────────────┘
+                                                   │
+                                        ┌──────────▼──────────┐
+                                        │    Celery Worker     │
+                                        │  + Beat scheduler    │
+                                        │  queues:             │
+                                        │    celery            │
+                                        │    transcription     │
+                                        │    br_pipeline       │
+                                        └─────────────────────┘
 ```
+
+---
 
 ## 📁 Project Structure
 
 ```
 DataSupportTool/
 ├── backend/
-│   ├── routes/                # API routes organized by domain
-│   │   ├── __init__.py
-│   │   ├── health.py          # Health check and statistics
-│   │   ├── text.py            # Text annotation routes
-│   │   └── asr.py             # ASR annotation routes
-│   ├── utils/                 # Utility functions
-│   │   ├── __init__.py
-│   │   └── helpers.py         # Helper functions (clean_nan_values, etc.)
-│   ├── __init__.py
-│   ├── api.py                 # Main FastAPI app (assembles routers)
-│   ├── audio_segment.py       # VAD segmentation logic (Silero)
-│   ├── br_pipeline_models.py  # BR Pipeline database models
-│   ├── br_pipeline_orchestrator.py # BR Pipeline orchestrator
-│   ├── br_pipeline_routes.py  # BR Pipeline API routes
-│   ├── celery_app.py          # Celery task queue config
-│   ├── database.py            # SQLAlchemy setup
-│   ├── models.py              # Database models (ASR + Text)
-│   ├── schemas.py             # Pydantic schemas
-│   ├── ollama_service.py      # Ollama LLM service
-│   ├── setup_ollama.py        # Ollama setup utility
-│   ├── tasks.py               # Async background tasks
-│   ├── whisper.py             # MLX Whisper transcription
-│   └── youtube_service.py     # YouTube download service
+│   ├── routes/
+│   │   ├── asr.py                  # ASR annotation endpoints
+│   │   ├── text.py                 # Text annotation endpoints
+│   │   ├── health.py               # Health + stats
+│   │   └── settings.py             # Model config + backup
+│   ├── services/
+│   │   ├── transcription_service.py
+│   │   └── backup_service.py
+│   ├── utils/
+│   │   ├── logger.py               # JSON structured logging
+│   │   └── helpers.py
+│   ├── middleware/
+│   │   └── logging_middleware.py   # Request/response logging + X-Request-ID
+│   ├── api.py                      # App factory, router assembly, SPA mount
+│   ├── models.py                   # SQLAlchemy models (ASR + Text + Pipeline)
+│   ├── br_pipeline_models.py       # BR Pipeline DB models
+│   ├── br_pipeline_routes.py       # BR Pipeline API router
+│   ├── br_pipeline_orchestrator.py # Stage orchestration logic
+│   ├── br_pipeline_tasks.py        # Celery tasks for BR stages
+│   ├── br_pipeline_schemas.py      # Pydantic schemas (BR)
+│   ├── celery_app.py               # Celery + Beat config
+│   ├── database.py                 # Engine + session factory
+│   ├── enums.py                    # Shared enumerations
+│   ├── schemas.py                  # Pydantic schemas (ASR + Text)
+│   ├── tasks.py                    # Celery tasks (ASR transcription, export)
+│   ├── audio_segment.py            # Silero VAD segmentation
+│   ├── whisper.py                  # Whisper transcription wrapper
+│   ├── qwen3_asr.py                # Qwen3 ASR wrapper
+│   ├── ollama_service.py           # Ollama LLM client
+│   ├── youtube_service.py          # yt-dlp download wrapper
+│   └── similarity.py               # Cosine similarity utility
 ├── frontend-react/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── Dashboard.jsx       # Main dashboard
-│   │   │   ├── ASRDatasets.jsx     # ASR dataset manager
-│   │   │   ├── ASRAnnotate.jsx     # Audio annotation UI
-│   │   │   ├── TextDatasets.jsx    # Text dataset manager
-│   │   │   ├── TextAnnotate.jsx    # Text annotation UI
-│   │   │   ├── BRClassification.jsx # BR Pipeline: Stage 1
-│   │   │   ├── BRRestructure.jsx   # BR Pipeline: Stage 2
-│   │   │   ├── BRQuestionValidation.jsx # BR Pipeline: Stage 3
-│   │   │   ├── BRModelResponses.jsx # BR Pipeline: Stage 4
-│   │   │   └── BRPipelineResults.jsx # BR Pipeline: Results
-│   │   ├── App.jsx            # Main app with dark mode
-│   │   ├── api.js             # API client
-│   │   └── index.css          # Tailwind + dark mode styles
-│   ├── package.json           # Node dependencies
-│   └── vite.config.js         # Vite configuration
-├── data/                      # Auto-created (audio files, uploads)
-├── scripts/                   # Utility scripts
-│   ├── backup.sh              # Automated database and file tarball backup to Google Drive
-│   ├── init_production_db.py  # Initialize production database
-│   └── start_services.sh      # Start all services
-├── config.py                  # Configuration
-├── docker-compose.yml         # Container configuration for Postgres/Redis
-├── BACKUP_SETUP.md            # Extensive setup guide for backup automation and config
-├── requirements.txt           # Python dependencies
-├── run_api.py                 # Start FastAPI backend
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── ASRDatasets.jsx
+│   │   │   ├── ASRAnnotate.jsx
+│   │   │   ├── TextDatasets.jsx
+│   │   │   ├── TextAnnotate.jsx
+│   │   │   ├── TextResponsePool.jsx
+│   │   │   ├── BRClassification.jsx    # Stage 1
+│   │   │   ├── BRRestructure.jsx       # Stage 2
+│   │   │   ├── BRQuestionValidation.jsx# Stage 3 + 4
+│   │   │   ├── BRModelResponses.jsx    # Stage 5
+│   │   │   ├── BRPipelineResults.jsx
+│   │   │   ├── BRPipelineValidation.jsx
+│   │   │   └── Settings.jsx
+│   │   ├── utils/
+│   │   │   └── logger.js               # Frontend request logger
+│   │   ├── api.js                      # Centralised Axios API client
+│   │   ├── App.jsx                     # Router + nav shell
+│   │   └── main.jsx
+│   ├── dist/                           # Production build output (gitignored)
+│   ├── package.json
+│   └── vite.config.js
+├── alembic/                            # DB migration scripts
+├── scripts/
+│   ├── start_services.sh               # One-shot startup (Docker + Celery + FastAPI)
+│   ├── backup.sh                       # pg_dump + rclone cloud sync
+│   └── init_production_db.py
+├── docs/
+│   ├── USER_GUIDE.md                   # End-user guide (all workflows, shortcuts)
+│   ├── TECHNICAL_GUIDE.md              # Architecture, API reference, deployment
+│   ├── TECHNICAL_PAPER.md              # Academic system design paper
+│   ├── BACKUP_SETUP.md                 # Backup automation + rclone setup
+│   ├── CLEANUP_SUMMARY.md              # Code cleanup history
+│   └── LOGGING_SETUP.md               # Logging configuration reference
+├── data/                               # Runtime data — audio, uploads, exports (gitignored)
+├── logs/                               # Application logs (gitignored)
+├── sql_backups/                        # Database backup archives
+├── config.py                           # Centralised config (reads .env)
+├── docker-compose.yml                  # PostgreSQL + Redis + Flower
+├── run_api.py                          # Uvicorn launcher
+├── alembic.ini
+├── requirements.txt
+├── .env.example
 └── README.md
 ```
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Python 3.12+** (for backend)
-- **Node.js 18+** (for frontend)
-- **FFmpeg** (for audio processing)
-- **Redis** (optional, for Celery task queue)
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Python | 3.11+ | Use conda env `datasupport` |
+| Node.js | 18 LTS+ | For frontend build |
+| Docker | 24+ | PostgreSQL + Redis + Flower |
+| FFmpeg | any | Audio processing |
 
-### 1. Install Dependencies
+### 1. Configure environment
 
-**Backend (Python):**
 ```bash
-cd DataSupportTool
+cp .env.example .env
+# Edit .env — set DATABASE_URL, REDIS_URL, MODEL_ENDPOINT
+```
+
+Key `.env` variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/data_pipeline` | PostgreSQL DSN |
+| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker |
+| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/1` | Celery results |
+| `API_HOST` | `0.0.0.0` | FastAPI bind host |
+| `API_PORT` | `8000` | FastAPI bind port |
+| `MODEL_ENDPOINT` | `http://localhost:8080/v1/completions` | LLM endpoint (Ollama/vLLM) |
+| `CORS_ORIGINS` | `*` | Restrict in production |
+
+### 2. Install dependencies
+
+```bash
+# Python (use your conda env)
+conda activate datasupport
 pip install -r requirements.txt
+
+# Node.js
+cd frontend-react && npm install && cd ..
 ```
 
-**Frontend (Node.js):**
-```bash
-cd frontend-react
-npm install
-```
-
-**Audio Dependencies:**
-```bash
-# macOS (Homebrew)
-brew install ffmpeg
-
-# Install MLX Whisper (Apple Silicon only)
-pip install mlx-whisper
-```
-
-### 2. Start the Backend API
+### 3. Build the frontend
 
 ```bash
-# From project root
-python run_api.py
+cd frontend-react && npm run build && cd ..
 ```
 
-The API will be available at: **http://localhost:8000**
-- API Docs: http://localhost:8000/docs
-- Database: `data_pipeline.db` (SQLite, auto-created)
-
-### 3. Start the Frontend (in a new terminal)
+### 4. Start everything
 
 ```bash
-cd frontend-react
-npm run dev
+bash scripts/start_services.sh
 ```
 
-The UI will be available at: **http://localhost:3000**
-
-### 4. (Optional) Start Celery Worker for Async Tasks
-
-```bash
-# Terminal 3 - Redis
-redis-server
-
-# Terminal 4 - Celery worker
-celery -A backend.celery_app worker --loglevel=info
-```
-
-## 📋 ASR Workflow
-
-### 1. Create Dataset
-- Navigate to **ASR Datasets** page
-- Click **"+ Create Dataset"**
-- Enter name and optional description
-
-### 2. Add Audio
-Two methods:
-
-**A. Upload Audio Files**
-- Click **"➕ Add Audio"** on a dataset
-- Upload MP3, WAV, M4A, or FLAC files
-- Files are stored in `data/audio/`
-
-**B. Import from YouTube**
-- Enter YouTube URL
-- Choose segmentation mode:
-  - **VAD (natural speech)**: Silero VAD finds speech boundaries
-  - **Fixed-length**: Split into equal intervals (15s/30s/60s/120s)
-- Click **"Import from YouTube"**
-
-### 3. Segment Audio (Optional)
-- Click **"✂️ Segment"** to split long audio files
-- Uses Silero VAD for natural speech boundaries
-- Segments ≤30s kept whole, >30s split into 30s chunks
-
-### 4. Transcribe Audio
-- Click **"🎤 Transcribe All"** to run Whisper v2
-- Transcription runs in background (Celery) or foreground
-- Progress tracked with status badges (pending → transcribing → transcribed)
-
-### 5. Annotate Transcriptions
-- Click **"Annotate"** to open annotation UI
-- Features:
-  - **Waveform visualization** with WaveSurfer.js
-  - **Audio controls**: Play/pause, rewind/forward 5s, speed control (0.5x - 2x)
-  - **Original transcription** (Whisper output)
-  - **Corrected transcription** (editable textarea)
-  - **Keyboard shortcuts**:
-    - `Space`: Play/pause (when not typing)
-    - `Ctrl+S`: Save annotation
-    - `Ctrl+Enter`: Mark complete and move to next file
-  - **Delete/Re-transcribe** buttons in audio player
-
-### 6. Export Dataset
-- Click **CSV** or **JSONL** to download annotated data
-- Formats:
-  ```csv
-  filename,whisper_transcript,corrected_transcript,duration,status
-  audio1.mp3,"Original text","Corrected text",15.2,completed
-  ```
-
-## 🎨 Dark Mode
-
-- Click **☀️/🌙** icon in navbar to toggle
-- Preference saved in localStorage
-- Applies to all pages: Dashboard, ASR Datasets, Text Datasets, Annotations
-
-## 🔧 Configuration
-
-Edit `config.py` or create `.env` file:
-
-```python
-# API Server
-API_HOST = "0.0.0.0"
-API_PORT = 8000
-
-# Database
-DATABASE_URL = "sqlite:///./data_pipeline.db"
-
-# Audio Processing
-AUDIO_UPLOAD_DIR = "./data/audio"
-MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
-
-# Whisper (MLX)
-WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"  # or "tiny", "base", "small", "medium"
-
-# VAD Segmentation
-VAD_THRESHOLD = 0.5           # Voice activity threshold
-MAX_SEGMENT_DURATION = 30     # Max duration before splitting (seconds)
-
-# Celery + Redis (optional)
-CELERY_BROKER_URL = "redis://localhost:6379/0"
-CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
-
-# YouTube Download
-YOUTUBE_DOWNLOAD_DIR = "./data/youtube"
-```
-
-## 📊 API Endpoints
-
-### ASR Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/asr/datasets` | List all ASR datasets |
-| POST | `/api/asr/datasets` | Create new ASR dataset |
-| DELETE | `/api/asr/datasets/{id}` | Delete ASR dataset |
-| POST | `/api/asr/datasets/{id}/upload` | Upload audio files |
-| POST | `/api/asr/datasets/{id}/youtube` | Import from YouTube |
-| POST | `/api/asr/datasets/{id}/segment` | Segment all audio files (VAD) |
-| POST | `/api/asr/datasets/{id}/transcribe` | Batch transcribe all files |
-| GET | `/api/asr/datasets/{id}/export` | Export dataset (CSV/JSONL) |
-| GET | `/api/asr/datasets/{id}/files` | Get audio files in dataset |
-| GET | `/api/asr/files/{id}` | Get audio file metadata |
-| GET | `/api/asr/files/{id}/audio` | Stream audio file |
-| POST | `/api/asr/files/{id}/transcribe` | Transcribe single file |
-| POST | `/api/asr/files/{id}/retranscribe` | Re-transcribe file (clear + transcribe) |
-| DELETE | `/api/asr/files/{id}` | Delete audio file |
-| POST | `/api/asr/files/{id}/annotate` | Save annotation |
-| PUT | `/api/asr/files/{id}/status` | Update file status |
-
-### Text Dataset Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/text/datasets` | List text datasets |
-| POST | `/api/text/datasets` | Create text dataset |
-| DELETE | `/api/text/datasets/{id}` | Delete text dataset |
-| POST | `/api/text/datasets/{id}/upload` | Upload CSV/JSON |
-| POST | `/api/text/datasets/{id}/records` | Add text record |
-| GET | `/api/text/datasets/{id}/records` | Get records |
-| GET | `/api/text/datasets/{id}/export` | Export dataset |
-| POST | `/api/text/records/{id}/annotate` | Save text annotation |
-
-### Utility Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/stats` | Get statistics (datasets, files, annotations) |
-| GET | `/api/tasks/{id}/status` | Get Celery task status |
-
-## 🛠️ Technology Details
-
-### Audio Processing Pipeline
-
-**1. YouTube Import (yt-dlp)**
-```bash
-# Automatically downloads best quality audio
-# Converts to WAV for processing
-# Stores in data/youtube/
-```
-
-**2. Silero VAD Segmentation**
-- **Model**: Silero VAD v4.0 (PyTorch)
-- **Purpose**: Detect speech vs. silence
-- **Algorithm**:
-  1. Split audio into windows (512 samples @ 16kHz)
-  2. Classify each window (voice probability 0-1)
-  3. Merge consecutive speech windows
-  4. Keep segments ≤30s whole
-  5. Split segments >30s into 30s chunks (preserves context)
-- **Benefits**: Natural sentence/phrase boundaries vs. arbitrary fixed-length cuts
-
-**3. MLX Whisper Transcription**
-- **Model**: Whisper Large V3 Turbo (Apple Silicon optimized)
-- **Performance**: ~10x faster than original Whisper on M1/M2/M3
-- **Quality**: State-of-the-art ASR accuracy
-- **Output**: Plain text transcription with timestamps
-
-**4. WaveSurfer.js Visualization**
-- **Interactive waveform** rendering
-- **Seek by clicking** waveform
-- **Play/pause/speed controls**
-- **Real-time playhead** tracking
-
-### Database Schema
-
-**ASRDataset**
-- `id`, `name`, `description`, `created_at`
-- Relationships: `audio_files[]`
-
-**AudioFile**
-- `id`, `dataset_id`, `filename`, `filepath`, `duration`
-- `status` (pending → transcribing → transcribed → annotating → completed)
-- `whisper_transcript`, `corrected_transcript`
-- `created_at`, `updated_at`
-
-**TextDataset** (legacy feature)
-- Similar structure for text annotation workflows
-
-## 🧪 Development
-
-### Frontend Development
-```bash
-cd frontend-react
-npm run dev        # Start dev server (http://localhost:3000)
-npm run build      # Production build
-npm run preview    # Preview production build
-```
-
-### Backend Development
-```bash
-# Hot reload enabled by default
-python run_api.py
-
-# Run with custom host/port
-API_HOST=127.0.0.1 API_PORT=9000 python run_api.py
-
-# Database migrations (if needed)
-alembic revision --autogenerate -m "description"
-alembic upgrade head
-```
-
-### Testing Audio Processing Locally
-```python
-from backend.whisper import transcribe_audio
-from backend.audio_segment import segment_audio_file
-
-# Transcribe a file
-result = transcribe_audio("data/audio/sample.mp3")
-print(result["text"])
-
-# Segment a file with VAD
-segments = segment_audio_file("data/audio/sample.mp3", use_vad=True)
-for i, seg in enumerate(segments):
-    print(f"Segment {i}: {seg['start']:.2f}s - {seg['end']:.2f}s")
-```
-
-## 📦 Deployment
-
-### Docker (Coming Soon)
-```bash
-docker-compose up -d
-```
-
-### Manual Deployment
-1. **Build frontend**:
-   ```bash
-   cd frontend-react
-   npm run build
-   # Serve dist/ with nginx or similar
-   ```
-
-2. **Deploy backend**:
-   ```bash
-   pip install -r requirements.txt
-   uvicorn backend.api:app --host 0.0.0.0 --port 8000 --workers 4
-   ```
-
-3. **Start Celery workers** (for async tasks):
-   ```bash
-   celery -A backend.celery_app worker --loglevel=info --concurrency=4
-   ```
-
-## 🐛 Troubleshooting
-
-### "FFmpeg not found"
-```bash
-# Install ffmpeg
-brew install ffmpeg  # macOS
-apt install ffmpeg   # Ubuntu/Debian
-```
-
-### "MLX not supported"
-MLX requires Apple Silicon (M1/M2/M3). For Intel/non-Mac:
-```bash
-# Use standard Whisper instead
-pip install openai-whisper
-# Modify backend/whisper.py to use openai-whisper
-```
-
-### "Waveform not loading"
-- Check browser console for CORS errors
-- Verify audio file exists in `data/audio/`
-- Check file permissions (should be readable by API process)
-
-### "Transcription fails"
-- Check Whisper model is downloaded (happens on first run)
-- Verify audio file format is supported (MP3, WAV, M4A, FLAC)
-- Check available disk space for temp files
-
-## 🎯 Roadmap
-
-- [ ] **Multi-language support** (Whisper supports 99 languages)
-- [ ] **Speaker diarization** (who speaks when)
-- [ ] **Batch export formats** (SRT subtitles, VTT, etc.)
-- [ ] **Cloud storage integration** (S3, GCS)
-- [ ] **Team collaboration** (multi-user annotations)
-- [ ] **Quality metrics** (WER, CER calculation)
-- [ ] **Docker deployment** templates
-
-## 📝 Data Formats
-
-### CSV Export Format (ASR)
-```csv
-filename,whisper_transcript,corrected_transcript,duration,status
-audio1.mp3,"Original text from Whisper","Corrected annotation",15.2,completed
-audio2.mp3,"Another transcription","Fixed version",8.5,completed
-```
-
-### JSONL Export Format (ASR)
-```jsonl
-{"filename":"audio1.mp3","whisper_transcript":"Original text","corrected_transcript":"Corrected annotation","duration":15.2,"status":"completed"}
-{"filename":"audio2.mp3","whisper_transcript":"Another transcription","corrected_transcript":"Fixed version","duration":8.5,"status":"completed"}
-```
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📜 License
-
-MIT License - see LICENSE file for details
+This starts PostgreSQL + Redis via Docker Compose, runs Celery worker + Beat scheduler, then starts FastAPI.
+
+Open **http://localhost:8000** — FastAPI serves both the API and the React SPA.
+
+| URL | What |
+|-----|------|
+| http://localhost:8000 | React SPA (production build) |
+| http://localhost:8000/api/docs | Swagger UI |
+| http://localhost:8000/api/health | Health check |
+| http://localhost:5556 | Flower (Celery monitor) |
+
+> **Development mode** (hot-reload):
+> ```bash
+> docker compose up -d                           # infrastructure
+> conda activate datasupport
+> PYTHONPATH=. celery -A backend.celery_app:celery_app worker \
+>   --beat --pool=solo --loglevel=info \
+>   --queues=celery,transcription,br_pipeline &  # background worker
+> python run_api.py &                            # API at :8000
+> cd frontend-react && npm run dev               # Vite at :3000 (proxies /api to :8000)
+> ```
 
 ---
 
-**Built with ❤️ for the annotation community**
-# Bahasa Rojak (BR) Automated Pipeline
+## 📋 ASR Workflow
 
-## Overview
+```
+Upload / YouTube → Segment (VAD) → Transcribe (Whisper + Qwen3) → Annotate → Export
+```
 
-The BR Pipeline automates the process of detecting Bahasa Rojak (code-mixed text), restructuring content, generating questions, and collecting model responses. This reduces manual work and standardizes the evaluation process.
+| Step | How |
+|------|-----|
+| **1. Create dataset** | ASR Annotation → **+ Create Dataset** |
+| **2. Add audio** | Upload files (MP3/WAV/M4A/FLAC) or **Import YouTube** URL |
+| **3. Segment** | Click **✂ Segment** — Silero VAD splits at natural speech boundaries |
+| **4. Transcribe** | **🎤 Transcribe All** — Whisper + Qwen3 run in parallel via Celery |
+| **5. Annotate** | **Annotate** button — waveform player + editable transcript |
+| **6. Export** | **CSV / JSONL / ZIP** — large exports run as background tasks |
 
-## Pipeline Stages
+### Annotation keyboard shortcuts
 
-### Stage 1: BR Detection (Automated)
-- **Purpose**: Identify if text contains Bahasa Rojak (code-mixing between languages)
-- **Output**: Boolean flag + confidence score
-- **Duration**: ~1-2 seconds per record
+| Shortcut | Action |
+|----------|--------|
+| `Space` | Play / Pause audio |
+| `Ctrl+Left/Right` | Rewind / Forward 5 s |
+| `Ctrl+S` | Save annotation |
+| `Ctrl+Enter` | Save + next file |
+| `Ctrl+H` | Find & Replace |
 
-### Stage 2: Text Restructuring (Automated)
-- **Purpose**: Consolidate MCQ (Multiple Choice Questions) text into a single coherent format
-- **What it does**: 
-  - Extracts question stem
-  - Consolidates options
-  - Removes formatting artifacts
-  - Standardizes structure
-- **Output**: Clean, restructured text
-- **Duration**: ~2-3 seconds per record
+---
 
-### Stage 3: Question Generation (Automated)
-- **Purpose**: Generate 3 diverse questions from the restructured text
-- **Output**: 3 questions per record
-- **Duration**: ~5-10 seconds per record (depends on model)
+## 📝 BR Pipeline Workflow
 
-### Stage 4: Human Validation (Manual)
-- **Purpose**: Human expert selects the best question from the 3 generated
-- **Interface**: Web UI showing:
-  - Original vs restructured text
-  - BR detection result
-  - 3 generated questions (selectable)
-- **Duration**: ~30-60 seconds per record
+```
+Upload text → Stage 1: BR Detection → Stage 2: Restructure →
+Stage 3: Question Generation → Stage 4: Human Validation (select question) →
+Stage 5: Model Responses → Export
+```
 
-### Stage 5: Model Response Generation (Automated)
-- **Purpose**: Generate responses from 3 base models using the selected question
-- **Output**: For each model:
-  - Response text
-  - Identified problems (hallucinations, factual errors, etc.)
-- **Duration**: ~10-20 seconds per record (parallel execution)
+Stages 1–3 and 5 run **automatically** as Celery tasks. Stage 4 requires human input.
 
-## Usage
+| Stage | Automated | Output |
+|-------|-----------|--------|
+| 1. BR Detection | ✅ LLM | `is_bahasa_rojak` flag + confidence |
+| 2. Text Restructuring | ✅ LLM | Consolidated MCQ text |
+| 3. Question Generation | ✅ LLM | 3 candidate questions per record |
+| 4. Human Validation | ❌ Manual | Selected best question |
+| 5. Model Responses | ✅ LLM × N | Response + problems per model |
 
-### 1. Start a Pipeline
+### Stage 4 keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Next / previous record |
+| `1` `2` `3` | Select question |
+| `q` | Generate questions for current record |
+| `g` | Generate model response |
+
+### Exports
+
+| Stage | Format | Use |
+|-------|--------|-----|
+| Stage 2 | CSV | Restructured texts |
+| Stage 3 | JSONL | Fine-tuning instruction dataset |
+| Final | CSV | Full results (question + model responses + problems) |
+
+---
+
+## 📊 API Reference (Summary)
+
+Full reference in [docs/TECHNICAL_GUIDE.md](docs/TECHNICAL_GUIDE.md).
+
+### Health & Stats
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Liveness check |
+| GET | `/api/stats` | Global counts |
+
+### ASR (`/api/asr/`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/POST | `/asr/datasets` | List / create datasets |
+| POST | `/asr/datasets/{id}/upload` | Upload audio files |
+| POST | `/asr/datasets/{id}/youtube` | Import from YouTube |
+| POST | `/asr/datasets/{id}/transcribe-all` | Batch transcribe (Celery) |
+| GET | `/asr/datasets/{id}/export` | Export CSV/JSONL/ZIP |
+| GET | `/asr/files/{id}/audio` | Stream audio |
+| POST | `/asr/files/{id}/annotate` | Save corrected transcript |
+| GET | `/asr/tasks/{task_id}/status` | Celery task status |
+
+### Text (`/api/text/`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/POST | `/text/datasets` | List / create datasets |
+| POST | `/text/datasets/{id}/upload` | Upload CSV/JSON |
+| GET | `/text/datasets/{id}/records` | Paginated records |
+| GET | `/text/datasets/{id}/export` | Export |
+| POST | `/text/records/{id}/annotate/*` | Annotate (BR flag / classification / modification / questions) |
+
+### BR Pipeline (`/api/br-pipeline/`)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/br-pipeline/start` | Start pipeline for a dataset |
+| GET | `/br-pipeline/status/{id}` | Pipeline status |
+| POST | `/br-pipeline/run-stage1` | Trigger Stage 1 (Celery) |
+| POST | `/br-pipeline/run-stage2` | Trigger Stage 2 (Celery) |
+| POST | `/br-pipeline/run-stage3` | Trigger Stage 3 (Celery) |
+| GET | `/br-pipeline/restructure/{id}/export-csv` | Stage 2 CSV |
+| POST | `/br-pipeline/questions/{id}/generate-all` | Batch generate questions |
+| POST | `/br-pipeline/questions/{record_id}/select` | Select best question |
+| GET | `/br-pipeline/questions/{id}/export-jsonl` | Stage 3 JSONL |
+| POST | `/br-pipeline/responses/{id}/generate-all` | Batch generate responses |
+| GET | `/br-pipeline/results/{id}` | Final results |
+
+---
+
+## 🛠️ Technology Details
+
+### Dual ASR Engines
+
+| Engine | Model | Platform |
+|--------|-------|----------|
+| **Whisper** | `mlx-community/whisper-large-v3-turbo` | MLX (Apple Silicon) or PyTorch (Linux/GPU) |
+| **Qwen3 ASR** | Alibaba Qwen3-based | CPU/GPU, supports code-mixed Malay/English |
+
+Both engines run in parallel Celery tasks. The annotator sees both transcripts side-by-side as reference during correction.
+
+### Silero VAD Segmentation
+
+1. Resample to 16 kHz mono
+2. Slide 512-sample window → frame-level voice probability
+3. Merge consecutive voiced frames into speech segments
+4. Keep segments ≤ 30 s; split longer runs at 30 s boundaries
+5. Result: natural utterance-length training samples
+
+### Database Schema (summary)
+
+| Table | Purpose |
+|-------|---------|
+| `asr_datasets` / `audio_files` | ASR workflow |
+| `text_datasets` / `text_records` | Text annotation |
+| `br_pipeline_runs` | Per-run aggregate state |
+| `br_record_stages` | Per-record stage outputs (all 5 stages) |
+| `br_model_configs` | LLM model registry |
+| `pipeline_datasets` / `pipeline_runs` / `model_responses` / `validation_records` | Generic pipeline models |
+
+Full schema in [docs/TECHNICAL_GUIDE.md](docs/TECHNICAL_GUIDE.md).
+
+---
+
+## 🧪 Development
 
 ```bash
-# From Text Datasets page, click "Start BR Pipeline" button
-# Or via API:
-POST /api/br-pipeline/start
-{
-  "dataset_id": 1
+# Backend (hot-reload)
+conda activate datasupport
+python run_api.py
+
+# Frontend (Vite dev server — proxies /api to :8000)
+cd frontend-react && npm run dev
+
+# Build frontend for production
+cd frontend-react && npm run build
+
+# DB migrations
+conda activate datasupport
+PYTHONPATH=. alembic upgrade head
+PYTHONPATH=. alembic revision --autogenerate -m "describe change"
+```
+
+---
+
+## 📦 Deployment
+
+### Single-Server (Recommended)
+
+```bash
+cd frontend-react && npm run build && cd ..
+bash scripts/start_services.sh
+# → http://localhost:8000
+```
+
+FastAPI serves both API (`/api/*`) and the React SPA (`/*`) on port 8000.
+
+### Manual
+
+```bash
+# 1. Build frontend
+cd frontend-react && npm run build && cd ..
+
+# 2. Apply DB migrations
+conda activate datasupport
+PYTHONPATH=. alembic upgrade head
+
+# 3. Start Celery
+PYTHONPATH=. celery -A backend.celery_app:celery_app worker --beat \
+  --queues=celery,transcription,br_pipeline --pool=prefork --concurrency=4 \
+  --loglevel=info &
+
+# 4. Start API
+uvicorn backend.api:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Nginx (optional reverse proxy)
+
+```nginx
+location / {
+    root /path/to/DataSupportTool/frontend-react/dist;
+    try_files $uri $uri/ /index.html;
+}
+location /api/ {
+    proxy_pass http://127.0.0.1:8000;
 }
 ```
 
-### 2. Monitor Progress
+See [docs/TECHNICAL_GUIDE.md](docs/TECHNICAL_GUIDE.md) for the full nginx config.
 
-```bash
-GET /api/br-pipeline/status/{pipeline_run_id}
+---
 
-Response:
-{
-  "id": 1,
-  "dataset_id": 1,
-  "total_records": 100,
-  "processed_records": 45,
-  "pending_validation": 55,
-  "current_stage": "human_validation",
-  "status": "awaiting_validation"
-}
-```
+## 🐛 Troubleshooting
 
-### 3. Human Validation
+| Problem | Solution |
+|---------|----------|
+| App doesn't load at :8000 | Check `curl http://localhost:8000/api/health`; run `npm run build` if dist/ missing |
+| Transcription stuck | Check Celery is running; `tail -f celery.log`; restart via `start_services.sh` |
+| Database error | Check `DATABASE_URL` in `.env`; run `docker compose up -d` |
+| YouTube import fails | `pip install -U yt-dlp`; verify FFmpeg (`ffmpeg -version`) |
+| BR pipeline stuck | Check Flower at `http://localhost:5556`; review `logs/api.log` |
+| Waveform not loading | Check browser console for CORS errors; verify file exists in `data/audio/` |
+| `ModuleNotFoundError` | Ensure `conda activate datasupport` and `PYTHONPATH=.` are set |
 
-Navigate to: `/br-pipeline/validate`
+---
 
-The interface shows:
-- Progress bar (X of Y records completed)
-- BR detection result
-- Restructured text
-- 3 generated questions (clickable)
+## 🎯 Roadmap
 
-Click on the best question to select it and automatically trigger model response generation.
+- [ ] **Speaker diarization** (pyannote.audio)
+- [ ] **WER/CER metrics** — score Whisper output against corrected transcript
+- [ ] **Active learning** — surface lowest-confidence files first
+- [ ] **SRT/VTT export** — subtitle format for video corpora
+- [ ] **Multi-user auth** — JWT-based annotator accounts with assignment queues
+- [ ] **Automated BR detection model** — fine-tune BERT/RoBERTa on accumulated Stage 1 labels
 
-### 4. View Results
+---
 
-Navigate to: `/br-pipeline/results/{pipeline_id}`
+## 📚 Documentation
 
-View a table showing:
-- **Record ID**: Original text record identifier
-- **BR**: Whether text is Bahasa Rojak (Yes/No)
-- **Question**: The human-selected question
-- **Model**: Base model name and ID
-- **Response**: Model's generated response
-- **Problems**: Identified issues (hallucinations, errors, etc.)
+| Document | Description |
+|----------|-------------|
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Step-by-step guide for all workflows, keyboard shortcuts, troubleshooting FAQ |
+| [docs/TECHNICAL_GUIDE.md](docs/TECHNICAL_GUIDE.md) | Full architecture, complete API reference, DB schema, deployment options |
+| [docs/TECHNICAL_PAPER.md](docs/TECHNICAL_PAPER.md) | Academic-style system design and pipeline analysis |
+| [docs/BACKUP_SETUP.md](docs/BACKUP_SETUP.md) | Automated backup configuration (pg_dump + rclone) |
 
-Export results to CSV for further analysis.
+---
 
-## API Endpoints
+## 📜 License
 
-### Pipeline Control
+MIT License — see LICENSE file for details.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/br-pipeline/start` | POST | Start pipeline for a dataset |
-| `/api/br-pipeline/status/{id}` | GET | Get pipeline status |
-| `/api/br-pipeline/pending-validation` | GET | Get records needing validation |
-| `/api/br-pipeline/validate/{record_id}` | POST | Submit question selection |
-| `/api/br-pipeline/results/{id}` | GET | Get final results |
+---
 
-### Model Configuration
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/br-pipeline/models` | GET | List configured models |
-| `/api/br-pipeline/models` | POST | Add new model |
-| `/api/br-pipeline/models/{id}/toggle` | PATCH | Enable/disable model |
-
-## Model Configuration
-
-Before starting a pipeline, configure at least 3 base models:
-
-```bash
-POST /api/br-pipeline/models
-{
-  "name": "GPT-4",
-  "model_type": "openai",
-  "model_id": "gpt-4",
-  "api_key_env_var": "OPENAI_API_KEY",
-  "parameters": {
-    "temperature": 0.7,
-    "max_tokens": 512
-  },
-  "is_active": true
-}
-```
-
-Supported model types:
-- `openai` - OpenAI models (GPT-4, GPT-3.5)
-- `anthropic` - Claude models
-- `local` - Local models (Ollama, llama.cpp, etc.)
-- `azure` - Azure OpenAI
-- `custom` - Custom API endpoints
-
-## Implementation Details
-
-### Placeholder Functions (To Be Implemented)
-
-The following functions in `br_pipeline_orchestrator.py` are **placeholders** and need real implementations:
-
-1. **`_detect_bahasa_rojak(text)`**
-   - Current: Returns `(False, 0.5)`
-   - Needed: Train or use a code-mixing detection model
-   - Options:
-     - Fine-tuned BERT/RoBERTa for language identification
-     - Rule-based approach with language detection libraries
-     - LLM-based classification
-
-2. **`_restructure_mcq_text(text)`**
-   - Current: Returns original text
-   - Needed: MCQ parsing and consolidation logic
-   - Options:
-     - Prompt engineering with GPT-4/Claude
-     - Custom parsing logic
-     - Fine-tuned model for MCQ restructuring
-
-3. **`_generate_questions(text, count=3)`**
-   - Current: Returns placeholder questions
-   - Needed: Question generation model
-   - Options:
-     - GPT-4 with structured prompt
-     - T5-based question generation model
-     - BART fine-tuned on QG dataset
-
-4. **`_generate_model_response(model, context, question)`**
-   - Current: Returns placeholder response
-   - Needed: Actual model API calls
-   - Implementation varies by model type (see Model Configuration)
-
-### Database Schema
-
-**br_pipeline_runs**: Tracks overall pipeline execution
-- `total_records`, `processed_records`, `pending_validation`
-- `current_stage`, `status`
-- Timestamps: `started_at`, `completed_at`
-
-**br_record_stages**: Tracks each record's progress through stages
-- Stage 1: `is_bahasa_rojak`, `br_confidence`
-- Stage 2: `restructured_text`
-- Stage 3: `generated_questions` (JSON array)
-- Stage 4: `selected_question_index`, `selected_question`
-- Stage 5: `model_responses` (JSON object)
-
-**br_model_configs**: Stores base model configurations
-- `name`, `model_type`, `model_id`
-- `api_endpoint`, `api_key_env_var`
-- `parameters` (JSON), `is_active`
-
-## Performance Considerations
-
-### Estimated Time per Record
-
-| Stage | Duration | Parallelizable |
-|-------|----------|----------------|
-| BR Detection | 1-2s | ✅ Yes |
-| Text Restructure | 2-3s | ✅ Yes |
-| Question Generation | 5-10s | ✅ Yes |
-| Human Validation | 30-60s | ❌ No (manual) |
-| Model Responses | 10-20s | ✅ Yes (3 models parallel) |
-
-**Total**: ~1-2 minutes per record (mostly human validation time)
-
-### Optimization Tips
-
-1. **Batch Processing**: Run stages 1-3 in batches for better throughput
-2. **Async Workers**: Use Celery/background tasks for long-running operations
-3. **Caching**: Cache model responses for identical questions
-4. **Parallel Execution**: Run model responses in parallel (already implemented)
-
-## Troubleshooting
-
-### Pipeline Stuck at "awaiting_validation"
-- Check `/br-pipeline/validate` page for pending records
-- Ensure human validators complete their reviews
-
-### Model Response Generation Failing
-- Verify model configurations are correct
-- Check API keys are set in environment variables
-- Review error logs: `pipeline_run.error_message`
-
-### Slow Performance
-- Consider running pipeline in background (async)
-- Increase batch sizes for stages 1-3
-- Use faster models for initial stages (cheaper/faster models)
-
-## Next Steps
-
-1. **Implement AI Functions**: Replace placeholder functions with real models
-2. **Add Batch Processing**: Process multiple records in parallel
-3. **Add Analytics**: Track completion rates, average validation time
-4. **Add User Management**: Track which validators complete most records
-5. **Add Quality Metrics**: Score model responses automatically
+*Built for Bahasa Rojak NLP research* 🇲🇾

@@ -77,11 +77,19 @@ OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A backend.celery_app:celery_app 
 CELERY_PID=$!
 echo "  ✅ Celery worker + beat started (PID: $CELERY_PID)"
 
-# ── 5. Start FastAPI ────────────────────────────────────────
+# ── 6. Start FastAPI ────────────────────────────────────────
 echo ""
 echo "🌐 Starting FastAPI server..."
-#python run_api.py &
-#API_PID=$!
+
+# Pre-flight check: ensure frontend has been built
+if [ ! -f "$PROJECT_ROOT/frontend-react/dist/index.html" ]; then
+    echo "  ⚠️  WARNING: frontend-react/dist/ not found."
+    echo "      Run: cd frontend-react && npm run build"
+    echo "      The API will start but will not serve the frontend UI."
+fi
+
+python run_api.py &
+API_PID=$!
 sleep 3
 
 echo ""

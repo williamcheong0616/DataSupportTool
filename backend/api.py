@@ -16,10 +16,12 @@ Architecture:
 """
 
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import logging
 
 from backend.database import init_db
@@ -131,12 +133,36 @@ def root():
     }
 
 
+# ==================== STATIC FRONTEND (SPA) ====================
+# Mount the built React app so FastAPI serves it at /* (Option A).
+# API routes registered above at /api/* take priority.
+_DIST_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
+
+if _DIST_DIR.is_dir():
+    # Serve static assets (JS, CSS, images)
+    _assets_dir = _DIST_DIR / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        """Catch-all: return index.html for any non-API path (client-side routing)."""
+        return FileResponse(str(_DIST_DIR / "index.html"))
+
+    logger.info(f"✓ Frontend SPA mounted from {_DIST_DIR}")
+else:
+    logger.warning(
+        f"⚠ Frontend dist not found at {_DIST_DIR}. "
+        "Run 'npm run build' in frontend-react/ to enable SPA serving."
+    )
+
+
 if __name__ == "__main__":
     # This block is only executed when running the file directly
     # For production, use: uvicorn backend.api:app --host 0.0.0.0 --port 8000
     import uvicorn
     from config import API_HOST, API_PORT
-    
+
     uvicorn.run(
         "backend.api:app",
         host=API_HOST,
