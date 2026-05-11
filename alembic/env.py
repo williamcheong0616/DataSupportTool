@@ -12,6 +12,7 @@ from alembic import context
 # Import application config and models
 from config import DATABASE_URL
 from backend.models import Base
+import backend.br_pipeline_models
 
 # Alembic Config object
 config = context.config

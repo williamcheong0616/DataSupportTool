@@ -276,3 +276,70 @@ class ValidationRecord(Base):
     # Relationships
     record = relationship("DataRecord", back_populates="validation_records")
     model_response = relationship("ModelResponse", back_populates="validation_records")
+
+
+# === Error Analysis Models ===
+
+class EvalDataset(Base):
+    """Dataset specifically for evaluating model outputs."""
+    __tablename__ = "eval_datasets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    records = relationship("EvalRecord", back_populates="dataset", cascade="all, delete-orphan")
+
+
+class EvalRecord(Base):
+    """A record containing a ground truth to validate models against."""
+    __tablename__ = "eval_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("eval_datasets.id"), nullable=False)
+    
+    prompt = Column(Text, nullable=True)
+    ground_truth = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    dataset = relationship("EvalDataset", back_populates="records")
+
+
+class FinetunedModelOutput(Base):
+    """Stores outputs from finetuned models for error analysis."""
+    __tablename__ = "finetuned_model_outputs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_type = Column(String(50), nullable=False)  # 'text' or 'asr'
+    record_id = Column(Integer, nullable=False)  # ID of TextRecord or AudioFile
+    model_name = Column(String(255), nullable=False)
+    output_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    annotations = relationship("ErrorAnnotation", back_populates="finetuned_output", cascade="all, delete-orphan")
+
+
+class ErrorAnnotation(Base):
+    """Stores highlight annotations for error checking."""
+    __tablename__ = "error_annotations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    output_id = Column(Integer, ForeignKey("finetuned_model_outputs.id"), nullable=False)
+    source_side = Column(String(50), nullable=False)  # 'ground_truth' or 'model_output'
+    
+    start_index = Column(Integer, nullable=False)
+    end_index = Column(Integer, nullable=False)
+    selected_text = Column(Text, nullable=False)
+    
+    error_type = Column(String(255), nullable=True)  # Nullable if it's a comment on ground truth
+    comment = Column(Text, nullable=True)
+    
+    annotated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    finetuned_output = relationship("FinetunedModelOutput", back_populates="annotations")

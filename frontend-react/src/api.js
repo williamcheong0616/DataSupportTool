@@ -443,4 +443,21 @@ export const downloadDatabaseBackup = (filename) =>
     responseType: 'blob'
   })
 
+// === ERROR ANALYSIS ===
+export const getErrorAnalysisTextDatasets = () => api.get(`/error-analysis/datasets/text`)
+export const getErrorAnalysisASRDatasets = () => api.get(`/error-analysis/datasets/asr`)
+export const getErrorAnalysisText = (datasetId) => api.get(`/error-analysis/text/${datasetId}`)
+export const getErrorAnalysisASR = (datasetId) => api.get(`/error-analysis/asr/${datasetId}`)
+export const addErrorAnnotation = (data) => api.post(`/error-analysis/annotations`, data)
+export const deleteErrorAnnotation = (id) => api.delete(`/error-analysis/annotations/${id}`)
+export const getErrorStats = () => api.get(`/error-analysis/stats`)
+
+// Eval Datasets
+export const uploadEvalDataset = (formData) => api.post('/error-analysis/eval/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const getEvalDatasets = () => api.get('/error-analysis/datasets/eval')
+export const getEvalErrorAnalysis = (datasetId) => api.get(`/error-analysis/eval/${datasetId}`)
+export const deleteEvalDataset = (datasetId) => api.delete(`/error-analysis/eval/${datasetId}`)
+
 export default api
