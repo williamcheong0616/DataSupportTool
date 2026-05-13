@@ -37,7 +37,6 @@ python-json-logger==4.0.0
 
 # ASR — local inference (lazy-loaded, only needed if running Whisper/VAD locally)
 # Install PyTorch separately first: https://pytorch.org/get-started/locally/
-torch==2.9.1
 faster-whisper==1.2.1
 silero-vad==6.2.1
 pydub==0.25.1
