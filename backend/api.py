@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import logging
 
 from backend.database import init_db
@@ -114,14 +115,24 @@ logger.info("✓ Settings routes registered")
 
 
 # ==================== STATIC FRONTEND (SPA) ====================
-# Mount the entire dist/ directory last. StaticFiles(html=True) serves exact
-# files when they exist (JS, CSS, images) and falls back to index.html for
-# everything else — which is what React Router needs for client-side routing.
-# API routes registered above at /api/* are matched first and are unaffected.
 _DIST_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
 
 if _DIST_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=str(_DIST_DIR), html=True), name="frontend")
+    # Serve actual build artifacts (JS, CSS, images) from /assets directly.
+    # This mount is checked after all /api/* routes so it never conflicts.
+    _assets_dir = _DIST_DIR / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
+
+    # Catch-all: serve the real file if it exists, otherwise hand index.html
+    # to React Router so it can handle client-side navigation on refresh.
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serveSpa(full_path: str):
+        candidate = _DIST_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_DIST_DIR / "index.html"))
+
     logger.info(f"✓ Frontend SPA mounted from {_DIST_DIR}")
 else:
     logger.warning(
