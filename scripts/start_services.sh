@@ -39,12 +39,12 @@ echo "  🐍 Conda env:    $CONDA_DEFAULT_ENV ($(which python))"
 # ── CUDA library path for faster-whisper / CTranslate2 ───────
 # PyTorch bundles libcublas.so.12 inside the conda env but CTranslate2
 # needs it on LD_LIBRARY_PATH to load it at runtime.
-CUDA_LIB="$CONDA_BASE/envs/$CONDA_ENV/lib/python3.12/site-packages/nvidia/cublas/lib"
-if [ -d "$CUDA_LIB" ]; then
+CUDA_LIB=$(find "$CONDA_BASE/envs/$CONDA_ENV" -name "libcublas.so.12" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+if [ -n "$CUDA_LIB" ]; then
     export LD_LIBRARY_PATH="$CUDA_LIB:${LD_LIBRARY_PATH:-}"
     echo "  🔧 CUDA libs:    $CUDA_LIB"
 else
-    echo "  ⚠️  CUDA libs not found at $CUDA_LIB (GPU transcription may fail)"
+    echo "  ⚠️  libcublas.so.12 not found — GPU transcription may fail (CPU will be used)"
 fi
 
 
