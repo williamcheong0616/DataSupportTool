@@ -1,42 +1,46 @@
 # Web Framework (API only - frontend is React)
-fastapi
-uvicorn>=0.27.0
-python-multipart>=0.0.9
-httpx>=0.27.0
+fastapi==0.128.2
+uvicorn==0.40.0
+python-multipart==0.0.22
+httpx==0.28.1
 
 # Database
-sqlalchemy>=2.0.25
-alembic>=1.13.1
-psycopg2-binary>=2.9.9
+sqlalchemy==2.0.46
+alembic==1.18.3
+psycopg2-binary==2.9.11
 
 # Data Processing
-pandas>=2.2.0
-numpy>=1.26.3
-pydantic>=2.6.0
+pandas==2.3.3
+numpy==2.2.6
+pydantic==2.12.5
 
 # ML & Evaluation
-scikit-learn>=1.4.0
+scikit-learn
 
 # Task Queue (Celery + Redis)
-celery>=5.3.6
-redis>=5.0.1
-flower>=2.0.1
+celery==5.6.2
+redis==7.1.0
+flower==2.0.1
 
-# Workflow Orchestration (Prefect) - using newer version for Python 3.12 compatibility
-prefect>=3.0.0
-
-# ML Tracking (MLflow)
-mlflow>=2.10.0
+# HTTP Client (Ollama / external API calls)
+requests==2.32.5
 
 # YouTube Audio Download
-yt-dlp>=2024.1.0
+yt-dlp==2026.3.3
 
 # Utilities
-python-dotenv>=1.0.1
-aiofiles>=23.2.1
+python-dotenv==1.2.1
+aiofiles==24.1.0
 
 # Logging
-python-json-logger>=2.0.7
+python-json-logger==4.0.0
 
-# ASR - Qwen3
-qwen-asr>=0.1.0
+# ASR — local inference (lazy-loaded, only needed if running Whisper/VAD locally)
+# Install PyTorch separately first: https://pytorch.org/get-started/locally/
+torch==2.9.1
+faster-whisper==1.2.1
+silero-vad==6.2.1
+pydub==0.25.1
+
+# ASR — Qwen3 (optional, only if using Qwen3-ASR model)
+qwen-asr
