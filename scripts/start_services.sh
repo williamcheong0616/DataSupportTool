@@ -18,18 +18,21 @@ echo "  🐍 PYTHONPATH:   $PYTHONPATH"
 
 # ── Activate conda environment ────────────────────────────────
 CONDA_ENV="datasupport"
-CONDA_BASE="${CONDA_PREFIX:-$HOME/miniconda3}"
 
-# Source conda.sh so 'conda activate' works inside non-interactive scripts
-if [ -f "$CONDA_BASE/etc/profile.d/conda.sh" ]; then
-    source "$CONDA_BASE/etc/profile.d/conda.sh"
+# Derive conda base from CONDA_EXE (set whenever conda is initialised),
+# falling back to common install locations.
+if [ -n "$CONDA_EXE" ]; then
+    CONDA_BASE="$(dirname "$(dirname "$CONDA_EXE")")"
+elif [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    CONDA_BASE="$HOME/miniconda3"
 elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
-    source "$HOME/anaconda3/etc/profile.d/conda.sh"
+    CONDA_BASE="$HOME/anaconda3"
 else
     echo "❌ conda not found. Install Miniconda and create the '$CONDA_ENV' env first."
     exit 1
 fi
 
+source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate "$CONDA_ENV"
 echo "  🐍 Conda env:    $CONDA_DEFAULT_ENV ($(which python))"
 
