@@ -95,10 +95,10 @@ from backend.routes.asr import router as asr_router
 app.include_router(asr_router)
 logger.info("✓ ASR annotation routes registered")
 
-# Error Analysis routes
-from backend.routes.error_analysis import router as error_analysis_router
-app.include_router(error_analysis_router)
-logger.info("✓ Error Analysis routes registered")
+# Error Analysis routes (disabled — not yet published)
+# from backend.routes.error_analysis import router as error_analysis_router
+# app.include_router(error_analysis_router)
+# logger.info("✓ Error Analysis routes registered")
 
 # BR Pipeline routes (optional - may not be installed)
 try:

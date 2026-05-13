@@ -13,10 +13,11 @@ import BRQuestionValidation from './pages/BRQuestionValidation'
 import BRModelResponses from './pages/BRModelResponses'
 import TextResponsePool from './pages/TextResponsePool'
 import Settings from './pages/Settings'
-import TextErrorAnalysis from './pages/TextErrorAnalysis'
-import ASRErrorAnalysis from './pages/ASRErrorAnalysis'
-import EvalErrorAnalysis from './pages/EvalErrorAnalysis'
-import ErrorAnalytics from './pages/ErrorAnalytics'
+// Error Analysis imports disabled — not yet published
+// import TextErrorAnalysis from './pages/TextErrorAnalysis'
+// import ASRErrorAnalysis from './pages/ASRErrorAnalysis'
+// import EvalErrorAnalysis from './pages/EvalErrorAnalysis'
+// import ErrorAnalytics from './pages/ErrorAnalytics'
 
 const NAV_LINK_BASE = 'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors'
 const NAV_ACTIVE = 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300'
@@ -98,17 +99,7 @@ function AppLayout({ darkMode, toggleDarkMode }) {
                   ASR
                 </NavLink>
 
-                {/* Error Analysis dropdown */}
-                <NavDropdown
-                  label="Error Analysis"
-                  icon="🔍"
-                  links={[
-                    { to: '/text-error-analysis', label: 'Text Error Analysis', icon: '📄' },
-                    { to: '/asr-error-analysis',  label: 'ASR Error Analysis',  icon: '🎙️' },
-                    { to: '/eval-error-analysis', label: 'Eval Error Analysis', icon: '🧪' },
-                    { to: '/error-analytics',     label: 'Error Analytics',     icon: '📊' },
-                  ]}
-                />
+                {/* Error Analysis dropdown disabled — not yet published */}
 
                 <NavLink to="/settings" className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}>
                   ⚙️ Settings
@@ -152,14 +143,7 @@ function AppLayout({ darkMode, toggleDarkMode }) {
           <Route path="/asr" element={<ASRDatasets />} />
           <Route path="/asr/:datasetId/annotate" element={<ASRAnnotate />} />
 
-          {/* Error Analysis */}
-          <Route path="/text-error-analysis" element={<TextErrorAnalysis />} />
-          <Route path="/text-error-analysis/:datasetId" element={<TextErrorAnalysis />} />
-          <Route path="/asr-error-analysis" element={<ASRErrorAnalysis />} />
-          <Route path="/asr-error-analysis/:datasetId" element={<ASRErrorAnalysis />} />
-          <Route path="/eval-error-analysis" element={<EvalErrorAnalysis />} />
-          <Route path="/eval-error-analysis/:datasetId" element={<EvalErrorAnalysis />} />
-          <Route path="/error-analytics" element={<ErrorAnalytics />} />
+          {/* Error Analysis routes disabled — not yet published */}
 
           <Route path="/settings" element={<Settings />} />
         </Routes>
