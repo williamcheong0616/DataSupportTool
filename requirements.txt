@@ -22,11 +22,8 @@ celery>=5.3.6
 redis>=5.0.1
 flower>=2.0.1
 
-# Workflow Orchestration (Prefect) - using newer version for Python 3.12 compatibility
-prefect>=3.0.0
-
-# ML Tracking (MLflow)
-mlflow>=2.10.0
+# HTTP Client (Ollama / external API calls)
+requests>=2.31.0
 
 # YouTube Audio Download
 yt-dlp>=2024.1.0
@@ -38,5 +35,12 @@ aiofiles>=23.2.1
 # Logging
 python-json-logger>=2.0.7
 
-# ASR - Qwen3
-qwen-asr>=0.1.0
+# ASR — local inference (lazy-loaded, only needed if running Whisper/VAD locally)
+# Install PyTorch separately first: https://pytorch.org/get-started/locally/
+torch>=2.2.0
+faster-whisper>=1.0.0
+silero-vad>=5.1.0
+pydub>=0.25.1
+
+# ASR — Qwen3 (optional, only if using Qwen3-ASR model)
+qwen-asr>=0.0.1

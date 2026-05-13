@@ -146,3 +146,16 @@ Data is persisted in named Docker volumes (`pgdata`, `redisdata`).
 - `PYTHONPATH` must be set to the project root — `run_api.py` and `start_services.sh` handle this automatically, but manual `celery` or `alembic` invocations need `PYTHONPATH=.` prefixed
 - Timezone for Celery Beat is `Asia/Kuala_Lumpur`
 - Audio files are stored under `data/audio/`; uploads under `data/uploads/`; exports under `data/exports/`
+
+---
+
+## Python Coding Style
+
+**Auto-invoke rule:** Whenever you write, edit, or review any `.py` file in this project, automatically run the `/python-codingstyle` skill without waiting for the user to ask. Run it at the end of every Python-touching task and include the style report inline with your response.
+
+The skill enforces:
+- **Naming:** `snake_case` for variables/functions/methods/files, `PascalCase` for classes and Pydantic schemas, `snake_case` plural for DB table names (`__tablename__`), `snake_case` for DB column names, `UPPER_CASE` for enum values, `kebab-case` for CSS classes, `SCREAMING_SNAKE_CASE` for constants and `.env` vars
+- **Type hints:** Required on all public function signatures; use `typing.Optional[str]` / `List[str]` / `Dict[str, Any]` style
+- **Docstrings:** Google style required on all public functions, classes, and methods; module-level docstrings required on all files
+- **Error handling:** Specific exception types only, re-raise with context, log before raising
+- **Modern idioms:** f-strings, `pathlib.Path`, context managers, no mutable defaults
