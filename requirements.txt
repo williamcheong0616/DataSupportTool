@@ -40,6 +40,7 @@ python-json-logger==4.0.0
 faster-whisper==1.2.1
 silero-vad==6.2.1
 pydub==0.25.1
+nvidia-cublas-cu12  # provides libcublas.so.12 that CTranslate2 requires regardless of system CUDA version
 
 # ASR — Qwen3 (optional, only if using Qwen3-ASR model)
 qwen-asr
