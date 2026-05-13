@@ -7,17 +7,31 @@ set -e
 echo "🚀 Starting DataSupportTool Services..."
 
 # ── 0. Set Environment Path ───────────────────────────────────
-# Get the absolute path to the project root (one level up from this script)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
-# Change to project root to ensure all commands run correctly
 cd "$PROJECT_ROOT"
 
-# Export PYTHONPATH so Celery and Python can find the 'backend' package
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 echo "  📍 Project Root: $PROJECT_ROOT"
 echo "  🐍 PYTHONPATH:   $PYTHONPATH"
+
+# ── Activate conda environment ────────────────────────────────
+CONDA_ENV="datasupport"
+CONDA_BASE="${CONDA_PREFIX:-$HOME/miniconda3}"
+
+# Source conda.sh so 'conda activate' works inside non-interactive scripts
+if [ -f "$CONDA_BASE/etc/profile.d/conda.sh" ]; then
+    source "$CONDA_BASE/etc/profile.d/conda.sh"
+elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+    source "$HOME/anaconda3/etc/profile.d/conda.sh"
+else
+    echo "❌ conda not found. Install Miniconda and create the '$CONDA_ENV' env first."
+    exit 1
+fi
+
+conda activate "$CONDA_ENV"
+echo "  🐍 Conda env:    $CONDA_DEFAULT_ENV ($(which python))"
 
 
 # ── 1. Check Docker ──────────────────────────────────────────

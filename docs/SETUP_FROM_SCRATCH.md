@@ -176,6 +176,27 @@ The defaults in `.env.example` work for local development as-is. The only values
 
 ## Step 9 — Start Infrastructure (PostgreSQL, Redis, Flower)
 
+Before starting, confirm ports 5432 and 6379 are free. On a fresh Ubuntu install, `apt` may have installed native PostgreSQL or Redis that auto-start and block these ports:
+
+```bash
+# Check if anything is already holding the ports
+sudo ss -tlnp | grep -E '5432|6379'
+```
+
+If you see `postgres` or `redis-server` in the output, stop and remove them:
+
+```bash
+# Native Redis conflict
+sudo systemctl stop redis-server && sudo systemctl disable redis-server
+sudo apt purge redis-server -y && sudo apt autoremove -y
+
+# Native PostgreSQL conflict
+sudo systemctl stop postgresql && sudo systemctl disable postgresql
+sudo apt purge postgresql* -y && sudo apt autoremove -y
+```
+
+Then start the containers:
+
 ```bash
 docker compose up -d
 
@@ -224,9 +245,10 @@ The production API server serves `dist/` as the React SPA. You only need to rebu
 ### Option A — One command (production-style)
 
 ```bash
-conda activate datasupport
 bash scripts/start_services.sh
 ```
+
+The script activates the `datasupport` conda env automatically.
 
 ### Option B — Four terminals (development, with hot-reload)
 
