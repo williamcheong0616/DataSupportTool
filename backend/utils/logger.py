@@ -44,6 +44,8 @@ def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> lo
     
     # File handler with JSON format for production
     if log_file:
+        from pathlib import Path
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         json_formatter = CustomJsonFormatter()
         file_handler.setFormatter(json_formatter)

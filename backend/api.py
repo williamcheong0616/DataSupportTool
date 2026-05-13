@@ -114,30 +114,6 @@ app.include_router(settings_router)
 logger.info("✓ Settings routes registered")
 
 
-# ==================== ROOT ENDPOINT ====================
-@app.get("/")
-def root():
-    """
-    Root endpoint with API information.
-    
-    Returns:
-        API metadata and available endpoints
-    """
-    return {
-        "name": "DataSupportTool API",
-        "version": "3.0.0",
-        "description": "Annotation tool for text and ASR datasets",
-        "endpoints": {
-            "docs": "/api/docs",
-            "health": "/api/health",
-            "stats": "/api/stats",
-            "text": "/api/text",
-            "asr": "/api/asr",
-            "br_pipeline": "/api/br-pipeline"
-        }
-    }
-
-
 # ==================== STATIC FRONTEND (SPA) ====================
 # Mount the built React app so FastAPI serves it at /* (Option A).
 # API routes registered above at /api/* take priority.
