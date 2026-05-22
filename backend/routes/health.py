@@ -7,7 +7,7 @@ for PostgreSQL, Redis, and Celery workers.
 
 import redis as redis_lib
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, case, text
+from sqlalchemy import and_, func, case, text
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, engine
@@ -154,7 +154,6 @@ def get_dataset_stats(db: Session = Depends(get_db)):
     }
 
     # Fetch latest pipeline run per dataset in one query using a subquery
-    from sqlalchemy import and_
     latest_run_subq = (
         db.query(
             BRPipelineRun.dataset_id,

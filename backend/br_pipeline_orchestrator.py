@@ -4,6 +4,7 @@ Manages the automated Bahasa Rojak detection and question generation pipeline
 """
 import os
 import logging
+import requests
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -356,8 +357,6 @@ class BRPipelineOrchestrator:
     
     async def _check_ollama_available(self) -> bool:
         """Check if Ollama service is available."""
-        import os
-        import requests
         ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
         try:
             response = requests.get(f"{ollama_url}/api/tags", timeout=5)
