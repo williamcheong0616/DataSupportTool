@@ -45,7 +45,7 @@ function TextAnnotate() {
   useEffect(() => {
     getTextDataset(datasetId)
       .then(res => setDataset(res.data))
-      .catch(() => navigate('/text'))
+      .catch(err => { console.error('Failed to load dataset:', err); navigate('/text') })
   }, [datasetId])
 
   // load first batch once we have the dataset

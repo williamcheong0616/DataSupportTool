@@ -66,6 +66,11 @@ app.add_middleware(RequestLoggingMiddleware)
 # CORS middleware - configurable origins (restrict in production)
 # Set CORS_ORIGINS env var to comma-separated origins, e.g. "http://localhost:5173,https://myapp.com"
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
+if CORS_ORIGINS == "*":
+    logger.warning(
+        "CORS is configured to allow ALL origins ('*'). "
+        "Set the CORS_ORIGINS environment variable to restrict access in production."
+    )
 cors_origins = ["*"] if CORS_ORIGINS == "*" else [o.strip() for o in CORS_ORIGINS.split(",")]
 
 app.add_middleware(
