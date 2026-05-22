@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 import pandas as pd
 import json
@@ -39,24 +40,25 @@ router = APIRouter(prefix="/api/text", tags=["text"])
 def list_text_datasets(db: Session = Depends(get_db)):
     """
     List all text datasets with record counts.
-    
+
     Returns:
         List of datasets with record and annotation counts
     """
-    datasets = db.query(TextDataset).order_by(TextDataset.created_at.desc()).all()
-    result = []
-    for ds in datasets:
-        record_count = db.query(TextRecord).filter(TextRecord.dataset_id == ds.id).count()
-        annotated_count = db.query(TextRecord).filter(
-            TextRecord.dataset_id == ds.id,
-            TextRecord.is_annotated == True
-        ).count()
-        result.append({
-            **ds.__dict__,
-            "record_count": record_count,
-            "annotated_count": annotated_count,
-        })
-    return result
+    rows = (
+        db.query(
+            TextDataset,
+            func.count(TextRecord.id).label("record_count"),
+            func.sum(case((TextRecord.is_annotated == True, 1), else_=0)).label("annotated_count"),
+        )
+        .outerjoin(TextRecord, TextRecord.dataset_id == TextDataset.id)
+        .group_by(TextDataset.id)
+        .order_by(TextDataset.created_at.desc())
+        .all()
+    )
+    return [
+        {**ds.__dict__, "record_count": int(rc or 0), "annotated_count": int(ac or 0)}
+        for ds, rc, ac in rows
+    ]
 
 
 @router.post("/datasets", response_model=TextDatasetResponse)
@@ -196,9 +198,11 @@ async def upload_text_data(
     
     # Store original headers
     headers = list(df.columns)
+    if not headers:
+        raise HTTPException(status_code=400, detail="File has no columns")
     if dataset.original_headers is None:
         dataset.original_headers = headers
-    
+
     # Determine text column
     if text_column and text_column in df.columns:
         selected_col = text_column
@@ -225,27 +229,31 @@ async def upload_text_data(
 
     records_added = 0
     records_skipped = 0
-    for _, row in df.iterrows():
-        text_value = str(row[selected_col])
+    try:
+        for _, row in df.iterrows():
+            text_value = str(row[selected_col])
 
-        # Skip rows that are already present in this dataset
-        if text_value in existing_texts:
-            records_skipped += 1
-            continue
+            # Skip rows that are already present in this dataset
+            if text_value in existing_texts:
+                records_skipped += 1
+                continue
 
-        # Sanitize raw_data: replace NaN/Inf with None for PostgreSQL JSON compatibility
-        raw = row.to_dict()
-        raw = {k: (None if pd.isna(v) or (isinstance(v, float) and not math.isfinite(v)) else v) for k, v in raw.items()}
-        record = TextRecord(
-            dataset_id=dataset_id,
-            original_text=text_value,
-            raw_data=raw,
-        )
-        db.add(record)
-        existing_texts.add(text_value)   # prevent intra-file duplicates too
-        records_added += 1
+            # Sanitize raw_data: replace NaN/Inf with None for PostgreSQL JSON compatibility
+            raw = row.to_dict()
+            raw = {k: (None if pd.isna(v) or (isinstance(v, float) and not math.isfinite(v)) else v) for k, v in raw.items()}
+            record = TextRecord(
+                dataset_id=dataset_id,
+                original_text=text_value,
+                raw_data=raw,
+            )
+            db.add(record)
+            existing_texts.add(text_value)   # prevent intra-file duplicates too
+            records_added += 1
 
-    db.commit()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save records: {str(e)}")
     return {
         "message": f"Added {records_added} records ({records_skipped} duplicates skipped)",
         "headers": headers,

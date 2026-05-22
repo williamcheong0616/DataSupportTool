@@ -36,35 +36,35 @@ class TextDataset(Base):
 class TextRecord(Base):
     """Individual text record for annotation."""
     __tablename__ = "text_records"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, ForeignKey("text_datasets.id"), nullable=False)
-    
+    dataset_id = Column(Integer, ForeignKey("text_datasets.id"), nullable=False, index=True)
+
     # Original data
     original_text = Column(Text, nullable=False)
     raw_data = Column(JSON, nullable=True)  # Store all original columns
-    
+
     # Annotation fields - Bahasa Rojak Identification
     is_bahasa_rojak = Column(Boolean, nullable=True)  # Yes/No
-    
+
     # Annotation fields - Classification
     classification_label = Column(String(255), nullable=True)
-    
+
     # Annotation fields - Text Modification
     modified_text = Column(Text, nullable=True)
     subject_added = Column(Text, nullable=True)
     context_added = Column(Text, nullable=True)
-    
+
     # Annotation fields - Question Generation
     question_1 = Column(Text, nullable=True)
     question_2 = Column(Text, nullable=True)
     question_3 = Column(Text, nullable=True)
-    
+
     # Status
-    is_annotated = Column(Boolean, default=False)
+    is_annotated = Column(Boolean, default=False, index=True)
     annotated_by = Column(String(255), nullable=True)
     annotated_at = Column(DateTime, nullable=True)
-    
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
@@ -94,9 +94,9 @@ class ASRDataset(Base):
 class AudioFile(Base):
     """Audio file for ASR annotation."""
     __tablename__ = "audio_files"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, ForeignKey("asr_datasets.id"), nullable=False)
+    dataset_id = Column(Integer, ForeignKey("asr_datasets.id"), nullable=False, index=True)
     
     # File info
     filename = Column(String(512), nullable=False)
@@ -120,7 +120,7 @@ class AudioFile(Base):
     corrected_transcript = Column(Text, nullable=True)
     
     # Status
-    status = Column(SQLEnum(TranscriptionStatus), default=TranscriptionStatus.PENDING)
+    status = Column(SQLEnum(TranscriptionStatus), default=TranscriptionStatus.PENDING, index=True)
     annotated_by = Column(String(255), nullable=True)
     annotated_at = Column(DateTime, nullable=True)
     

@@ -188,28 +188,35 @@ class BRPipelineOrchestrator:
                 # Generate 3 questions
                 questions = await self._generate_questions(record_stage.restructured_text, count=3)
                 
-                # Check if we got fallback questions (indicates failure)
-                if questions[0].startswith("What is the main topic"):
+                # Check if we got fallback questions (indicates Ollama failure)
+                is_fallback = (
+                    not questions
+                    or (len(questions) > 0 and questions[0].startswith("What is the main topic"))
+                )
+                if is_fallback:
                     consecutive_failures += 1
-                    logger.warning(f"Got fallback questions for record {record_stage.id} (failure {consecutive_failures}/{max_failures})")
+                    logger.warning(
+                        f"Got fallback questions for record {record_stage.id} "
+                        f"(failure {consecutive_failures}/{max_failures})"
+                    )
                     if consecutive_failures >= max_failures:
                         raise Exception("Ollama service appears to be unavailable (too many consecutive failures)")
                 else:
-                    consecutive_failures = 0  # Reset on success
-                
+                    consecutive_failures = 0
+
                 # Update record stage
                 record_stage.generated_questions = questions
                 record_stage.questions_generated_at = datetime.utcnow()
                 record_stage.current_stage = BRPipelineStage.QUESTION_GENERATION
-                
+
                 self.db.commit()
-                
+
             except Exception as e:
                 logger.error(f"Failed to generate questions for record {record_stage.id}: {e}")
                 record_stage.error_message = str(e)
                 self.db.commit()
                 raise  # Stop processing
-        
+
         # Update pipeline run
         pipeline_run = self.db.query(BRPipelineRun).filter(
             BRPipelineRun.id == pipeline_run_id
@@ -220,12 +227,12 @@ class BRPipelineOrchestrator:
     async def _move_to_human_validation(self, pipeline_run_id: int):
         """Stage 4: Mark records ready for human validation."""
         logger.info(f"Pipeline {pipeline_run_id}: Awaiting human validation")
-        
+
         # Count records pending validation
         pending_count = self.db.query(BRRecordStage).filter(
             BRRecordStage.pipeline_run_id == pipeline_run_id,
             BRRecordStage.current_stage == BRPipelineStage.QUESTION_GENERATION,
-            BRRecordStage.selected_question_index == None
+            BRRecordStage.selected_question_index.is_(None),
         ).count()
         
         pipeline_run = self.db.query(BRPipelineRun).filter(
@@ -234,7 +241,7 @@ class BRPipelineOrchestrator:
         pipeline_run.pending_validation = pending_count
         pipeline_run.status = "awaiting_validation"
         self.db.commit()
-    
+
     async def select_question(
         self, 
         record_stage_id: int, 
@@ -320,9 +327,9 @@ class BRPipelineOrchestrator:
             BRRecordStage.pipeline_run_id == pipeline_run_id,
             BRRecordStage.current_stage.in_([
                 BRPipelineStage.QUESTION_GENERATION,
-                BRPipelineStage.HUMAN_VALIDATION
+                BRPipelineStage.HUMAN_VALIDATION,
             ]),
-            BRRecordStage.selected_question_index == None
+            BRRecordStage.selected_question_index.is_(None),
         ).count()
         pipeline_run.pending_validation = pending_count
         
@@ -349,9 +356,11 @@ class BRPipelineOrchestrator:
     
     async def _check_ollama_available(self) -> bool:
         """Check if Ollama service is available."""
+        import os
+        import requests
+        ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
         try:
-            import requests
-            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            response = requests.get(f"{ollama_url}/api/tags", timeout=5)
             return response.status_code == 200
         except Exception as e:
             logger.error(f"Ollama availability check failed: {e}")
@@ -569,25 +578,32 @@ class BRPipelineOrchestrator:
                 # Generate 3 questions in Bahasa Rojak style
                 questions = await self._generate_questions(record_stage.restructured_text, count=3)
                 
-                # Check if we got fallback questions (indicates failure)
-                if questions[0].startswith("What is the main topic"):
+                # Check if we got fallback questions (indicates Ollama failure)
+                is_fallback = (
+                    not questions
+                    or (len(questions) > 0 and questions[0].startswith("What is the main topic"))
+                )
+                if is_fallback:
                     consecutive_failures += 1
-                    logger.warning(f"Got fallback questions for record {record_stage.id} (failure {consecutive_failures}/{max_failures})")
+                    logger.warning(
+                        f"Got fallback questions for record {record_stage.id} "
+                        f"(failure {consecutive_failures}/{max_failures})"
+                    )
                     if consecutive_failures >= max_failures:
                         raise Exception("Ollama service appears to be unavailable (too many consecutive failures)")
                 else:
                     consecutive_failures = 0
-                
+
                 # Update record stage
                 record_stage.generated_questions = questions
                 record_stage.questions_generated_at = datetime.utcnow()
                 record_stage.current_stage = BRPipelineStage.QUESTION_GENERATION
-                
+
                 self.db.commit()
-                
+
                 if idx % 25 == 0 or idx == total:
                     logger.info(f"Stage 3 progress: {idx}/{total} records")
-                
+
             except Exception as e:
                 logger.error(f"Failed to generate questions for record {record_stage.id}: {e}")
                 record_stage.error_message = str(e)
