@@ -3,6 +3,7 @@ BR Pipeline API Endpoints
 Handles automated Bahasa Rojak detection and question generation pipeline
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import asyncio
@@ -38,35 +39,31 @@ router = APIRouter(prefix="/api/br-pipeline", tags=["BR Pipeline"])
 def run_pipeline_in_background_thread(pipeline_run_id: int):
     """Background task to execute pipeline stages in a separate thread."""
     import asyncio
-    # Create a new database session for the background task
     db = SessionLocal()
+    loop = None
     try:
-        # Update status to running
-        from backend.br_pipeline_models import BRPipelineRun
         pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
         if pipeline_run:
             pipeline_run.status = "running"
             db.commit()
-        
-        # Create new event loop for this thread
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         orchestrator = BRPipelineOrchestrator(db)
         loop.run_until_complete(orchestrator._execute_pipeline(pipeline_run_id))
-        
+
         logger.info(f"Pipeline {pipeline_run_id} background execution completed")
     except Exception as e:
-        logger.error(f"Pipeline {pipeline_run_id} background execution failed: {e}")
-        # Mark as failed
-        from backend.br_pipeline_models import BRPipelineRun
+        logger.exception(f"Pipeline {pipeline_run_id} background execution failed: {e}")
         pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
         if pipeline_run:
             pipeline_run.status = "failed"
             pipeline_run.error_message = str(e)
             db.commit()
     finally:
-        loop.close()
+        if loop is not None:
+            loop.close()
         db.close()
 
 
@@ -87,41 +84,40 @@ def run_stage_in_background_thread(stage_func, pipeline_run_id: int, **kwargs):
     """Generic background thread runner for stage execution."""
     import asyncio
     db = SessionLocal()
+    loop = None
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
-        # Update pipeline status to running
+
         pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
         if pipeline_run:
             pipeline_run.status = "running"
             pipeline_run.error_message = None
             db.commit()
-        
+
         orchestrator = BRPipelineOrchestrator(db)
         count = loop.run_until_complete(stage_func(orchestrator, pipeline_run_id, **kwargs))
-        
-        # Update pipeline status to completed
+
         pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
         if pipeline_run:
             pipeline_run.status = "completed"
             pipeline_run.error_message = None
             db.commit()
-        
+
         logger.info(f"Stage execution completed: {count} records processed for pipeline {pipeline_run_id}")
     except Exception as e:
-        logger.error(f"Stage execution failed for pipeline {pipeline_run_id}: {e}", exc_info=True)
-        # Mark pipeline as failed with error message
+        logger.exception(f"Stage execution failed for pipeline {pipeline_run_id}: {e}")
         try:
             pipeline_run = db.query(BRPipelineRun).filter(BRPipelineRun.id == pipeline_run_id).first()
             if pipeline_run:
                 pipeline_run.status = "failed"
                 pipeline_run.error_message = str(e)
                 db.commit()
-        except Exception:
-            pass
+        except Exception as inner_e:
+            logger.error(f"Failed to mark pipeline {pipeline_run_id} as failed: {inner_e}")
     finally:
-        loop.close()
+        if loop is not None:
+            loop.close()
         db.close()
 
 
@@ -767,18 +763,35 @@ def get_restructure_records(
     if not pipeline_run:
         raise HTTPException(status_code=404, detail="Pipeline run not found")
     
+    # Rows where both original_text and restructured_text are empty/null have no
+    # actionable content and must be hidden from all tabs and counts.
+    empty_row_condition = (
+        or_(TextRecord.original_text == None, TextRecord.original_text == "")
+        & or_(BRRecordStage.restructured_text == None, BRRecordStage.restructured_text == "")
+    )
+
     # Only count/show records classified as Bahasa Rojak
     if status == "discarded":
-        base_filter = db.query(BRRecordStage).filter(
-            BRRecordStage.pipeline_run_id == pipeline_run_id,
-            BRRecordStage.is_bahasa_rojak == True,
-            BRRecordStage.is_discarded == True
+        base_filter = (
+            db.query(BRRecordStage)
+            .join(TextRecord, BRRecordStage.text_record_id == TextRecord.id)
+            .filter(
+                BRRecordStage.pipeline_run_id == pipeline_run_id,
+                BRRecordStage.is_bahasa_rojak == True,
+                BRRecordStage.is_discarded == True,
+                ~empty_row_condition,
+            )
         )
     else:
-        base_filter = db.query(BRRecordStage).filter(
-            BRRecordStage.pipeline_run_id == pipeline_run_id,
-            BRRecordStage.is_bahasa_rojak == True,
-            BRRecordStage.is_discarded == False
+        base_filter = (
+            db.query(BRRecordStage)
+            .join(TextRecord, BRRecordStage.text_record_id == TextRecord.id)
+            .filter(
+                BRRecordStage.pipeline_run_id == pipeline_run_id,
+                BRRecordStage.is_bahasa_rojak == True,
+                BRRecordStage.is_discarded == False,
+                ~empty_row_condition,
+            )
         )
     
     total = base_filter.count()
@@ -897,26 +910,44 @@ def search_restructure_records(
 
     search_term = f"%{q}%"
 
-    # All active BR records for position calculation (ordered same as main listing)
-    all_active = db.query(BRRecordStage).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id,
-        BRRecordStage.is_bahasa_rojak == True,
-        BRRecordStage.is_discarded == False,
-    ).order_by(BRRecordStage.id).all()
+    empty_row_condition = (
+        or_(TextRecord.original_text == None, TextRecord.original_text == "")
+        & or_(BRRecordStage.restructured_text == None, BRRecordStage.restructured_text == "")
+    )
+
+    # All active (non-hidden) BR records for position calculation — must match main listing order
+    all_active = (
+        db.query(BRRecordStage)
+        .join(TextRecord, BRRecordStage.text_record_id == TextRecord.id)
+        .filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id,
+            BRRecordStage.is_bahasa_rojak == True,
+            BRRecordStage.is_discarded == False,
+            ~empty_row_condition,
+        )
+        .order_by(BRRecordStage.id)
+        .all()
+    )
 
     id_to_position = {rs.id: idx + 1 for idx, rs in enumerate(all_active)}  # 1-based
 
     # Search query (join with TextRecord for original_text)
-    matching_stages = db.query(BRRecordStage).join(
-        TextRecord, TextRecord.id == BRRecordStage.text_record_id
-    ).filter(
-        BRRecordStage.pipeline_run_id == pipeline_run_id,
-        BRRecordStage.is_bahasa_rojak == True,
-        BRRecordStage.is_discarded == False,
-    ).filter(
-        TextRecord.original_text.ilike(search_term) |
-        BRRecordStage.restructured_text.ilike(search_term)
-    ).order_by(BRRecordStage.id).all()
+    matching_stages = (
+        db.query(BRRecordStage)
+        .join(TextRecord, TextRecord.id == BRRecordStage.text_record_id)
+        .filter(
+            BRRecordStage.pipeline_run_id == pipeline_run_id,
+            BRRecordStage.is_bahasa_rojak == True,
+            BRRecordStage.is_discarded == False,
+            ~empty_row_condition,
+        )
+        .filter(
+            TextRecord.original_text.ilike(search_term)
+            | BRRecordStage.restructured_text.ilike(search_term)
+        )
+        .order_by(BRRecordStage.id)
+        .all()
+    )
 
     total = len(matching_stages)
     offset = (page - 1) * per_page

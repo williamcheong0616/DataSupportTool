@@ -35,7 +35,7 @@ celery_app.conf.update(
     broker_connection_max_retries=10,
     
     # Result settings
-    result_expires=3600,  # Results expire after 1 hour
+    result_expires=86400,  # Results expire after 24 hours
     
     # Task routing - separate queues for different workloads
     task_routes={

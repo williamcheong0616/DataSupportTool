@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import StreamingResponse, FileResponse
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 import os
 import io
@@ -49,34 +50,42 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 def list_asr_datasets(db: Session = Depends(get_db)):
     """
     List all ASR datasets with file counts and status breakdown.
-    
+
     Returns:
         List of datasets with file_count, pending_count, completed_count
     """
-    datasets = db.query(ASRDataset).order_by(ASRDataset.created_at.desc()).all()
-    result = []
-    for ds in datasets:
-        file_count = db.query(AudioFile).filter(AudioFile.dataset_id == ds.id).count()
-        pending_count = db.query(AudioFile).filter(
-            AudioFile.dataset_id == ds.id,
-            AudioFile.status.in_([TranscriptionStatus.PENDING, TranscriptionStatus.TRANSCRIBING])
-        ).count()
-        transcribed_count = db.query(AudioFile).filter(
-            AudioFile.dataset_id == ds.id,
-            AudioFile.status.in_([TranscriptionStatus.TRANSCRIBED, TranscriptionStatus.ANNOTATING])
-        ).count()
-        completed_count = db.query(AudioFile).filter(
-            AudioFile.dataset_id == ds.id,
-            AudioFile.status == TranscriptionStatus.COMPLETED
-        ).count()
-        result.append({
+    rows = (
+        db.query(
+            ASRDataset,
+            func.count(AudioFile.id).label("file_count"),
+            func.sum(case(
+                (AudioFile.status.in_([TranscriptionStatus.PENDING, TranscriptionStatus.TRANSCRIBING]), 1),
+                else_=0,
+            )).label("pending_count"),
+            func.sum(case(
+                (AudioFile.status.in_([TranscriptionStatus.TRANSCRIBED, TranscriptionStatus.ANNOTATING]), 1),
+                else_=0,
+            )).label("transcribed_count"),
+            func.sum(case(
+                (AudioFile.status == TranscriptionStatus.COMPLETED, 1),
+                else_=0,
+            )).label("completed_count"),
+        )
+        .outerjoin(AudioFile, AudioFile.dataset_id == ASRDataset.id)
+        .group_by(ASRDataset.id)
+        .order_by(ASRDataset.created_at.desc())
+        .all()
+    )
+    return [
+        {
             **ds.__dict__,
-            "file_count": file_count,
-            "pending_count": pending_count,
-            "transcribed_count": transcribed_count,
-            "completed_count": completed_count,
-        })
-    return result
+            "file_count": int(fc or 0),
+            "pending_count": int(pc or 0),
+            "transcribed_count": int(tc or 0),
+            "completed_count": int(cc or 0),
+        }
+        for ds, fc, pc, tc, cc in rows
+    ]
 
 
 @router.post("/datasets", response_model=ASRDatasetResponse)
@@ -177,23 +186,36 @@ async def upload_audio_files(
             # Save file to disk
             file_path = os.path.join(dataset_dir, file.filename or "upload.wav")
             content = await file.read()
-            with open(file_path, "wb") as f:
-                f.write(content)
-            
+            try:
+                with open(file_path, "wb") as f:
+                    f.write(content)
+            except OSError as e:
+                logger.error(f"Failed to write audio file {file_path}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
             file_size = len(content)
             total_size += file_size
-            
-            # Create database record
-            audio_file = AudioFile(
-                dataset_id=dataset_id,
-                filename=file.filename,
-                file_path=file_path,
-                file_size=file_size,
-                status=TranscriptionStatus.PENDING,
-            )
-            db.add(audio_file)
-            db.commit()
-            db.refresh(audio_file)
+
+            # Create database record; clean up disk file if DB fails
+            try:
+                audio_file = AudioFile(
+                    dataset_id=dataset_id,
+                    filename=file.filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    status=TranscriptionStatus.PENDING,
+                )
+                db.add(audio_file)
+                db.commit()
+                db.refresh(audio_file)
+            except Exception as e:
+                db.rollback()
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+                logger.error(f"Failed to create DB record for {file_path}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to register file in database: {e}")
             uploaded.append(audio_file.id)
             
             # Queue transcription via Celery

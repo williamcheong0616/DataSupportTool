@@ -56,115 +56,109 @@ def _serialize_output(output: FinetunedModelOutput) -> dict:
 @router.get("/datasets/text")
 def list_text_datasets_with_outputs(db: Session = Depends(get_db)):
     """Return text datasets that have at least one finetuned output."""
-    dataset_ids = db.query(FinetunedModelOutput.record_id).filter(
-        FinetunedModelOutput.dataset_type == 'text'
-    ).all()
-    record_ids = [r[0] for r in dataset_ids]
-    if not record_ids:
-        return []
-    dataset_id_rows = db.query(TextRecord.dataset_id).filter(
-        TextRecord.id.in_(record_ids)
-    ).distinct().all()
-    ds_ids = [r[0] for r in dataset_id_rows]
-    datasets = db.query(TextDataset).filter(TextDataset.id.in_(ds_ids)).all()
+    datasets = (
+        db.query(TextDataset)
+        .join(TextRecord, TextRecord.dataset_id == TextDataset.id)
+        .join(
+            FinetunedModelOutput,
+            (FinetunedModelOutput.record_id == TextRecord.id)
+            & (FinetunedModelOutput.dataset_type == "text"),
+        )
+        .distinct()
+        .all()
+    )
     return [{"id": d.id, "name": d.name} for d in datasets]
 
 
 @router.get("/datasets/asr")
 def list_asr_datasets_with_outputs(db: Session = Depends(get_db)):
     """Return ASR datasets that have at least one finetuned output."""
-    file_ids = db.query(FinetunedModelOutput.record_id).filter(
-        FinetunedModelOutput.dataset_type == 'asr'
-    ).all()
-    record_ids = [r[0] for r in file_ids]
-    if not record_ids:
-        return []
-    dataset_id_rows = db.query(AudioFile.dataset_id).filter(
-        AudioFile.id.in_(record_ids)
-    ).distinct().all()
-    ds_ids = [r[0] for r in dataset_id_rows]
-    datasets = db.query(ASRDataset).filter(ASRDataset.id.in_(ds_ids)).all()
+    datasets = (
+        db.query(ASRDataset)
+        .join(AudioFile, AudioFile.dataset_id == ASRDataset.id)
+        .join(
+            FinetunedModelOutput,
+            (FinetunedModelOutput.record_id == AudioFile.id)
+            & (FinetunedModelOutput.dataset_type == "asr"),
+        )
+        .distinct()
+        .all()
+    )
     return [{"id": d.id, "name": d.name} for d in datasets]
 
 
 @router.get("/text/{dataset_id}")
 def get_text_error_analysis(dataset_id: int, db: Session = Depends(get_db)):
     """Only fetch text records that have at least one finetuned output."""
-    # Get all finetuned outputs for text type in this dataset
-    outputs_all = (
+    from collections import defaultdict
+
+    outputs = (
         db.query(FinetunedModelOutput)
-        .filter(FinetunedModelOutput.dataset_type == 'text')
+        .join(TextRecord, FinetunedModelOutput.record_id == TextRecord.id)
+        .filter(
+            FinetunedModelOutput.dataset_type == "text",
+            TextRecord.dataset_id == dataset_id,
+        )
         .all()
     )
 
-    # Filter to those whose record_id belongs to this dataset
-    record_ids_in_dataset = {
-        r.id for r in db.query(TextRecord.id).filter(TextRecord.dataset_id == dataset_id).all()
-    }
-
-    # Group outputs by record_id
-    from collections import defaultdict
-    outputs_by_record = defaultdict(list)
-    for o in outputs_all:
-        if o.record_id in record_ids_in_dataset:
-            outputs_by_record[o.record_id].append(o)
-
-    if not outputs_by_record:
+    if not outputs:
         return []
 
-    # Fetch only the relevant records
+    outputs_by_record: dict = defaultdict(list)
+    for o in outputs:
+        outputs_by_record[o.record_id].append(o)
+
     records = db.query(TextRecord).filter(
         TextRecord.id.in_(list(outputs_by_record.keys()))
     ).all()
 
-    result = []
-    for r in records:
-        ground_truth = r.modified_text if r.modified_text else r.original_text
-        result.append({
+    return [
+        {
             "record_id": r.id,
-            "ground_truth": ground_truth,
+            "ground_truth": r.modified_text if r.modified_text else r.original_text,
             "finetuned_outputs": [_serialize_output(o) for o in outputs_by_record[r.id]],
-        })
-    return result
+        }
+        for r in records
+    ]
 
 
 @router.get("/asr/{dataset_id}")
 def get_asr_error_analysis(dataset_id: int, db: Session = Depends(get_db)):
     """Only fetch ASR records that have at least one finetuned output."""
-    outputs_all = (
+    from collections import defaultdict
+
+    outputs = (
         db.query(FinetunedModelOutput)
-        .filter(FinetunedModelOutput.dataset_type == 'asr')
+        .join(AudioFile, FinetunedModelOutput.record_id == AudioFile.id)
+        .filter(
+            FinetunedModelOutput.dataset_type == "asr",
+            AudioFile.dataset_id == dataset_id,
+        )
         .all()
     )
 
-    record_ids_in_dataset = {
-        r.id for r in db.query(AudioFile.id).filter(AudioFile.dataset_id == dataset_id).all()
-    }
-
-    from collections import defaultdict
-    outputs_by_record = defaultdict(list)
-    for o in outputs_all:
-        if o.record_id in record_ids_in_dataset:
-            outputs_by_record[o.record_id].append(o)
-
-    if not outputs_by_record:
+    if not outputs:
         return []
+
+    outputs_by_record: dict = defaultdict(list)
+    for o in outputs:
+        outputs_by_record[o.record_id].append(o)
 
     records = db.query(AudioFile).filter(
         AudioFile.id.in_(list(outputs_by_record.keys()))
     ).all()
 
-    result = []
-    for r in records:
-        ground_truth = r.corrected_transcript if r.corrected_transcript else r.whisper_transcript
-        result.append({
+    return [
+        {
             "record_id": r.id,
             "file_path": r.file_path,
             "filename": r.filename,
-            "ground_truth": ground_truth,
+            "ground_truth": r.corrected_transcript if r.corrected_transcript else r.whisper_transcript,
             "finetuned_outputs": [_serialize_output(o) for o in outputs_by_record[r.id]],
-        })
-    return result
+        }
+        for r in records
+    ]
 
 
 @router.post("/annotations")
