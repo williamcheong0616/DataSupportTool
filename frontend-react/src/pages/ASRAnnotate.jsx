@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import WaveSurfer from 'wavesurfer.js'
 import {
+  ArrowLeft, Play, Pause, Square, SkipBack, SkipForward,
+  RefreshCw, Trash2, Link2, Zap, CheckCircle2, Search,
+  ChevronUp, ChevronDown,
+} from 'lucide-react'
+import {
   getASRDatasets,
   getAudioFiles,
   getAudioUrl,
@@ -15,12 +20,30 @@ import {
   pollTaskUntilDone,
 } from '../api'
 
-const STATUS_COLORS = {
-  pending: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
-  transcribing: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300',
-  transcribed: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
-  annotating: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
-  completed: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+const STATUS_CFG = {
+  pending:     { label: 'Pending',     cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' },
+  transcribing:{ label: 'Processing',  cls: 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300' },
+  transcribed: { label: 'Transcribed', cls: 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300' },
+  annotating:  { label: 'In Progress', cls: 'bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300' },
+  completed:   { label: 'Completed',   cls: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' },
+}
+
+function StatusChip({ status, size = 'xs' }) {
+  const cfg = STATUS_CFG[status] || STATUS_CFG.pending
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-${size} font-medium ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  )
+}
+
+function Kbd({ children }) {
+  return (
+    <kbd className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium"
+      style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)', color: 'var(--clr-text-muted)' }}>
+      {children}
+    </kbd>
+  )
 }
 
 const PER_PAGE = 20
@@ -45,24 +68,16 @@ function ASRAnnotate() {
   const [dur, setDur] = useState(0)
   const [waveReady, setWaveReady] = useState(false)
   const [waveError, setWaveError] = useState(null)
-
-  // pagination
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(1)
   const [totalAll, setTotalAll] = useState(0)
   const [filteredTotal, setFilteredTotal] = useState(0)
   const [counts, setCounts] = useState({ pending: 0, transcribed: 0, completed: 0 })
-
-  // fuse mode
   const [fuseMode, setFuseMode] = useState(false)
   const [selected, setSelected] = useState([])
   const [fusing, setFusing] = useState(false)
-
-  // sorting
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState('asc')
-
-  // find & replace
   const [showFindReplace, setShowFindReplace] = useState(false)
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
@@ -70,18 +85,19 @@ function ASRAnnotate() {
 
   const cur = files[idx]
 
-  // wavesurfer
+  // WaveSurfer setup
   useEffect(() => {
     if (wsRef.current) { wsRef.current.destroy(); wsRef.current = null }
     if (!waveformRef.current || !cur) return
-
     setWaveReady(false); setWaveError(null); setCurTime(0); setDur(0)
 
     const ws = WaveSurfer.create({
       container: waveformRef.current,
-      waveColor: '#c7d2fe', progressColor: '#6366f1', cursorColor: '#4f46e5',
+      waveColor: '#5EEAD4',       // teal-300
+      progressColor: '#0D9488',   // teal-600
+      cursorColor: '#0F766E',     // teal-700
       cursorWidth: 2, barWidth: 2, barGap: 1, barRadius: 2,
-      height: 100, normalize: true, url: getAudioUrl(cur.id),
+      height: 80, normalize: true, url: getAudioUrl(cur.id),
     })
     wsRef.current = ws
 
@@ -99,7 +115,6 @@ function ASRAnnotate() {
     if (wsRef.current && waveReady) wsRef.current.setPlaybackRate(rate)
   }, [rate, waveReady])
 
-  // load dataset
   useEffect(() => {
     getASRDatasets()
       .then(res => {
@@ -109,15 +124,8 @@ function ASRAnnotate() {
       .catch(() => navigate('/asr'))
   }, [datasetId])
 
-  // fetch files when page/filter/sort changes
-  useEffect(() => {
-    if (dataset) fetchFiles()
-  }, [dataset, page, filter, sortBy, sortOrder])
-
-  // sync transcript
-  useEffect(() => {
-    if (cur) setTranscript(cur.corrected_transcript || cur.whisper_transcript || '')
-  }, [idx, files])
+  useEffect(() => { if (dataset) fetchFiles() }, [dataset, page, filter, sortBy, sortOrder])
+  useEffect(() => { if (cur) setTranscript(cur.corrected_transcript || cur.whisper_transcript || '') }, [idx, files])
 
   async function fetchFiles() {
     setLoading(true)
@@ -126,23 +134,14 @@ function ASRAnnotate() {
       const offset = (page - 1) * PER_PAGE
       const res = await getAudioFiles(datasetId, status, PER_PAGE, offset, sortBy, sortOrder)
       const batch = res.data.files || []
-
       setFiles(batch)
       setFilteredTotal(res.data.filtered_total || res.data.total || 0)
       setTotalAll(res.data.total || 0)
       setPages(res.data.total_pages || 1)
-      setCounts({
-        pending: res.data.pending || 0,
-        transcribed: res.data.transcribed || 0,
-        completed: res.data.completed || 0,
-      })
-
-      // jump to first incomplete
+      setCounts({ pending: res.data.pending || 0, transcribed: res.data.transcribed || 0, completed: res.data.completed || 0 })
       const start = batch.findIndex(f => f.status !== 'completed')
       setIdx(start >= 0 ? start : 0)
-    } catch (err) {
-      console.error('Failed to load:', err)
-    }
+    } catch (err) { console.error('Failed to load:', err) }
     setLoading(false)
   }
 
@@ -150,85 +149,49 @@ function ASRAnnotate() {
   function changeSort(field) { setSortBy(field); setPage(1); setIdx(0) }
   function toggleSortOrder() { setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc'); setPage(1); setIdx(0) }
   function goPage(p) { if (p >= 1 && p <= pages) { setPage(p); setIdx(0) } }
-
-  function fmtTime(s) {
-    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-  }
-
+  function fmtTime(s) { return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` }
   function playPause() { wsRef.current?.playPause() }
   function stop() { wsRef.current?.stop(); setCurTime(0) }
   function skip(s) {
-    if (wsRef.current && dur > 0) {
-      const t = Math.max(0, Math.min(dur, curTime + s))
-      wsRef.current.seekTo(t / dur)
-    }
+    if (wsRef.current && dur > 0) wsRef.current.seekTo(Math.max(0, Math.min(dur, curTime + s)) / dur)
   }
 
   async function doTranscribe(engine = 'whisper') {
     if (!cur) return
-    const id = cur.id
     setTranscribing(true)
     try {
-      const res = await transcribeAudio(id, engine)
-      const taskId = res.data.task_id
-      
-      if (taskId) {
-        // Poll until transcription completes
+      const res = await transcribeAudio(cur.id, engine)
+      if (res.data.task_id) {
         try {
-          const result = await pollTaskUntilDone(taskId, 2000, 150)
-          
-          if (result && result.status === 'success') {
-            // Refresh the file list to get updated data
-            await fetchFiles()
-          }
-        } catch (pollErr) {
-          alert('Transcription may still be running. Refresh to check.')
-        }
+          await pollTaskUntilDone(res.data.task_id, 2000, 150)
+          await fetchFiles()
+        } catch { alert('Transcription may still be running. Refresh to check.') }
       }
-    } catch (err) {
-      alert('Transcribe failed: ' + (err.response?.data?.detail || err.message))
-    }
+    } catch (err) { alert('Transcribe failed: ' + (err.response?.data?.detail || err.message)) }
     setTranscribing(false)
   }
 
   async function doRetranscribe(engine = 'whisper') {
     if (!cur || !confirm(`Re-transcribe with ${engine}? This clears the existing ${engine} transcription.`)) return
-    const id = cur.id
     setTranscribing(true)
     try {
-      const res = await retranscribeAudio(id, engine)
-      const taskId = res.data.task_id
-      
-      if (taskId) {
-        try {
-          const result = await pollTaskUntilDone(taskId, 2000, 150)
-          if (result && result.status === 'success') {
-            await fetchFiles()
-          }
-        } catch (pollErr) {
-          alert('Re-transcription may still be running. Refresh to check.')
-        }
+      const res = await retranscribeAudio(cur.id, engine)
+      if (res.data.task_id) {
+        try { await pollTaskUntilDone(res.data.task_id, 2000, 150); await fetchFiles() }
+        catch { alert('Re-transcription may still be running. Refresh to check.') }
       }
-    } catch (err) {
-      alert('Re-transcribe failed: ' + (err.response?.data?.detail || err.message))
-    }
+    } catch (err) { alert('Re-transcribe failed: ' + (err.response?.data?.detail || err.message)) }
     setTranscribing(false)
   }
 
   async function doDelete() {
     if (!cur || !confirm(`Delete "${cur.filename}"? Can't undo.`)) return
-    try {
-      await deleteAudioFile(cur.id)
-      fetchFiles()
-    } catch (err) {
-      alert('Delete failed: ' + (err.response?.data?.detail || err.message))
-    }
+    try { await deleteAudioFile(cur.id); fetchFiles() }
+    catch (err) { alert('Delete failed: ' + (err.response?.data?.detail || err.message)) }
   }
 
   function toggleFuse() { setFuseMode(!fuseMode); setSelected([]) }
-  function toggleSelect(id) {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-  }
+  function toggleSelect(id) { setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]) }
 
   async function doFuse() {
     if (selected.length < 2) return alert('Select at least 2 files')
@@ -236,26 +199,20 @@ function ASRAnnotate() {
     setFusing(true)
     try {
       const res = await fuseAudioFiles(selected)
-      alert(`✓ Fused ${selected.length} files → ${res.data.filename} (${Math.round(res.data.duration)}s)`)
-      setFuseMode(false); setSelected([])
-      fetchFiles()
-    } catch (err) {
-      alert('Fuse failed: ' + (err.response?.data?.detail || err.message))
-    }
+      alert(`Fused ${selected.length} files → ${res.data.filename} (${Math.round(res.data.duration)}s)`)
+      setFuseMode(false); setSelected([]); fetchFiles()
+    } catch (err) { alert('Fuse failed: ' + (err.response?.data?.detail || err.message)) }
     setFusing(false)
   }
 
   async function save() {
     if (!cur) return
-    const id = cur.id
     setSaving(true)
     try {
       const annotator = localStorage.getItem('dst_username') || 'anonymous'
-      await annotateTranscript(id, transcript, annotator)
-      setFiles(prev => prev.map(f => f.id === id ? { ...f, corrected_transcript: transcript } : f))
-    } catch (err) {
-      alert('Save failed: ' + (err.response?.data?.detail || err.message))
-    }
+      await annotateTranscript(cur.id, transcript, annotator)
+      setFiles(prev => prev.map(f => f.id === cur.id ? { ...f, corrected_transcript: transcript } : f))
+    } catch (err) { alert('Save failed: ' + (err.response?.data?.detail || err.message)) }
     setSaving(false)
   }
 
@@ -266,19 +223,13 @@ function ASRAnnotate() {
       const annotator = localStorage.getItem('dst_username') || 'anonymous'
       await annotateTranscript(cur.id, transcript, annotator)
       await updateFileStatus(cur.id, 'completed')
-
-      // update locally
       setFiles(prev => prev.map(f => f.id === cur.id ? { ...f, corrected_transcript: transcript, status: 'completed' } : f))
       setCounts(c => ({ ...c, completed: c.completed + 1 }))
-
-      // go to next incomplete
       let next = files.findIndex((f, i) => i > idx && f.status !== 'completed')
       if (next === -1) next = files.findIndex((f, i) => i < idx && f.status !== 'completed')
       if (next >= 0) setIdx(next)
       else if (idx < files.length - 1) setIdx(idx + 1)
-    } catch (err) {
-      alert('Failed: ' + (err.response?.data?.detail || err.message))
-    }
+    } catch (err) { alert('Failed: ' + (err.response?.data?.detail || err.message)) }
     setSaving(false)
   }
 
@@ -288,30 +239,22 @@ function ASRAnnotate() {
     if ((e.ctrlKey || e.metaKey) && e.key === 'h') { e.preventDefault(); setShowFindReplace(prev => !prev) }
   }
 
-  // Find & Replace helpers
   const matchCount = (() => {
     if (!findText || !transcript) return 0
     try {
       const flags = caseSensitive ? 'g' : 'gi'
-      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      return (transcript.match(new RegExp(escaped, flags)) || []).length
-    } catch {
-      return 0
-    }
+      return (transcript.match(new RegExp(findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)) || []).length
+    } catch { return 0 }
   })()
 
   function doReplaceAll() {
     if (!findText) return
     try {
       const flags = caseSensitive ? 'g' : 'gi'
-      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      setTranscript(prev => prev.replace(new RegExp(escaped, flags), replaceText))
-    } catch {
-      // ignore invalid regex
-    }
+      setTranscript(prev => prev.replace(new RegExp(findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags), replaceText))
+    } catch { /* ignore */ }
   }
 
-  // global keyboard shortcuts
   useEffect(() => {
     function onKey(e) {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return
@@ -325,8 +268,10 @@ function ASRAnnotate() {
 
   if (loading && files.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-12 h-12 border-b-2 border-indigo-600 rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center h-72 gap-4">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent animate-spin"
+          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
+        <p className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>Loading files…</p>
       </div>
     )
   }
@@ -334,69 +279,92 @@ function ASRAnnotate() {
   const pct = totalAll > 0 ? Math.round((counts.completed / totalAll) * 100) : 0
 
   return (
-    <div>
-      {/* header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-5">
+
+      {/* ── Page header ─────────────────────────────────────── */}
+      <div className="flex items-start justify-between">
         <div>
-          <button onClick={() => navigate('/asr')} className="mb-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300">
-            ← Back to Datasets
+          <button
+            onClick={() => navigate('/asr')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium mb-2 transition-colors"
+            style={{ color: 'var(--clr-text-muted)' }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--clr-primary)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--clr-text-muted)'}
+          >
+            <ArrowLeft size={14} /> Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{dataset?.name || 'ASR Annotation'}</h1>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+            {dataset?.name || 'ASR Annotation'}
+          </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={toggleFuse}
-            className={`px-4 py-2 rounded-lg border transition ${fuseMode
-              ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-            {fuseMode ? '✓ Fuse Mode' : '🔗 Fuse Audio'}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleFuse}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors border ${
+              fuseMode
+                ? 'text-white border-teal-600'
+                : 'border-slate-300 dark:border-slate-600'
+            }`}
+            style={fuseMode ? { background: 'var(--clr-primary)' } : { color: 'var(--clr-text)' }}
+          >
+            <Link2 size={13} /> {fuseMode ? 'Fuse Mode On' : 'Fuse Audio'}
           </button>
           {fuseMode && selected.length >= 2 && (
-            <button onClick={doFuse} disabled={fusing}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
-              {fusing ? '⏳ Fusing...' : `⚡ Fuse ${selected.length}`}
+            <button
+              onClick={doFuse}
+              disabled={fusing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <Zap size={13} /> {fusing ? 'Fusing…' : `Fuse ${selected.length} Files`}
             </button>
           )}
         </div>
       </div>
 
-      {/* stats + filter bar */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{totalAll}</div>
-              <div className="text-sm text-gray-500">Total Files</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{counts.pending}</div>
-              <div className="text-sm text-gray-500">Pending</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{counts.transcribed}</div>
-              <div className="text-sm text-gray-500">Transcribed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{counts.completed}</div>
-              <div className="text-sm text-gray-500">Completed</div>
-            </div>
+      {/* ── Stats + controls bar ────────────────────────────── */}
+      <div className="surface px-5 py-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          {/* Counters */}
+          <div className="flex items-center gap-5">
+            {[
+              { label: 'Total', val: totalAll, color: 'var(--clr-primary)' },
+              { label: 'Pending', val: counts.pending, color: 'var(--clr-text-muted)' },
+              { label: 'Transcribed', val: counts.transcribed, color: '#3B82F6' },
+              { label: 'Completed', val: counts.completed, color: '#10B981' },
+            ].map(({ label, val, color }) => (
+              <div key={label} className="text-center">
+                <div className="text-xl font-bold" style={{ fontFamily: 'Syne, sans-serif', color }}>{val}</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>{label}</div>
+              </div>
+            ))}
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-500">Sort:</label>
-              <select value={sortBy} onChange={e => changeSort(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+
+          {/* Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+              <span>Sort</span>
+              <select
+                value={sortBy}
+                onChange={e => changeSort(e.target.value)}
+                className="form-input !w-auto !py-1 text-xs"
+              >
                 <option value="created_at">Date Added</option>
                 <option value="filename">Filename</option>
                 <option value="id">File ID</option>
               </select>
-              <button onClick={toggleSortOrder}
-                className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+              <button
+                onClick={toggleSortOrder}
+                className="inline-flex items-center gap-0.5 px-2 py-1 rounded border text-xs transition-colors"
+                style={{ borderColor: 'var(--clr-border)', color: 'var(--clr-text-muted)' }}
+              >
+                {sortOrder === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
                 {sortOrder === 'asc' ? 'Asc' : 'Desc'}
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-500">Filter:</label>
-              <select value={filter} onChange={e => changeFilter(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+              <span>Filter</span>
+              <select value={filter} onChange={e => changeFilter(e.target.value)} className="form-input !w-auto !py-1 text-xs">
                 <option value="all">All Files</option>
                 <option value="pending">Pending</option>
                 <option value="transcribed">Transcribed</option>
@@ -404,308 +372,478 @@ function ASRAnnotate() {
                 <option value="completed">Completed</option>
               </select>
             </div>
+
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">{pct}%</span>
-              <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+              <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>{pct}%</span>
+              <div className="w-28 progress-track">
+                <div className="progress-fill" style={{ width: `${pct}%` }} />
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* ── Fuse mode banner ────────────────────────────────── */}
       {fuseMode && (
-        <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🔗</span>
-            <div className="flex-1">
-              <h3 className="font-medium text-indigo-900 dark:text-indigo-200">Audio Fuse Mode</h3>
-              <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">Select 2+ files using checkboxes to concatenate them.</p>
-            </div>
-            <button onClick={toggleFuse} className="text-indigo-600 hover:text-indigo-800">✕</button>
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm"
+          style={{ background: 'var(--clr-primary-bg)', border: '1px solid color-mix(in srgb, var(--clr-primary) 30%, transparent)' }}
+        >
+          <Link2 size={15} style={{ color: 'var(--clr-primary)' }} />
+          <div style={{ color: 'var(--clr-text)' }}>
+            <span className="font-semibold">Fuse mode active</span>
+            <span className="ml-2" style={{ color: 'var(--clr-text-muted)' }}>Select 2+ files using checkboxes to concatenate them.</span>
+            {selected.length > 0 && <span className="ml-2 font-medium" style={{ color: 'var(--clr-primary)' }}>{selected.length} selected</span>}
           </div>
+          <button onClick={toggleFuse} className="ml-auto opacity-50 hover:opacity-100 text-base leading-none">×</button>
         </div>
       )}
 
       {files.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-          <p className="mb-4 text-xl">No files found</p>
-          <p>Upload audio files or change the filter.</p>
+        <div className="surface p-12 text-center">
+          <p className="text-sm font-medium" style={{ color: 'var(--clr-text)' }}>No files found</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--clr-text-muted)' }}>Upload audio files or change the filter.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* file list sidebar */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-fit">
-            <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">
-              Files
-              <span className="ml-1 text-sm font-normal text-gray-500">
-                ({filteredTotal}{filter !== 'all' ? ` ${filter}` : ''})
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+
+          {/* ── File list sidebar ─────────────────────────── */}
+          <div className="surface p-4 h-fit lg:sticky lg:top-20">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+                Files
+              </h2>
+              <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                {filteredTotal}{filter !== 'all' ? ` ${filter}` : ''} total
+                {fuseMode && selected.length > 0 && (
+                  <span className="ml-1.5 font-medium" style={{ color: 'var(--clr-primary)' }}>· {selected.length} selected</span>
+                )}
               </span>
-              {fuseMode && selected.length > 0 && (
-                <span className="ml-1 text-sm text-indigo-600 dark:text-indigo-400">— {selected.length} selected</span>
-              )}
-            </h2>
-            <div className="space-y-2 max-h-[480px] overflow-y-auto">
-              {files.map((file, i) => (
-                <div key={file.id}
-                  className={`relative w-full text-left p-3 rounded-lg border transition ${
-                    i === idx ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400'
-                      : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                  {fuseMode && (
-                    <div className="absolute left-2 top-3">
-                      <input type="checkbox" checked={selected.includes(file.id)} onChange={() => toggleSelect(file.id)}
-                        className="w-4 h-4 text-indigo-600 rounded" onClick={e => e.stopPropagation()} />
-                    </div>
-                  )}
-                  <button onClick={() => !fuseMode && setIdx(i)} className="w-full text-left" style={{ paddingLeft: fuseMode ? '24px' : 0 }}>
-                    <div className="flex items-start justify-between">
-                      <span className="flex-1 text-sm font-medium truncate dark:text-gray-100">{file.filename}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded ml-2 ${STATUS_COLORS[file.status] || STATUS_COLORS.pending}`}>{file.status}</span>
-                    </div>
-                    {file.duration && <span className="text-xs text-gray-500 dark:text-gray-400">{fmtTime(file.duration)}</span>}
-                  </button>
-                </div>
-              ))}
             </div>
 
-            {/* pagination */}
+            <div className="space-y-1 max-h-[500px] overflow-y-auto -mx-1 px-1">
+              {files.map((file, i) => {
+                const isActive = i === idx
+                return (
+                  <div
+                    key={file.id}
+                    className="relative rounded-lg transition-colors"
+                    style={{
+                      background: isActive ? 'var(--clr-primary-bg)' : undefined,
+                      border: `1px solid ${isActive ? 'color-mix(in srgb, var(--clr-primary) 40%, transparent)' : 'var(--clr-border)'}`,
+                    }}
+                  >
+                    {fuseMode && (
+                      <div className="absolute left-2.5 top-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(file.id)}
+                          onChange={() => toggleSelect(file.id)}
+                          className="w-3.5 h-3.5 rounded accent-teal-600"
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => !fuseMode && setIdx(i)}
+                      className="w-full text-left px-3 py-2.5"
+                      style={{ paddingLeft: fuseMode ? '28px' : undefined }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-medium truncate flex-1" style={{ color: 'var(--clr-text)' }}>
+                          {file.filename}
+                        </span>
+                        <StatusChip status={file.status} />
+                      </div>
+                      {file.duration && (
+                        <span className="text-[11px] mt-0.5 block" style={{ color: 'var(--clr-text-muted)' }}>
+                          {fmtTime(file.duration)}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Pagination */}
             {pages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <button onClick={() => goPage(page - 1)} disabled={page === 1}
-                  className="px-2 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50">Prev</button>
-                <span className="text-sm text-gray-500">Page {page} / {pages}</span>
-                <button onClick={() => goPage(page + 1)} disabled={page === pages}
-                  className="px-2 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50">Next</button>
+              <div
+                className="flex items-center justify-between mt-3 pt-3"
+                style={{ borderTop: '1px solid var(--clr-border)' }}
+              >
+                <button
+                  onClick={() => goPage(page - 1)}
+                  disabled={page === 1}
+                  className="px-2 py-1 text-xs rounded-md transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                >
+                  Prev
+                </button>
+                <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                  {page} / {pages}
+                </span>
+                <button
+                  onClick={() => goPage(page + 1)}
+                  disabled={page === pages}
+                  className="px-2 py-1 text-xs rounded-md transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                >
+                  Next
+                </button>
               </div>
             )}
           </div>
 
-          {/* annotation area */}
+          {/* ── Annotation area ───────────────────────────── */}
           <div className="space-y-4 lg:col-span-2">
             {cur && (
               <>
-                {/* audio player */}
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">{cur.filename}</h2>
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-sm px-3 py-1 rounded ${STATUS_COLORS[cur.status] || STATUS_COLORS.pending}`}>{cur.status}</span>
-                      <div className="flex items-center space-x-1">
-                        <button onClick={() => doRetranscribe('whisper')} disabled={transcribing}
-                          className="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50">
-                          {transcribing ? '...' : '🔄 Whisper'}
-                        </button>
-                        <button onClick={() => doRetranscribe('qwen3')} disabled={transcribing}
-                          className="px-2 py-1 text-xs text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-600 rounded hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50">
-                          {transcribing ? '...' : '🔄 Qwen3'}
-                        </button>
-                      </div>
-                      <button onClick={doDelete}
-                        className="px-2 py-1 text-xs text-red-600 dark:text-red-400 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30">
-                        🗑️ Delete
+                {/* Audio player */}
+                <div className="surface p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-sm font-bold truncate" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+                        {cur.filename}
+                      </h2>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <StatusChip status={cur.status} />
+                      <button
+                        onClick={() => doRetranscribe('whisper')}
+                        disabled={transcribing}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 disabled:opacity-50"
+                        title="Re-transcribe with Whisper"
+                      >
+                        <RefreshCw size={10} /> Whisper
+                      </button>
+                      <button
+                        onClick={() => doRetranscribe('qwen3')}
+                        disabled={transcribing}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 hover:bg-violet-100 disabled:opacity-50"
+                        title="Re-transcribe with Qwen3"
+                      >
+                        <RefreshCw size={10} /> Qwen3
+                      </button>
+                      <button
+                        onClick={doDelete}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 hover:bg-red-100"
+                      >
+                        <Trash2 size={10} /> Delete
                       </button>
                     </div>
                   </div>
 
-                  {/* waveform */}
-                  <div className="mb-4">
-                    <div ref={waveformRef} className="w-full rounded-lg bg-gray-50 dark:bg-gray-700" style={{ minHeight: '100px' }} />
+                  {/* Waveform */}
+                  <div className="rounded-lg overflow-hidden mb-3" style={{ background: 'var(--clr-surface-2)' }}>
+                    <div ref={waveformRef} style={{ minHeight: '80px' }} />
                     {!waveReady && !waveError && (
-                      <div className="flex items-center justify-center h-24 text-gray-400"><div className="animate-pulse">Loading waveform...</div></div>
-                    )}
-                    {waveError && (
-                      <div className="mt-2">
-                        <div className="mb-2 text-sm text-red-500">{waveError}</div>
-                        <audio controls className="w-full" src={getAudioUrl(cur.id)}
-                          onLoadedMetadata={e => setDur(e.target.duration)} onTimeUpdate={e => setCurTime(e.target.currentTime)} />
+                      <div className="flex items-center justify-center h-20 gap-2 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                        <div className="w-4 h-4 rounded-full border border-transparent animate-spin"
+                          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
+                        Loading waveform…
                       </div>
                     )}
                   </div>
+                  {waveError && (
+                    <div className="mb-3">
+                      <p className="text-xs text-red-500 mb-2">{waveError}</p>
+                      <audio
+                        controls
+                        className="w-full"
+                        src={getAudioUrl(cur.id)}
+                        onLoadedMetadata={e => setDur(e.target.duration)}
+                        onTimeUpdate={e => setCurTime(e.target.currentTime)}
+                      />
+                    </div>
+                  )}
 
-                  <div className="flex justify-between mb-3 text-sm text-gray-500 dark:text-gray-400">
-                    <span>{fmtTime(curTime)}</span><span>{fmtTime(dur)}</span>
+                  {/* Time display */}
+                  <div className="flex justify-between text-xs mb-4 tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>
+                    <span>{fmtTime(curTime)}</span>
+                    <span>{fmtTime(dur)}</span>
                   </div>
 
-                  {/* controls */}
-                  <div className="flex items-center justify-center mb-4 space-x-4">
-                    <button onClick={() => skip(-5)} disabled={!waveReady}
-                      className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">⏪ -5s</button>
-                    <button onClick={playPause} disabled={!waveReady}
-                      className="p-4 text-xl text-white bg-indigo-600 rounded-full hover:bg-indigo-700 disabled:opacity-50">{playing ? '⏸️' : '▶️'}</button>
-                    <button onClick={stop} disabled={!waveReady}
-                      className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">⏹️</button>
-                    <button onClick={() => skip(5)} disabled={!waveReady}
-                      className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">+5s ⏩</button>
+                  {/* Playback controls */}
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <button
+                      onClick={() => skip(-5)}
+                      disabled={!waveReady}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
+                      style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                    >
+                      <SkipBack size={13} /> −5s
+                    </button>
+                    <button
+                      onClick={playPause}
+                      disabled={!waveReady}
+                      className="w-11 h-11 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40 hover:brightness-110 active:scale-95"
+                      style={{ background: 'var(--clr-primary)' }}
+                    >
+                      {playing ? <Pause size={18} /> : <Play size={18} />}
+                    </button>
+                    <button
+                      onClick={stop}
+                      disabled={!waveReady}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40"
+                      style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                    >
+                      <Square size={13} />
+                    </button>
+                    <button
+                      onClick={() => skip(5)}
+                      disabled={!waveReady}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
+                      style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                    >
+                      +5s <SkipForward size={13} />
+                    </button>
                   </div>
 
-                  <div className="flex items-center justify-center space-x-4">
-                    <label className="text-sm text-gray-600 dark:text-gray-300">Speed:</label>
-                    <div className="flex space-x-2">
+                  {/* Speed */}
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>Speed</span>
+                    <div className="flex gap-1">
                       {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
-                        <button key={r} onClick={() => setRate(r)}
-                          className={`px-2 py-1 text-sm rounded ${rate === r
-                            ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200'}`}>
-                          {r}x
+                        <button
+                          key={r}
+                          onClick={() => setRate(r)}
+                          className="px-2 py-0.5 rounded text-xs font-medium transition-colors"
+                          style={{
+                            background: rate === r ? 'var(--clr-primary)' : 'var(--clr-surface-2)',
+                            color: rate === r ? '#fff' : 'var(--clr-text-muted)',
+                          }}
+                        >
+                          {r}×
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
-                    <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Space</kbd> play/pause · 
-                    <kbd className="px-1 py-0.5 ml-1 bg-gray-100 dark:bg-gray-700 rounded">←</kbd>/<kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">→</kbd> skip 5s
-                  </div>
+                  {/* Keyboard hints */}
+                  <p className="mt-3 text-center text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                    <Kbd>Space</Kbd> play/pause &nbsp;·&nbsp;
+                    <Kbd>←</Kbd> <Kbd>→</Kbd> skip 5s
+                  </p>
                 </div>
 
-                {/* Transcript panels (Whisper + Qwen3 side by side) */}
+                {/* Transcript panels (Whisper + Qwen3) */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {/* Whisper transcript */}
-                  <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                  {/* Whisper */}
+                  <div className="surface p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">📝 Whisper</h2>
-                      <div className="flex items-center space-x-2">
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                        Whisper
+                      </p>
+                      <div className="flex gap-1.5">
                         {cur.whisper_transcript && (
-                          <button onClick={() => setTranscript(cur.whisper_transcript)}
-                            className="px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30">
+                          <button
+                            onClick={() => setTranscript(cur.whisper_transcript)}
+                            className="px-2 py-0.5 text-xs font-medium rounded transition-colors"
+                            style={{ background: 'var(--clr-primary-bg)', color: 'var(--clr-primary)' }}
+                          >
                             Use as base
                           </button>
                         )}
                         {!cur.whisper_transcript && cur.status === 'pending' && (
-                          <button onClick={() => doTranscribe('whisper')} disabled={transcribing}
-                            className="px-3 py-1 text-xs text-white bg-yellow-500 rounded hover:bg-yellow-600 disabled:opacity-50">
-                            {transcribing ? '...' : '🎤 Run'}
+                          <button
+                            onClick={() => doTranscribe('whisper')}
+                            disabled={transcribing}
+                            className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-200 disabled:opacity-50"
+                          >
+                            {transcribing ? '…' : 'Run'}
                           </button>
                         )}
                       </div>
                     </div>
                     {cur.whisper_transcript ? (
-                      <div className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
-                        <p className="leading-relaxed text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{cur.whisper_transcript}</p>
+                      <div className="p-3 rounded-lg" style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--clr-text)' }}>{cur.whisper_transcript}</p>
                         {cur.whisper_language && (
-                          <div className="mt-2 text-xs text-gray-400">Lang: {cur.whisper_language}{cur.whisper_confidence ? ` · Conf: ${(cur.whisper_confidence * 100).toFixed(0)}%` : ''}</div>
+                          <p className="mt-2 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                            Lang: {cur.whisper_language}{cur.whisper_confidence ? ` · Conf: ${(cur.whisper_confidence * 100).toFixed(0)}%` : ''}
+                          </p>
                         )}
                       </div>
                     ) : (
-                      <div className="p-3 text-center text-sm text-gray-400 border border-gray-300 dark:border-gray-600 border-dashed rounded-lg bg-gray-50 dark:bg-gray-700">
-                        {cur.status === 'transcribing' ? '⏳ Processing...' : 'Not available'}
+                      <div
+                        className="p-3 rounded-lg text-center text-xs border-dashed border"
+                        style={{ color: 'var(--clr-text-muted)', background: 'var(--clr-surface-2)', borderColor: 'var(--clr-border-2)' }}
+                      >
+                        {cur.status === 'transcribing' ? 'Processing…' : 'Not available'}
                       </div>
                     )}
                   </div>
 
-                  {/* Qwen3 transcript */}
-                  <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                  {/* Qwen3 */}
+                  <div className="surface p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">🤖 Qwen3</h2>
-                      <div className="flex items-center space-x-2">
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                        Qwen3 ASR
+                      </p>
+                      <div className="flex gap-1.5">
                         {cur.qwen3_transcript && (
-                          <button onClick={() => setTranscript(cur.qwen3_transcript)}
-                            className="px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30">
+                          <button
+                            onClick={() => setTranscript(cur.qwen3_transcript)}
+                            className="px-2 py-0.5 text-xs font-medium rounded transition-colors"
+                            style={{ background: 'var(--clr-primary-bg)', color: 'var(--clr-primary)' }}
+                          >
                             Use as base
                           </button>
                         )}
                         {!cur.qwen3_transcript && (
-                          <button onClick={() => doTranscribe('qwen3')} disabled={transcribing}
-                            className="px-3 py-1 text-xs text-white bg-purple-500 rounded hover:bg-purple-600 disabled:opacity-50">
-                            {transcribing ? '...' : '🎤 Run'}
+                          <button
+                            onClick={() => doTranscribe('qwen3')}
+                            disabled={transcribing}
+                            className="px-2 py-0.5 text-xs font-medium rounded bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 hover:bg-violet-200 disabled:opacity-50"
+                          >
+                            {transcribing ? '…' : 'Run'}
                           </button>
                         )}
                       </div>
                     </div>
                     {cur.qwen3_transcript ? (
-                      <div className="p-3 border border-purple-200 dark:border-purple-600 rounded-lg bg-purple-50 dark:bg-purple-900/20">
-                        <p className="leading-relaxed text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{cur.qwen3_transcript}</p>
+                      <div className="p-3 rounded-lg" style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--clr-text)' }}>{cur.qwen3_transcript}</p>
                         {cur.qwen3_language && (
-                          <div className="mt-2 text-xs text-gray-400">Lang: {cur.qwen3_language}</div>
+                          <p className="mt-2 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>Lang: {cur.qwen3_language}</p>
                         )}
                       </div>
                     ) : (
-                      <div className="p-3 text-center text-sm text-gray-400 border border-gray-300 dark:border-gray-600 border-dashed rounded-lg bg-gray-50 dark:bg-gray-700">
-                        {cur.status === 'transcribing' ? '⏳ Processing...' : 'Not available — click "🎤 Run"'}
+                      <div
+                        className="p-3 rounded-lg text-center text-xs border-dashed border"
+                        style={{ color: 'var(--clr-text-muted)', background: 'var(--clr-surface-2)', borderColor: 'var(--clr-border-2)' }}
+                      >
+                        {cur.status === 'transcribing' ? 'Processing…' : 'Not yet run — click Run to start'}
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* corrected transcript */}
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                {/* Corrected transcript */}
+                <div className="surface p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">✏️ Corrected Transcription</h2>
-                    <div className="flex items-center space-x-2">
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                      Corrected Transcription
+                    </p>
+                    <div className="flex gap-1.5">
                       {cur.corrected_transcript && (
-                        <span className="px-2 py-1 text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded">Saved</span>
-                      )}
-                      {cur.whisper_transcript && transcript !== cur.whisper_transcript && transcript !== cur.corrected_transcript && (
-                        <span className="px-2 py-1 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 rounded">Unsaved</span>
+                        <span className="px-2 py-0.5 text-xs font-medium rounded bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
+                          Saved
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  <textarea value={transcript} onChange={e => setTranscript(e.target.value)} onKeyDown={onKeyDown} rows={6}
-                    placeholder="Edit transcript here..."
-                    className="w-full px-3 py-2 leading-relaxed border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500" />
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Corrected version will be saved as ground truth.</p>
+                  <textarea
+                    value={transcript}
+                    onChange={e => setTranscript(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    rows={6}
+                    placeholder="Edit transcript here…"
+                    className="form-input font-mono text-sm leading-relaxed"
+                  />
+                  <p className="mt-1.5 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                    This corrected version will be saved as ground truth.
+                  </p>
 
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+S</kbd> save · 
-                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+Enter</kbd> complete · 
-                      <kbd className="px-2 py-1 ml-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+H</kbd> find/replace
+                  <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+                    <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                      <Kbd>Ctrl+S</Kbd> save &nbsp;
+                      <Kbd>Ctrl+↵</Kbd> complete &nbsp;
+                      <Kbd>Ctrl+H</Kbd> find/replace
                     </div>
-                    <div className="flex space-x-2">
-                      <button onClick={() => setShowFindReplace(prev => !prev)}
-                        className={`px-4 py-2 border rounded-lg transition ${showFindReplace
-                          ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300'
-                          : 'border-gray-300 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                        🔍 Find & Replace
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowFindReplace(prev => !prev)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                          showFindReplace
+                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-700 dark:text-amber-300'
+                            : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                        style={!showFindReplace ? { color: 'var(--clr-text)' } : undefined}
+                      >
+                        <Search size={11} /> Find & Replace
                       </button>
-                      <button onClick={save} disabled={saving}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
-                        {saving ? 'Saving...' : 'Save'}
+                      <button
+                        onClick={save}
+                        disabled={saving}
+                        className="btn-secondary text-xs px-3 py-1.5"
+                      >
+                        {saving ? 'Saving…' : 'Save'}
                       </button>
-                      <button onClick={markComplete} disabled={saving}
-                        className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
-                        ✓ Complete
+                      <button
+                        onClick={markComplete}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        <CheckCircle2 size={12} /> Complete
                       </button>
                     </div>
                   </div>
 
                   {/* Find & Replace Panel */}
                   {showFindReplace && (
-                    <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                    <div
+                      className="mt-4 p-4 rounded-lg"
+                      style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}
+                    >
                       <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-amber-900 dark:text-amber-200">🔍 Find & Replace</h3>
-                        <button onClick={() => setShowFindReplace(false)}
-                          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 text-sm">✕ Close</button>
+                        <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                          Find & Replace
+                        </p>
+                        <button
+                          onClick={() => setShowFindReplace(false)}
+                          className="text-xs opacity-50 hover:opacity-80"
+                          style={{ color: 'var(--clr-text)' }}
+                        >
+                          Close
+                        </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                          <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Find</label>
-                          <input type="text" value={findText} onChange={e => setFindText(e.target.value)}
-                            placeholder="Word to find..."
-                            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-amber-500" />
+                          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--clr-text-muted)' }}>Find</label>
+                          <input
+                            type="text"
+                            value={findText}
+                            onChange={e => setFindText(e.target.value)}
+                            placeholder="Word to find…"
+                            className="form-input text-xs"
+                          />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Replace with</label>
-                          <input type="text" value={replaceText} onChange={e => setReplaceText(e.target.value)}
-                            placeholder="Replacement text..."
-                            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-amber-500" />
+                          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--clr-text-muted)' }}>Replace with</label>
+                          <input
+                            type="text"
+                            value={replaceText}
+                            onChange={e => setReplaceText(e.target.value)}
+                            placeholder="Replacement text…"
+                            className="form-input text-xs"
+                          />
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <label className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300 cursor-pointer">
-                            <input type="checkbox" checked={caseSensitive} onChange={e => setCaseSensitive(e.target.checked)}
-                              className="w-4 h-4 text-amber-600 rounded" />
+                          <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--clr-text-muted)' }}>
+                            <input
+                              type="checkbox"
+                              checked={caseSensitive}
+                              onChange={e => setCaseSensitive(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded accent-teal-600"
+                            />
                             Case sensitive
                           </label>
                           {findText && (
-                            <span className="text-sm text-amber-600 dark:text-amber-400">
-                              {matchCount} match{matchCount !== 1 ? 'es' : ''} found
+                            <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                              {matchCount} match{matchCount !== 1 ? 'es' : ''}
                             </span>
                           )}
                         </div>
-                        <button onClick={doReplaceAll} disabled={!findText || matchCount === 0}
-                          className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button
+                          onClick={doReplaceAll}
+                          disabled={!findText || matchCount === 0}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                        >
                           Replace All ({matchCount})
                         </button>
                       </div>
@@ -713,20 +851,26 @@ function ASRAnnotate() {
                   )}
                 </div>
 
-                {/* record navigation */}
-                <div className="flex justify-between">
-                  <button onClick={() => idx > 0 && setIdx(idx - 1)} disabled={idx === 0}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+                {/* Record navigation */}
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={() => idx > 0 && setIdx(idx - 1)}
+                    disabled={idx === 0}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
                     ← Previous
                   </button>
-                  <span className="py-2 text-gray-600 dark:text-gray-400">
+                  <span className="text-xs tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>
                     {(page - 1) * PER_PAGE + idx + 1} of {filteredTotal}
                   </span>
-                  <button onClick={() => {
-                    if (idx < files.length - 1) setIdx(idx + 1)
-                    else if (page < pages) goPage(page + 1)
-                  }} disabled={idx >= files.length - 1 && page >= pages}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+                  <button
+                    onClick={() => {
+                      if (idx < files.length - 1) setIdx(idx + 1)
+                      else if (page < pages) goPage(page + 1)
+                    }}
+                    disabled={idx >= files.length - 1 && page >= pages}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
                     Next →
                   </button>
                 </div>

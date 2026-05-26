@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import {
+  LayoutDashboard, FileText, Mic, Search, Settings2,
+  Sun, Moon, ChevronDown, ScanSearch, MicOff,
+  FlaskConical, BarChart2, Database,
+} from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import TextDatasets from './pages/TextDatasets'
 import TextAnnotate from './pages/TextAnnotate'
@@ -18,12 +23,16 @@ import ASRErrorAnalysis from './pages/ASRErrorAnalysis'
 import EvalErrorAnalysis from './pages/EvalErrorAnalysis'
 import ErrorAnalytics from './pages/ErrorAnalytics'
 
-const NAV_LINK_BASE = 'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors'
-const NAV_ACTIVE = 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300'
-const NAV_INACTIVE = 'text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+/* ── Shared nav classes ────────────────────────────────────── */
+const NAV_BASE =
+  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold tracking-widest uppercase font-display transition-all duration-150 select-none'
+const NAV_ACTIVE =
+  'nav-active'
+const NAV_INACTIVE =
+  'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/70'
 
-/** A dropdown nav item that groups multiple child links */
-function NavDropdown({ label, icon, links }) {
+/** Dropdown nav group */
+function NavDropdown({ label, icon: Icon, links }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const location = useLocation()
@@ -39,31 +48,40 @@ function NavDropdown({ label, icon, links }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className={`${NAV_LINK_BASE} gap-1 ${isAnyActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+        className={`${NAV_BASE} gap-1.5 ${isAnyActive ? NAV_ACTIVE : NAV_INACTIVE}`}
       >
-        {icon && <span>{icon}</span>}
+        {Icon && <Icon size={12} strokeWidth={2.5} />}
         {label}
-        <svg className={`w-3.5 h-3.5 ml-0.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDown
+          size={10}
+          strokeWidth={3}
+          className={`ml-0.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+        <div
+          className="absolute top-full left-0 mt-1.5 w-56 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden"
+          style={{
+            background: 'var(--clr-surface)',
+            border: '1px solid var(--clr-border)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          }}
+        >
           {links.map(l => (
             <NavLink
               key={l.to}
               to={l.to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                `flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-medium'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    ? 'text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/50'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                 }`
               }
             >
-              {l.icon && <span>{l.icon}</span>}
+              {l.icon && <l.icon size={14} strokeWidth={2} className="flex-shrink-0 opacity-70" />}
               {l.label}
             </NavLink>
           ))}
@@ -75,43 +93,84 @@ function NavDropdown({ label, icon, links }) {
 
 function AppLayout({ darkMode, toggleDarkMode }) {
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Navigation */}
-      <nav className="bg-white shadow-md dark:bg-gray-800 sticky top-0 z-40">
+    <div className="min-h-screen" style={{ background: 'var(--clr-bg)' }}>
+      {/* ── Navigation ──────────────────────────────────────── */}
+      <nav
+        className="sticky top-0 z-40"
+        style={{
+          background: 'var(--clr-surface)',
+          borderBottom: '1px solid var(--clr-border)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
         <div className="px-4 mx-auto max-w-7xl">
           <div className="flex items-center justify-between h-14">
-            {/* Logo */}
-            <div className="flex items-center gap-6">
-              <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                📝 Data Tool
-              </span>
+
+            {/* Brand + links */}
+            <div className="flex items-center gap-5">
+              {/* Logo mark */}
+              <div className="flex items-center gap-2.5 mr-1">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'var(--clr-primary)' }}
+                >
+                  <Database size={14} className="text-white" strokeWidth={2.5} />
+                </div>
+                <span
+                  className="text-[15px] font-bold tracking-tight"
+                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}
+                >
+                  DataTool
+                </span>
+              </div>
+
+              {/* Divider */}
+              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
 
               {/* Primary links */}
-              <div className="flex items-center gap-1">
-                <NavLink to="/" end className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}>
+              <div className="flex items-center gap-0.5">
+                <NavLink
+                  to="/"
+                  end
+                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+                >
+                  <LayoutDashboard size={12} strokeWidth={2.5} />
                   Dashboard
                 </NavLink>
-                <NavLink to="/text" className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}>
+
+                <NavLink
+                  to="/text"
+                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+                >
+                  <FileText size={12} strokeWidth={2.5} />
                   Text
                 </NavLink>
-                <NavLink to="/asr" className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}>
+
+                <NavLink
+                  to="/asr"
+                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+                >
+                  <Mic size={12} strokeWidth={2.5} />
                   ASR
                 </NavLink>
 
-                {/* Error Analysis dropdown */}
                 <NavDropdown
                   label="Error Analysis"
-                  icon="🔍"
+                  icon={Search}
                   links={[
-                    { to: '/text-error-analysis', label: 'Text Error Analysis', icon: '📄' },
-                    { to: '/asr-error-analysis',  label: 'ASR Error Analysis',  icon: '🎙️' },
-                    { to: '/eval-error-analysis', label: 'Eval Error Analysis', icon: '🧪' },
-                    { to: '/error-analytics',     label: 'Error Analytics',     icon: '📊' },
+                    { to: '/text-error-analysis', label: 'Text Errors',  icon: ScanSearch },
+                    { to: '/asr-error-analysis',  label: 'ASR Errors',   icon: MicOff     },
+                    { to: '/eval-error-analysis', label: 'Eval Errors',  icon: FlaskConical },
+                    { to: '/error-analytics',     label: 'Analytics',    icon: BarChart2  },
                   ]}
                 />
 
-                <NavLink to="/settings" className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}>
-                  ⚙️ Settings
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+                >
+                  <Settings2 size={12} strokeWidth={2.5} />
+                  Settings
                 </NavLink>
               </div>
             </div>
@@ -119,25 +178,21 @@ function AppLayout({ darkMode, toggleDarkMode }) {
             {/* Dark mode toggle */}
             <button
               onClick={toggleDarkMode}
-              className="p-2 transition-colors bg-gray-100 rounded-lg dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-150"
+              style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}
+              title={darkMode ? 'Light mode' : 'Dark mode'}
             >
-              {darkMode ? (
-                <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                </svg>
-              )}
+              {darkMode
+                ? <Sun size={15} className="text-amber-400" strokeWidth={2} />
+                : <Moon size={15} className="text-slate-500" strokeWidth={2} />
+              }
             </button>
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
-      <main className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      {/* ── Main content ────────────────────────────────────── */}
+      <main className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/text" element={<TextDatasets />} />
@@ -151,8 +206,6 @@ function AppLayout({ darkMode, toggleDarkMode }) {
           <Route path="/br-pipeline/responses/:pipelineId" element={<BRModelResponses />} />
           <Route path="/asr" element={<ASRDatasets />} />
           <Route path="/asr/:datasetId/annotate" element={<ASRAnnotate />} />
-
-          {/* Error Analysis */}
           <Route path="/text-error-analysis" element={<TextErrorAnalysis />} />
           <Route path="/text-error-analysis/:datasetId" element={<TextErrorAnalysis />} />
           <Route path="/asr-error-analysis" element={<ASRErrorAnalysis />} />
@@ -160,7 +213,6 @@ function AppLayout({ darkMode, toggleDarkMode }) {
           <Route path="/eval-error-analysis" element={<EvalErrorAnalysis />} />
           <Route path="/eval-error-analysis/:datasetId" element={<EvalErrorAnalysis />} />
           <Route path="/error-analytics" element={<ErrorAnalytics />} />
-
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
@@ -169,25 +221,16 @@ function AppLayout({ darkMode, toggleDarkMode }) {
 }
 
 function App() {
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('darkMode')
-    return saved === 'true'
-  })
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true')
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    document.documentElement.classList.toggle('dark', darkMode)
     localStorage.setItem('darkMode', darkMode)
   }, [darkMode])
 
-  const toggleDarkMode = () => setDarkMode(d => !d)
-
   return (
     <Router>
-      <AppLayout darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+      <AppLayout darkMode={darkMode} toggleDarkMode={() => setDarkMode(d => !d)} />
     </Router>
   )
 }
