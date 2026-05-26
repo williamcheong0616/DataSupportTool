@@ -1,7 +1,143 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Figtree:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+@layer base {
+  :root {
+    --clr-bg:         #F7F7F6;
+    --clr-surface:    #FFFFFF;
+    --clr-surface-2:  #F0F0EE;
+    --clr-border:     #E2E2DF;
+    --clr-border-2:   #D0D0CD;
+    --clr-text:       #1A1A18;
+    --clr-text-muted: #6B6B68;
+    --clr-primary:    #0D9488;
+    --clr-primary-bg: #F0FDFA;
+  }
+
+  .dark {
+    --clr-bg:         #0D1117;
+    --clr-surface:    #161B22;
+    --clr-surface-2:  #21262D;
+    --clr-border:     #30363D;
+    --clr-border-2:   #484F58;
+    --clr-text:       #E6EDF3;
+    --clr-text-muted: #7D8590;
+    --clr-primary:    #2DD4BF;
+    --clr-primary-bg: #042F2E;
+  }
+
+  * {
+    border-color: var(--clr-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--clr-bg);
+    color: var(--clr-text);
+    font-family: 'Figtree', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Syne', sans-serif;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--clr-border-2); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--clr-text-muted); }
 }
+
+@layer components {
+  /* Surface card — replaces the old bg-white + shadow pattern */
+  .surface {
+    background-color: var(--clr-surface);
+    border: 1px solid var(--clr-border);
+    border-radius: 10px;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-150;
+    background-color: var(--clr-primary);
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:active { filter: brightness(0.96); }
+  .btn-primary:disabled { @apply opacity-50 cursor-not-allowed; filter: none; }
+
+  /* Secondary / outline button */
+  .btn-secondary {
+    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-150;
+    background-color: var(--clr-surface-2);
+    color: var(--clr-text);
+    border: 1px solid var(--clr-border);
+  }
+  .btn-secondary:hover { background-color: var(--clr-border); }
+
+  /* Nav active glow chip */
+  .nav-active {
+    color: var(--clr-primary);
+    background-color: var(--clr-primary-bg);
+  }
+
+  /* Stat card left-border accent */
+  .stat-card {
+    @apply surface p-5 flex items-center gap-4;
+    border-left-width: 3px;
+  }
+
+  /* Section label */
+  .section-label {
+    font-family: 'Syne', sans-serif;
+    @apply text-[11px] font-bold tracking-widest uppercase;
+    color: var(--clr-text-muted);
+  }
+
+  /* Form input */
+  .form-input {
+    @apply w-full px-3 py-2 text-sm rounded-lg transition-colors;
+    background-color: var(--clr-surface);
+    border: 1px solid var(--clr-border);
+    color: var(--clr-text);
+  }
+  .form-input:focus {
+    @apply outline-none;
+    border-color: var(--clr-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--clr-primary) 15%, transparent);
+  }
+
+  /* Progress bar track */
+  .progress-track {
+    @apply h-1.5 rounded-full overflow-hidden;
+    background-color: var(--clr-surface-2);
+  }
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500;
+    background-color: var(--clr-primary);
+  }
+}
+
+/* Subtle page background grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* Ensure content sits above the grain */
+#root { position: relative; z-index: 1; }
