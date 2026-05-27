@@ -173,7 +173,7 @@ function TextAnnotate() {
           >
             <ArrowLeft size={14} /> Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
             {dataset.name}
           </h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>{taskLabel}</p>
@@ -204,7 +204,7 @@ function TextAnnotate() {
           >
             <Workflow size={22} style={{ color: 'var(--clr-primary)' }} />
           </div>
-          <h2 className="text-base font-bold mb-2" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+          <h2 className="text-base font-bold mb-2" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
             This dataset uses the BR Pipeline
           </h2>
           <p className="text-sm mb-5" style={{ color: 'var(--clr-text-muted)' }}>
@@ -272,7 +272,7 @@ function TextAnnotate() {
           {/* Original text */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest mb-2"
-              style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+              style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
               Original Text
             </p>
             <div
@@ -357,7 +357,7 @@ function TextAnnotate() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                   Modified Text
                 </label>
                 <textarea
@@ -369,7 +369,7 @@ function TextAnnotate() {
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                   Subject Added
                 </label>
                 <input
@@ -381,7 +381,7 @@ function TextAnnotate() {
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                   Context Added
                 </label>
                 <input
@@ -410,7 +410,7 @@ function TextAnnotate() {
               {[['Question 1', q1, setQ1], ['Question 2', q2, setQ2], ['Question 3', q3, setQ3]].map(([label, val, setter]) => (
                 <div key={label}>
                   <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                    style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                    style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                     {label}
                   </label>
                   <input

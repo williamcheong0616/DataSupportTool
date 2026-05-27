@@ -26,7 +26,7 @@ function Modal({ title, onClose, children, footer }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="surface w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--clr-border)' }}>
-          <h2 className="text-base font-bold" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+          <h2 className="text-base font-bold" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
             {title}
           </h2>
           <button onClick={onClose} className="text-xl leading-none opacity-40 hover:opacity-70 transition-opacity">×</button>
@@ -45,7 +45,7 @@ function Modal({ title, onClose, children, footer }) {
 /* ── Label / field helpers ─────────────────────────────────── */
 function FieldLabel({ children }) {
   return (
-    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
       {children}
     </label>
   )
@@ -233,7 +233,7 @@ function ASRDatasets() {
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
             ASR Datasets
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
@@ -439,7 +439,7 @@ function ASRDatasets() {
                 <div className="flex items-start justify-between gap-4">
                   {/* Left: info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold truncate" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+                    <h3 className="text-base font-bold truncate" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
                       {dataset.name}
                     </h3>
                     {dataset.description && (
@@ -544,7 +544,7 @@ function ASRDatasets() {
 
       {/* ── How-to tip ──────────────────────────────────────── */}
       <div className="surface p-5" style={{ borderLeftColor: '#3B82F6', borderLeftWidth: '3px' }}>
-        <p className="text-xs font-bold mb-2 uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: '#3B82F6' }}>
+        <p className="text-xs font-bold mb-2 uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: '#3B82F6' }}>
           How ASR Annotation Works
         </p>
         <ol className="space-y-1 text-sm" style={{ color: 'var(--clr-text-muted)' }}>

@@ -293,7 +293,7 @@ function ASRAnnotate() {
           >
             <ArrowLeft size={14} /> Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
             {dataset?.name || 'ASR Annotation'}
           </h1>
         </div>
@@ -333,7 +333,7 @@ function ASRAnnotate() {
               { label: 'Completed', val: counts.completed, color: '#10B981' },
             ].map(({ label, val, color }) => (
               <div key={label} className="text-center">
-                <div className="text-xl font-bold" style={{ fontFamily: 'Syne, sans-serif', color }}>{val}</div>
+                <div className="text-xl font-bold" style={{ fontFamily: 'Raleway, sans-serif', color }}>{val}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>{label}</div>
               </div>
             ))}
@@ -410,7 +410,7 @@ function ASRAnnotate() {
           {/* ── File list sidebar ─────────────────────────── */}
           <div className="surface p-4 h-fit lg:sticky lg:top-20">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+              <h2 className="text-sm font-bold" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
                 Files
               </h2>
               <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
@@ -503,7 +503,7 @@ function ASRAnnotate() {
                 <div className="surface p-5">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-sm font-bold truncate" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+                      <h2 className="text-sm font-bold truncate" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
                         {cur.filename}
                       </h2>
                     </div>
@@ -632,7 +632,7 @@ function ASRAnnotate() {
                   {/* Whisper */}
                   <div className="surface p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                         Whisper
                       </p>
                       <div className="flex gap-1.5">
@@ -678,7 +678,7 @@ function ASRAnnotate() {
                   {/* Qwen3 */}
                   <div className="surface p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                         Qwen3 ASR
                       </p>
                       <div className="flex gap-1.5">
@@ -723,7 +723,7 @@ function ASRAnnotate() {
                 {/* Corrected transcript */}
                 <div className="surface p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                       Corrected Transcription
                     </p>
                     <div className="flex gap-1.5">
@@ -789,7 +789,7 @@ function ASRAnnotate() {
                       style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+                        <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
                           Find & Replace
                         </p>
                         <button

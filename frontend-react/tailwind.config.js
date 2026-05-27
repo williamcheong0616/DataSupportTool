@@ -8,8 +8,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Syne', 'sans-serif'],
-        sans: ['Figtree', 'system-ui', 'sans-serif'],
+        display: ['Raleway', 'sans-serif'],
+        sans: ['Lato', 'system-ui', 'sans-serif'],
       },
       colors: {
         brand: {

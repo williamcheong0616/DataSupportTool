@@ -36,7 +36,7 @@ function Modal({ title, onClose, children, footer }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="surface w-full max-w-md max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--clr-border)' }}>
-          <h2 className="text-base font-bold" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+          <h2 className="text-base font-bold" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
             {title}
           </h2>
           <button onClick={onClose} className="text-xl leading-none opacity-40 hover:opacity-70 transition-opacity">×</button>
@@ -54,7 +54,7 @@ function Modal({ title, onClose, children, footer }) {
 
 function FieldLabel({ children }) {
   return (
-    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}>
+    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
       {children}
     </label>
   )
@@ -273,7 +273,7 @@ function TextDatasets() {
             style={{ background: 'linear-gradient(135deg, #D97706, #F59E0B)', borderBottom: '1px solid var(--clr-border)' }}
           >
             {!sidebarCollapsed && (
-              <span className="text-white text-xs font-bold tracking-widest uppercase" style={{ fontFamily: 'Syne, sans-serif' }}>
+              <span className="text-white text-xs font-bold tracking-widest uppercase" style={{ fontFamily: 'Raleway, sans-serif' }}>
                 BR Pipelines
               </span>
             )}
@@ -320,7 +320,7 @@ function TextDatasets() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+            <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
               Text Datasets
             </h1>
             <p className="mt-0.5 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
@@ -472,7 +472,7 @@ function TextDatasets() {
                   <div className="flex items-start justify-between gap-4">
                     {/* Left: info */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-bold truncate" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}>
+                      <h3 className="text-base font-bold truncate" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
                         {dataset.name}
                       </h3>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>

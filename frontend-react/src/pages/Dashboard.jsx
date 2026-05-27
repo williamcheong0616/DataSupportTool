@@ -161,7 +161,7 @@ function Dashboard() {
       <div>
         <h1
           className="text-2xl font-bold tracking-tight"
-          style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}
+          style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
         >
           Overview
         </h1>
@@ -186,13 +186,13 @@ function Dashboard() {
               <div>
                 <p
                   className="text-[11px] font-bold tracking-widest uppercase"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text-muted)' }}
+                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}
                 >
                   {card.title}
                 </p>
                 <p
                   className="text-2xl font-bold leading-none mt-0.5"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}
+                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
                 >
                   {card.value.toLocaleString()}
                 </p>
@@ -211,7 +211,7 @@ function Dashboard() {
           >
             <h2
               className="text-base font-bold"
-              style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}
+              style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
             >
               Dataset Breakdown
             </h2>
@@ -368,7 +368,7 @@ function Dashboard() {
           <TrendingUp size={15} style={{ color: 'var(--clr-text-muted)' }} strokeWidth={2} />
           <h2
             className="text-base font-bold"
-            style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}
+            style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
           >
             Getting Started
           </h2>

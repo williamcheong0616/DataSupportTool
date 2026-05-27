@@ -118,7 +118,7 @@ function AppLayout({ darkMode, toggleDarkMode }) {
                 </div>
                 <span
                   className="text-[15px] font-bold tracking-tight"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--clr-text)' }}
+                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
                 >
                   DataTool
                 </span>
