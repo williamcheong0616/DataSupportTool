@@ -118,6 +118,14 @@ from backend.routes.settings import router as settings_router
 app.include_router(settings_router)
 logger.info("✓ Settings routes registered")
 
+# Provider API routes (external integrations, e.g. training pipeline)
+from backend.routes.provider import router as provider_router
+app.include_router(provider_router)
+if os.getenv("PROVIDER_API_KEY"):
+    logger.info("✓ Provider API routes registered (external access ENABLED)")
+else:
+    logger.info("✓ Provider API routes registered (external access disabled — set PROVIDER_API_KEY to enable)")
+
 
 # ==================== STATIC FRONTEND (SPA) ====================
 _DIST_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
