@@ -7,7 +7,7 @@ for PostgreSQL, Redis, and Celery workers.
 
 import redis as redis_lib
 from fastapi import APIRouter, Depends
-from sqlalchemy import text
+from sqlalchemy import and_, func, case, text
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, engine
@@ -122,48 +122,81 @@ def get_dataset_stats(db: Session = Depends(get_db)):
     """
     Get per-dataset breakdowns for text and ASR datasets.
     """
+    # Aggregate ASR counts in a single query
+    asr_rows = (
+        db.query(
+            ASRDataset,
+            func.count(AudioFile.id).label("file_count"),
+            func.sum(case((AudioFile.status == TranscriptionStatus.PENDING, 1), else_=0)).label("pending_count"),
+            func.sum(case((AudioFile.status == TranscriptionStatus.COMPLETED, 1), else_=0)).label("completed_count"),
+        )
+        .outerjoin(AudioFile, AudioFile.dataset_id == ASRDataset.id)
+        .group_by(ASRDataset.id)
+        .all()
+    )
+    asr_datasets = [
+        {
+            "id": ds.id,
+            "name": ds.name,
+            "file_count": int(fc or 0),
+            "pending_count": int(pc or 0),
+            "completed_count": int(cc or 0),
+        }
+        for ds, fc, pc, cc in asr_rows
+    ]
+
+    # Aggregate text record counts in a single query
+    text_record_counts = {
+        ds_id: cnt
+        for ds_id, cnt in db.query(TextRecord.dataset_id, func.count(TextRecord.id))
+        .group_by(TextRecord.dataset_id)
+        .all()
+    }
+
+    # Fetch latest pipeline run per dataset in one query using a subquery
+    latest_run_subq = (
+        db.query(
+            BRPipelineRun.dataset_id,
+            func.max(BRPipelineRun.id).label("latest_id"),
+        )
+        .group_by(BRPipelineRun.dataset_id)
+        .subquery()
+    )
+    latest_runs = {
+        pr.dataset_id: pr
+        for pr in db.query(BRPipelineRun)
+        .join(latest_run_subq, and_(
+            BRPipelineRun.dataset_id == latest_run_subq.c.dataset_id,
+            BRPipelineRun.id == latest_run_subq.c.latest_id,
+        ))
+        .all()
+    }
+
+    # Aggregate completed stage counts per pipeline run in one query
+    stage_counts = {
+        pr_id: cnt
+        for pr_id, cnt in db.query(
+            BRRecordStage.pipeline_run_id,
+            func.count(BRRecordStage.id),
+        )
+        .filter(BRRecordStage.model_responses.isnot(None))
+        .group_by(BRRecordStage.pipeline_run_id)
+        .all()
+    }
+
     text_datasets = []
     for ds in db.query(TextDataset).all():
-        record_count = db.query(TextRecord).filter(TextRecord.dataset_id == ds.id).count()
-        latest_run = db.query(BRPipelineRun).filter(
-            BRPipelineRun.dataset_id == ds.id
-        ).order_by(BRPipelineRun.id.desc()).first()
-        
-        annotated_count = 0
-        has_pipeline = False
-        if latest_run:
-            has_pipeline = True
-            annotated_count = db.query(BRRecordStage).filter(
-                BRRecordStage.pipeline_run_id == latest_run.id,
-                BRRecordStage.model_responses != None
-            ).count()
-
+        latest_run = latest_runs.get(ds.id)
+        has_pipeline = latest_run is not None
+        annotated_count = stage_counts.get(latest_run.id, 0) if latest_run else 0
+        record_count = latest_run.total_records if latest_run else text_record_counts.get(ds.id, 0)
         text_datasets.append({
             "id": ds.id,
             "name": ds.name,
-            "record_count": latest_run.total_records if latest_run else record_count,
+            "record_count": record_count,
             "annotated_count": annotated_count,
             "task_type": ds.task_type,
             "has_pipeline": has_pipeline,
-        })
-
-    asr_datasets = []
-    for ds in db.query(ASRDataset).all():
-        file_count = db.query(AudioFile).filter(AudioFile.dataset_id == ds.id).count()
-        pending_count = db.query(AudioFile).filter(
-            AudioFile.dataset_id == ds.id,
-            AudioFile.status == TranscriptionStatus.PENDING
-        ).count()
-        completed_count = db.query(AudioFile).filter(
-            AudioFile.dataset_id == ds.id,
-            AudioFile.status == TranscriptionStatus.COMPLETED
-        ).count()
-        asr_datasets.append({
-            "id": ds.id,
-            "name": ds.name,
-            "file_count": file_count,
-            "pending_count": pending_count,
-            "completed_count": completed_count,
         })
 
     return {

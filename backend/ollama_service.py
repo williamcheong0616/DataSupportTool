@@ -2,6 +2,7 @@
 Ollama Service for BR Pipeline
 Handles communication with Ollama for BR detection, text restructuring, and question generation
 """
+import os
 from itertools import count
 
 import requests
@@ -12,6 +13,8 @@ import gc
 from typing import List, Dict, Any, Optional
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +47,7 @@ def _create_http_session() -> requests.Session:
 class OllamaService:
     """Service for interacting with Ollama API."""
     
-    def __init__(self, base_url: str = "http://localhost:11434", model_name: str = "gemma3:4b"):
+    def __init__(self, base_url: str = OLLAMA_BASE_URL, model_name: str = "gemma3:4b"):
         self.base_url = base_url
         self.model_name = model_name
         self.generate_url = f"{base_url}/api/generate"

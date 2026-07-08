@@ -50,9 +50,16 @@ fi
 
 
 # ── 1. Check Docker ──────────────────────────────────────────
+# Try default socket first; fall back to system socket (needed when Docker
+# Desktop's socket returns 500 but the Engine socket is healthy).
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker first."
-    exit 1
+    if DOCKER_HOST=unix:///var/run/docker.sock docker info > /dev/null 2>&1; then
+        export DOCKER_HOST=unix:///var/run/docker.sock
+        echo "  ℹ️  Using system Docker socket (/var/run/docker.sock)"
+    else
+        echo "❌ Docker is not running. Please start Docker first."
+        exit 1
+    fi
 fi
 
 # ── 2. Clean up stale state ───────────────────────────────────

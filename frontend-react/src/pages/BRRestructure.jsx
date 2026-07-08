@@ -66,9 +66,12 @@ function BRRestructure() {
   // Poll progress when pipeline is running
   useEffect(() => {
     if (!polling) return
+    let consecutiveFailures = 0
+    const MAX_POLL_FAILURES = 5
     const interval = setInterval(async () => {
       try {
         const res = await getBRStageProgress(pipelineId)
+        consecutiveFailures = 0
         setProgress(res.data)
         if (res.data.status !== 'running') {
           setPolling(false)
@@ -76,7 +79,12 @@ function BRRestructure() {
           fetchPipelineInfo()
         }
       } catch (err) {
-        console.error('Poll failed:', err)
+        consecutiveFailures += 1
+        console.error(`Poll failed (${consecutiveFailures}/${MAX_POLL_FAILURES}):`, err)
+        if (consecutiveFailures >= MAX_POLL_FAILURES) {
+          console.error('Stopping progress polling after repeated failures')
+          setPolling(false)
+        }
       }
     }, 3000)
     return () => clearInterval(interval)
