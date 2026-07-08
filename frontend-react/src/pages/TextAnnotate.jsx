@@ -144,13 +144,13 @@ function TextAnnotate() {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4">
         <div className="w-8 h-8 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
-        <p className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>Loading records…</p>
+          style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Loading records…</p>
       </div>
     )
   }
 
-  if (!dataset) return <p style={{ color: 'var(--clr-text)' }}>Dataset not found</p>
+  if (!dataset) return <p style={{ color: 'var(--text-hi)' }}>Dataset not found</p>
 
   const pct = total > 0 ? (done / total) * 100 : 0
 
@@ -167,18 +167,18 @@ function TextAnnotate() {
           <button
             onClick={() => navigate('/text')}
             className="inline-flex items-center gap-1.5 text-sm font-medium mb-2 transition-colors"
-            style={{ color: 'var(--clr-text-muted)' }}
-            onMouseOver={e => e.currentTarget.style.color = 'var(--clr-primary)'}
-            onMouseOut={e => e.currentTarget.style.color = 'var(--clr-text-muted)'}
+            style={{ color: 'var(--text-dim)' }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--accent)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--text-dim)'}
           >
             <ArrowLeft size={14} /> Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
             {dataset.name}
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>{taskLabel}</p>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-dim)' }}>{taskLabel}</p>
         </div>
-        <span className="text-xs mt-1" style={{ color: 'var(--clr-text-muted)' }}>
+        <span className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
           Loaded {records.length} / {total}
           {canLoadMore && <span className="ml-1 opacity-60">(scroll for more)</span>}
         </span>
@@ -186,7 +186,7 @@ function TextAnnotate() {
 
       {/* ── Progress bar ────────────────────────────────────── */}
       <div className="surface px-5 py-4">
-        <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--clr-text-muted)' }}>
+        <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--text-dim)' }}>
           <span>{done} of {total} annotated</span>
           <span className="font-semibold tabular-nums">{pct.toFixed(1)}%</span>
         </div>
@@ -199,15 +199,15 @@ function TextAnnotate() {
       {dataset.task_type === 'general' && (
         <div className="surface p-8 text-center">
           <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
-            style={{ background: 'var(--clr-primary-bg)' }}
+            className="w-12 h-12 rounded flex items-center justify-center mx-auto mb-4"
+            style={{ background: 'var(--accent-dim)' }}
           >
-            <Workflow size={22} style={{ color: 'var(--clr-primary)' }} />
+            <Workflow size={22} style={{ color: 'var(--accent)' }} />
           </div>
-          <h2 className="text-base font-bold mb-2" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+          <h2 className="text-base font-bold mb-2" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
             This dataset uses the BR Pipeline
           </h2>
-          <p className="text-sm mb-5" style={{ color: 'var(--clr-text-muted)' }}>
+          <p className="text-sm mb-5" style={{ color: 'var(--text-dim)' }}>
             Use the automated BR Pipeline instead of manual annotation for this dataset type.
           </p>
           <button onClick={() => navigate('/text')} className="btn-primary">
@@ -219,7 +219,7 @@ function TextAnnotate() {
       {/* ── No records ──────────────────────────────────────── */}
       {dataset.task_type !== 'general' && records.length === 0 && (
         <div className="surface p-10 text-center">
-          <p className="text-sm font-medium" style={{ color: 'var(--clr-text)' }}>No records in this dataset</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-hi)' }}>No records in this dataset</p>
           <button onClick={() => navigate('/text')} className="btn-primary mt-4">Back to Datasets</button>
         </div>
       )}
@@ -238,14 +238,14 @@ function TextAnnotate() {
               ← Previous
             </button>
             <div className="text-center">
-              <span className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+              <span className="text-sm" style={{ color: 'var(--text-dim)' }}>
                 Record {idx + 1} of {records.length}
                 {canLoadMore && <span className="text-xs opacity-60 ml-1">({total} total)</span>}
               </span>
               {cur?.is_annotated && (
                 <div className="flex items-center justify-center gap-1 mt-1">
-                  <CheckCircle2 size={11} className="text-emerald-500" />
-                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Annotated</span>
+                  <CheckCircle2 size={11} style={{ color: "var(--green)" }} />
+                  <span className="text-[11px] font-medium" style={{ color: "var(--green)" }}>Annotated</span>
                 </div>
               )}
             </div>
@@ -262,9 +262,9 @@ function TextAnnotate() {
 
           {/* Loading more indicator */}
           {fetching && (
-            <div className="flex items-center justify-center gap-2 py-2 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+            <div className="flex items-center justify-center gap-2 py-2 text-xs" style={{ color: 'var(--text-dim)' }}>
               <div className="w-3.5 h-3.5 rounded-full border border-transparent animate-spin"
-                style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
+                style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }} />
               Loading more records…
             </div>
           )}
@@ -272,23 +272,23 @@ function TextAnnotate() {
           {/* Original text */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest mb-2"
-              style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+              style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
               Original Text
             </p>
             <div
-              className="p-4 rounded-lg text-base leading-relaxed"
-              style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)', color: 'var(--clr-text)' }}
+              className="p-4 rounded text-base leading-relaxed"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-hi)' }}
             >
               {cur?.original_text || 'No text'}
             </div>
             {cur?.raw_data && Object.keys(cur.raw_data).length > 1 && (
               <details className="mt-2">
-                <summary className="text-xs cursor-pointer" style={{ color: 'var(--clr-text-muted)' }}>
+                <summary className="text-xs cursor-pointer" style={{ color: 'var(--text-dim)' }}>
                   Show all columns
                 </summary>
                 <pre
-                  className="mt-2 p-3 rounded-lg text-xs overflow-x-auto"
-                  style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text-muted)' }}
+                  className="mt-2 p-3 rounded text-xs overflow-x-auto"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-dim)' }}
                 >
                   {JSON.stringify(cur.raw_data, null, 2)}
                 </pre>
@@ -297,28 +297,28 @@ function TextAnnotate() {
           </div>
 
           {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--clr-border)' }} />
+          <div style={{ borderTop: '1px solid var(--border)' }} />
 
           {/* ── Task: Bahasa Rojak Identification ── */}
           {dataset.task_type === 'bahasa_rojak_identification' && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>
                 Is this Bahasa Rojak?
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => saveBR(true)}
                   disabled={saving}
-                  className="py-5 rounded-xl text-base font-bold transition-all disabled:opacity-50 hover:shadow-md active:scale-[0.98]"
-                  style={{ background: '#ECFDF5', color: '#065F46', border: '2px solid #6EE7B7' }}
+                  className="py-5 rounded text-base font-bold transition-all disabled:opacity-50 active:scale-[0.98]"
+                  style={{ background: 'var(--green-dim)', color: 'var(--green)', border: '2px solid var(--green)' }}
                 >
                   Yes, Bahasa Rojak
                 </button>
                 <button
                   onClick={() => saveBR(false)}
                   disabled={saving}
-                  className="py-5 rounded-xl text-base font-bold transition-all disabled:opacity-50 hover:shadow-md active:scale-[0.98]"
-                  style={{ background: '#FEF2F2', color: '#7F1D1D', border: '2px solid #FCA5A5' }}
+                  className="py-5 rounded text-base font-bold transition-all disabled:opacity-50 active:scale-[0.98]"
+                  style={{ background: 'var(--red-dim)', color: 'var(--red)', border: '2px solid var(--red)' }}
                 >
                   No, Not Bahasa Rojak
                 </button>
@@ -329,7 +329,7 @@ function TextAnnotate() {
           {/* ── Task: Language Classification ── */}
           {dataset.task_type === 'bahasa_rojak_classification' && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>
                 Classify this text:
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
@@ -338,11 +338,11 @@ function TextAnnotate() {
                     key={opt}
                     onClick={() => saveClassification(opt)}
                     disabled={saving}
-                    className="py-3 px-4 rounded-lg text-sm font-medium transition-all disabled:opacity-50 hover:shadow-sm active:scale-[0.98]"
+                    className="py-3 px-4 rounded text-sm font-medium transition-all disabled:opacity-50 active:scale-[0.98]"
                     style={{
-                      background: 'var(--clr-primary-bg)',
-                      color: 'var(--clr-primary)',
-                      border: '1px solid color-mix(in srgb, var(--clr-primary) 30%, transparent)',
+                      background: 'var(--accent-dim)',
+                      color: 'var(--accent)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                     }}
                   >
                     {opt}
@@ -357,7 +357,7 @@ function TextAnnotate() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                  style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                   Modified Text
                 </label>
                 <textarea
@@ -369,7 +369,7 @@ function TextAnnotate() {
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                  style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                   Subject Added
                 </label>
                 <input
@@ -381,7 +381,7 @@ function TextAnnotate() {
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                  style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                   Context Added
                 </label>
                 <input
@@ -404,13 +404,13 @@ function TextAnnotate() {
           {/* ── Task: Question Generation ── */}
           {dataset.task_type === 'question_generation' && (
             <div className="space-y-4">
-              <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>
                 Generate 3 questions based on this text:
               </p>
               {[['Question 1', q1, setQ1], ['Question 2', q2, setQ2], ['Question 3', q3, setQ3]].map(([label, val, setter]) => (
                 <div key={label}>
                   <label className="block text-xs font-bold uppercase tracking-widest mb-1.5"
-                    style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                    style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                     {label}
                   </label>
                   <input
@@ -434,8 +434,8 @@ function TextAnnotate() {
           {/* Annotated indicator */}
           {cur?.is_annotated && (
             <div
-              className="flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm"
-              style={{ background: '#ECFDF5', border: '1px solid #6EE7B7', color: '#065F46' }}
+              className="flex items-center gap-2.5 px-4 py-3 rounded text-sm"
+              style={{ background: 'var(--green-dim)', border: '1px solid var(--green)', color: 'var(--green)' }}
             >
               <CheckCircle2 size={15} />
               <span className="font-medium">This record has been annotated</span>

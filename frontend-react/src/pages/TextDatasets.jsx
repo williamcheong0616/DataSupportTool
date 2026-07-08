@@ -14,6 +14,7 @@ import {
   startBRPipeline,
   listBRPipelines,
 } from '../api'
+import ActionChip from '../components/ActionChip'
 
 const TASK_TYPES = [
   { value: 'general',                       label: 'General (For BR Pipeline)' },
@@ -35,15 +36,15 @@ function Modal({ title, onClose, children, footer }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="surface w-full max-w-md max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--clr-border)' }}>
-          <h2 className="text-base font-bold" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <h2 className="text-base font-bold" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
             {title}
           </h2>
           <button onClick={onClose} className="text-xl leading-none opacity-40 hover:opacity-70 transition-opacity">×</button>
         </div>
         <div className="p-6 overflow-y-auto flex-1">{children}</div>
         {footer && (
-          <div className="px-6 py-4 flex justify-end gap-2" style={{ borderTop: '1px solid var(--clr-border)' }}>
+          <div className="px-6 py-4 flex justify-end gap-2" style={{ borderTop: '1px solid var(--border)' }}>
             {footer}
           </div>
         )}
@@ -54,7 +55,7 @@ function Modal({ title, onClose, children, footer }) {
 
 function FieldLabel({ children }) {
   return (
-    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
       {children}
     </label>
   )
@@ -83,15 +84,17 @@ function StageProgress({ pipeline }) {
                 className="progress-fill"
                 style={{
                   width: `${pct}%`,
-                  background: isDone ? '#10B981' : isActive ? '#F59E0B' : undefined,
+                  background: isDone ? 'var(--green)' : isActive ? 'var(--amber)' : undefined,
                 }}
               />
             </div>
-            <span className={`text-[9px] font-medium group-hover:underline ${
-              isDone   ? 'text-emerald-600 dark:text-emerald-400' :
-              isActive ? 'text-amber-600 dark:text-amber-400' :
-              'text-slate-400 dark:text-slate-500'
-            }`}>
+            <span
+              className="text-[9px] font-medium group-hover:underline"
+              style={{
+                fontFamily: 'var(--mono)',
+                color: isDone ? 'var(--green)' : isActive ? 'var(--amber)' : 'var(--text-dim)',
+              }}
+            >
               {stage.label}
             </span>
           </Link>
@@ -243,18 +246,25 @@ function TextDatasets() {
   const getTaskLabel = (taskType) => TASK_TYPES.find(t => t.value === taskType)?.label || taskType
 
   const pipelineStatusChip = (pipeline) => {
-    const color = pipeline.status === 'completed' ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50'
-      : pipeline.status === 'running' ? 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50'
-      : 'text-slate-500 bg-slate-100 dark:bg-slate-800'
-    return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${color}`}>{pipeline.status}</span>
+    const color = pipeline.status === 'completed' ? 'var(--green)'
+      : pipeline.status === 'running' ? 'var(--accent)'
+      : 'var(--text-dim)'
+    return (
+      <span
+        className="dst-badge"
+        style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}
+      >
+        {pipeline.status}
+      </span>
+    )
   }
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4">
         <div className="w-8 h-8 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
-        <p className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>Loading datasets…</p>
+          style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Loading datasets…</p>
       </div>
     )
   }
@@ -270,16 +280,23 @@ function TextDatasets() {
           {/* Sidebar header */}
           <div
             className="flex items-center justify-between px-3 py-2.5"
-            style={{ background: 'linear-gradient(135deg, #D97706, #F59E0B)', borderBottom: '1px solid var(--clr-border)' }}
+            style={{ borderBottom: '1px solid var(--border)' }}
           >
             {!sidebarCollapsed && (
-              <span className="text-white text-xs font-bold tracking-widest uppercase" style={{ fontFamily: 'Raleway, sans-serif' }}>
+              <span
+                className="text-xs font-bold tracking-widest uppercase flex items-center gap-1.5"
+                style={{ fontFamily: 'var(--mono)', color: 'var(--amber)' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--amber)' }} />
                 BR Pipelines
               </span>
             )}
             <button
               onClick={() => setSidebarCollapsed(c => !c)}
-              className="p-1 text-white hover:bg-white/20 rounded transition-colors"
+              className="p-1 rounded transition-colors"
+              style={{ color: 'var(--text-dim)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
@@ -289,18 +306,23 @@ function TextDatasets() {
           {!sidebarCollapsed && (
             <div className="max-h-[70vh] overflow-y-auto">
               {pipelineList.length === 0 ? (
-                <p className="text-xs p-4" style={{ color: 'var(--clr-text-muted)' }}>
+                <p className="text-xs p-4" style={{ color: 'var(--text-dim)' }}>
                   No pipelines started yet.
                 </p>
               ) : (
-                <div className="divide-y" style={{ borderColor: 'var(--clr-border)' }}>
+                <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
                   {pipelineList.map(pipeline => (
-                    <div key={pipeline.id} className="px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <div
+                      key={pipeline.id}
+                      className="px-3 py-2.5 transition-colors"
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--clr-text)' }}>
+                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-hi)' }}>
                           {pipeline.dataset_name}
                         </span>
-                        <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--clr-text-muted)' }}>
+                        <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-dim)' }}>
                           #{pipeline.id}
                         </span>
                       </div>
@@ -320,16 +342,16 @@ function TextDatasets() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+            <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
               Text Datasets
             </h1>
-            <p className="mt-0.5 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+            <p className="mt-0.5 text-sm" style={{ color: 'var(--text-dim)' }}>
               Manage text datasets and BR pipeline workflows
             </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" style={{ color: 'var(--clr-text)' }} />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" style={{ color: 'var(--text-hi)' }} />
               <input
                 type="text"
                 placeholder="Search…"
@@ -441,7 +463,7 @@ function TextDatasets() {
                     <option value="">— Choose column —</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
-                  <p className="mt-1.5 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                  <p className="mt-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
                     Detected columns: {headers.join(', ')}
                   </p>
                 </div>
@@ -453,9 +475,9 @@ function TextDatasets() {
         {/* Dataset list */}
         {visibleDatasets.length === 0 ? (
           <div className="surface p-12 text-center">
-            <FileText size={32} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--clr-text)' }} />
-            <p className="text-sm font-medium" style={{ color: 'var(--clr-text)' }}>No datasets yet</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--clr-text-muted)' }}>
+            <FileText size={32} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--text-hi)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-hi)' }}>No datasets yet</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>
               Create a dataset and upload your JSON, JSONL, or CSV file.
             </p>
           </div>
@@ -472,13 +494,13 @@ function TextDatasets() {
                   <div className="flex items-start justify-between gap-4">
                     {/* Left: info */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-bold truncate" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+                      <h3 className="text-base font-bold truncate" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
                         {dataset.name}
                       </h3>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                         {getTaskLabel(dataset.task_type)}
                       </p>
-                      <div className="flex flex-wrap gap-4 mt-1.5 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                      <div className="flex flex-wrap gap-4 mt-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
                         <span className="flex items-center gap-1"><Layers size={11} /> {dataset.record_count || 0} records</span>
                         <span className="flex items-center gap-1"><CheckCircle2 size={11} /> {dataset.annotated_count || 0} annotated</span>
                         {dataset.original_headers && (
@@ -491,7 +513,7 @@ function TextDatasets() {
                         {pipeline ? (
                           <>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                              <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
                                 Stage {pipeline.current_stage_num ?? 1} of 4
                               </span>
                               {pipelineStatusChip(pipeline)}
@@ -500,7 +522,7 @@ function TextDatasets() {
                           </>
                         ) : dataset.record_count > 0 && (
                           <div>
-                            <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--clr-text-muted)' }}>
+                            <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--text-dim)' }}>
                               <span>Annotation Progress</span><span>{pct}%</span>
                             </div>
                             <div className="progress-track"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
@@ -512,56 +534,39 @@ function TextDatasets() {
                     {/* Right: actions */}
                     <div className="flex flex-col gap-1.5 flex-shrink-0">
                       {(!dataset.record_count || dataset.record_count === 0) ? (
-                        <button
-                          onClick={() => setShowUpload(dataset.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors"
-                        >
-                          <Plus size={11} /> Upload Data
-                        </button>
+                        <ActionChip onClick={() => setShowUpload(dataset.id)} color="var(--green)" icon={Plus}>
+                          Upload Data
+                        </ActionChip>
                       ) : (
                         <>
-                          <button
-                            onClick={() => navigate(`/text/${dataset.id}/annotate`)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg btn-primary"
-                          >
+                          <button onClick={() => navigate(`/text/${dataset.id}/annotate`)} className="btn-primary">
                             Annotate
                           </button>
                           {pipeline ? (
-                            <button
-                              onClick={() => navigate(`/br-pipeline/classification/${pipeline.id}`)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors"
-                            >
-                              <ExternalLink size={11} /> View Pipeline
-                            </button>
+                            <ActionChip onClick={() => navigate(`/br-pipeline/classification/${pipeline.id}`)} color="var(--amber)" icon={ExternalLink}>
+                              View Pipeline
+                            </ActionChip>
                           ) : (
-                            <button
+                            <ActionChip
                               onClick={() => handleStartPipeline(dataset.id)}
                               disabled={startingPipeline === dataset.id}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 hover:bg-orange-100 transition-colors disabled:opacity-50"
+                              color="#fb923c"
+                              icon={Play}
                             >
-                              <Play size={11} /> {startingPipeline === dataset.id ? 'Starting…' : 'Start Pipeline'}
-                            </button>
+                              {startingPipeline === dataset.id ? 'Starting…' : 'Start Pipeline'}
+                            </ActionChip>
                           )}
-                          <button
-                            onClick={() => handleExport(dataset.id, 'csv')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors"
-                          >
-                            <Download size={11} /> CSV
-                          </button>
-                          <button
-                            onClick={() => handleExport(dataset.id, 'jsonl')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 hover:bg-violet-100 transition-colors"
-                          >
-                            <Download size={11} /> JSONL
-                          </button>
+                          <ActionChip onClick={() => handleExport(dataset.id, 'csv')} color="var(--accent)" icon={Download}>
+                            CSV
+                          </ActionChip>
+                          <ActionChip onClick={() => handleExport(dataset.id, 'jsonl')} color="#a78bfa" icon={Download}>
+                            JSONL
+                          </ActionChip>
                         </>
                       )}
-                      <button
-                        onClick={() => handleDelete(dataset.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 hover:bg-red-100 transition-colors"
-                      >
-                        <Trash2 size={11} /> Delete
-                      </button>
+                      <ActionChip onClick={() => handleDelete(dataset.id)} color="var(--red)" icon={Trash2}>
+                        Delete
+                      </ActionChip>
                     </div>
                   </div>
                 </div>

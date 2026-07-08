@@ -1,37 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ERROR_CATEGORIES, getCategoryColor } from '../utils/errorCategories';
 
-// Map each error label to a solid border/badge color for the box outline
-const BORDER_COLORS = {
-  'Good Output':               'border-green-500 bg-green-50 dark:bg-green-950/30',
-  'Bad Output':                'border-red-500 bg-red-50 dark:bg-red-950/30',
-  'Hallucinations':            'border-orange-500 bg-orange-50 dark:bg-orange-950/30',
-  'Wrong Facts':               'border-purple-500 bg-purple-50 dark:bg-purple-950/30',
-  'Partial Informations':      'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30',
-  'Unnatural Bhs Rojak':       'border-amber-700 bg-amber-50 dark:bg-amber-950/30',
-  'Catastrophic Forgetting':   'border-gray-700 bg-gray-100 dark:bg-gray-800/50',
-  'Model Not Learning Well':   'border-slate-400 bg-slate-50 dark:bg-slate-800/30',
-  'Worded Slightly Different': 'border-blue-500 bg-blue-50 dark:bg-blue-950/30',
-};
-
-const BADGE_COLORS = {
-  'Good Output':               'bg-green-500 text-white',
-  'Bad Output':                'bg-red-500 text-white',
-  'Hallucinations':            'bg-orange-500 text-white',
-  'Wrong Facts':               'bg-purple-500 text-white',
-  'Partial Informations':      'bg-yellow-500 text-white',
-  'Unnatural Bhs Rojak':       'bg-amber-700 text-white',
-  'Catastrophic Forgetting':   'bg-gray-800 text-white',
-  'Model Not Learning Well':   'bg-slate-400 text-white',
-  'Worded Slightly Different': 'bg-blue-500 text-white',
-};
-
-const getBorderColor = (label) =>
-  BORDER_COLORS[label] || 'border-pink-500 bg-pink-50 dark:bg-pink-950/30';
-
-const getBadgeColor = (label) =>
-  BADGE_COLORS[label] || 'bg-pink-500 text-white';
-
 const HighlightableText = ({
   text,
   annotations,
@@ -75,25 +44,24 @@ const HighlightableText = ({
 
       if (sourceSide === 'model_output' && ann.error_type) {
         // Boxed annotation with badge label on top
-        const borderCls = getBorderColor(ann.error_type);
-        const badgeCls = getBadgeColor(ann.error_type);
+        const catColor = getCategoryColor(ann.error_type);
         elements.push(
           <ruby
             key={`ann-${ann.id || i}`}
-            className={`cursor-pointer rounded px-1 border-b-2 ${borderCls}`}
+            className="cursor-pointer rounded px-1"
+            style={{ rubyPosition: 'over', rubyAlign: 'center', borderBottom: `2px solid ${catColor}` }}
             onClick={() => {
               if (window.confirm(`Remove annotation: "${ann.error_type}"?`)) {
                 onDeleteAnnotation(ann.id);
               }
             }}
             title={`${ann.error_type} — click to remove`}
-            style={{ rubyPosition: 'over', rubyAlign: 'center' }}
           >
             {chunk}
             <rt
               data-error={ann.error_type}
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm tracking-wide ${badgeCls} before:content-[attr(data-error)] block`}
-              style={{ transform: 'translateY(-2px)' }}
+              className="text-[10px] font-bold px-1.5 py-0.5 tracking-wide text-white before:content-[attr(data-error)] block"
+              style={{ transform: 'translateY(-2px)', background: catColor, borderRadius: 2, fontFamily: 'var(--mono)' }}
             />
           </ruby>
         );
@@ -102,7 +70,8 @@ const HighlightableText = ({
         elements.push(
           <span
             key={`ann-${ann.id || i}`}
-            className="relative inline border-b-2 border-blue-400 cursor-pointer group mx-0.5"
+            className="relative inline cursor-pointer group mx-0.5"
+            style={{ borderBottom: '2px solid var(--accent)' }}
             title={ann.comment}
             onClick={() => {
               if (window.confirm(`Remove comment: "${ann.comment}"?`)) {
@@ -112,16 +81,17 @@ const HighlightableText = ({
           >
             {chunk}
             {/* comment tooltip */}
-            <span 
+            <span
               data-comment={`💬 ${ann.comment}`}
-              className="absolute bottom-full left-0 mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50 shadow-lg before:content-[attr(data-comment)]"
+              className="dst-panel absolute bottom-full left-0 mb-1 hidden group-hover:block text-xs px-2 py-1 whitespace-nowrap z-50 before:content-[attr(data-comment)]"
+              style={{ color: 'var(--text-hi)', boxShadow: '0 6px 20px rgba(0,0,0,0.4)' }}
             />
           </span>
         );
       } else {
         // Fallback plain
         elements.push(
-          <span key={`ann-${ann.id || i}`} className="bg-gray-200 dark:bg-gray-600 rounded px-0.5">
+          <span key={`ann-${ann.id || i}`} className="rounded px-0.5" style={{ background: 'var(--bg-hover)' }}>
             {chunk}
           </span>
         );
@@ -231,7 +201,7 @@ const HighlightableText = ({
     <div className="relative" ref={containerRef}>
       {/* Text body */}
       <div
-        className="p-4 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 min-h-[80px] text-base leading-9 shadow-sm cursor-text select-text"
+        className="dst-panel p-4 min-h-[80px] text-base leading-9 cursor-text select-text"
         onMouseUp={handleMouseUp}
       >
         {renderText()}
@@ -241,15 +211,18 @@ const HighlightableText = ({
       {pendingSelection && (
         <div
           ref={popupRef}
-          className="absolute z-50 -translate-x-1/2 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl shadow-2xl p-3 min-w-[240px] max-w-[300px]"
-          style={{ top: popupPos.top, left: popupPos.left }}
+          className="dst-panel absolute z-50 -translate-x-1/2 p-3 min-w-[240px] max-w-[300px]"
+          style={{ top: popupPos.top, left: popupPos.left, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
           // Prevent mousedown inside popup from triggering the outside-click handler
           onMouseDown={(e) => e.stopPropagation()}
         >
           {/* Small caret */}
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white dark:bg-gray-700 border-l border-t dark:border-gray-600" />
+          <div
+            className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45"
+            style={{ background: 'var(--bg-panel)', borderLeft: '1px solid var(--border)', borderTop: '1px solid var(--border)' }}
+          />
 
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-2 truncate">
+          <div className="text-xs mb-2 truncate" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
             "{pendingSelection.selected_text.length > 30
               ? pendingSelection.selected_text.substring(0, 30) + '…'
               : pendingSelection.selected_text}"
@@ -263,26 +236,29 @@ const HighlightableText = ({
                   // Use onMouseDown so it fires before any outside-click blur
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                   onClick={() => handleAddError(cat.label)}
-                  className={`text-left px-2 py-1.5 text-xs rounded-lg font-medium hover:opacity-80 active:scale-95 transition-all ${cat.color}`}
+                  className="text-left px-2 py-1.5 text-xs font-medium hover:opacity-80 active:scale-95 transition-all text-white"
+                  style={{ background: cat.color, borderRadius: 3, fontFamily: 'var(--mono)' }}
                 >
                   {cat.label}
                 </button>
               ))}
               {/* Custom tag input */}
-              <div className="mt-1 pt-2 border-t dark:border-gray-600 flex gap-1">
+              <div className="mt-1 pt-2 flex gap-1" style={{ borderTop: '1px solid var(--border)' }}>
                 <input
                   type="text"
                   value={customError}
                   onChange={(e) => setCustomError(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && customError) handleAddError(customError); }}
                   placeholder="Custom tag…"
-                  className="flex-1 px-2 py-1 text-xs border rounded dark:bg-gray-800 dark:text-white dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  className="dst-input flex-1"
+                  style={{ height: 26, fontSize: 12 }}
                   onMouseDown={(e) => e.stopPropagation()}
                 />
                 <button
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                   onClick={() => customError && handleAddError(customError)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-xs font-semibold"
+                  className="dst-btn-primary"
+                  style={{ height: 26, padding: '0 10px' }}
                 >
                   ＋
                 </button>
@@ -295,13 +271,13 @@ const HighlightableText = ({
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Add a reference comment…"
                 rows={3}
-                className="w-full p-2 text-xs border rounded dark:bg-gray-800 dark:text-white dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none"
+                className="dst-textarea"
                 onMouseDown={(e) => e.stopPropagation()}
               />
               <button
                 onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onClick={handleAddComment}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                className="dst-btn-primary"
               >
                 Save Comment
               </button>
@@ -310,7 +286,10 @@ const HighlightableText = ({
 
           <button
             onClick={closePopup}
-            className="mt-2 w-full text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-center"
+            className="mt-2 w-full text-xs text-center transition-colors"
+            style={{ color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-hi)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-dim)' }}
           >
             Cancel
           </button>
