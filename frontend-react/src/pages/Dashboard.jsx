@@ -15,54 +15,12 @@ const PIPELINE_STAGES = [
 ]
 
 const STAT_CARDS = (stats) => [
-  {
-    title: 'Text Datasets',
-    value: stats?.text_datasets ?? 0,
-    icon: FolderOpen,
-    border: '#3B82F6',
-    iconCls: 'text-blue-500',
-    iconBg: 'bg-blue-50 dark:bg-blue-950/60',
-  },
-  {
-    title: 'Text Records',
-    value: stats?.text_records ?? 0,
-    icon: FileText,
-    border: '#10B981',
-    iconCls: 'text-emerald-500',
-    iconBg: 'bg-emerald-50 dark:bg-emerald-950/60',
-  },
-  {
-    title: 'Pipeline Completed',
-    value: stats?.text_annotated ?? 0,
-    icon: Cpu,
-    border: '#8B5CF6',
-    iconCls: 'text-violet-500',
-    iconBg: 'bg-violet-50 dark:bg-violet-950/60',
-  },
-  {
-    title: 'ASR Datasets',
-    value: stats?.asr_datasets ?? 0,
-    icon: Music2,
-    border: '#F59E0B',
-    iconCls: 'text-amber-500',
-    iconBg: 'bg-amber-50 dark:bg-amber-950/60',
-  },
-  {
-    title: 'Audio Files',
-    value: stats?.audio_files ?? 0,
-    icon: Headphones,
-    border: '#EC4899',
-    iconCls: 'text-pink-500',
-    iconBg: 'bg-pink-50 dark:bg-pink-950/60',
-  },
-  {
-    title: 'ASR Completed',
-    value: stats?.asr_completed ?? 0,
-    icon: CheckCircle2,
-    border: '#0D9488',
-    iconCls: 'text-teal-600 dark:text-teal-400',
-    iconBg: 'bg-teal-50 dark:bg-teal-950/60',
-  },
+  { title: 'Text Datasets',      value: stats?.text_datasets ?? 0,  icon: FolderOpen,    color: '#4a9eff' },
+  { title: 'Text Records',       value: stats?.text_records ?? 0,   icon: FileText,      color: '#3dd68c' },
+  { title: 'Pipeline Completed', value: stats?.text_annotated ?? 0, icon: Cpu,           color: '#a78bfa' },
+  { title: 'ASR Datasets',       value: stats?.asr_datasets ?? 0,   icon: Music2,        color: '#e8a820' },
+  { title: 'Audio Files',        value: stats?.audio_files ?? 0,    icon: Headphones,    color: '#f472b6' },
+  { title: 'ASR Completed',      value: stats?.asr_completed ?? 0,  icon: CheckCircle2,  color: '#2dd4bf' },
 ]
 
 /** Mini pipeline progress for the dataset table */
@@ -90,15 +48,17 @@ function PipelineProgress({ pipeline }) {
                 className="progress-fill"
                 style={{
                   width: `${pct}%`,
-                  background: isDone ? '#10B981' : isActive ? '#F59E0B' : undefined,
+                  background: isDone ? 'var(--green)' : isActive ? 'var(--amber)' : undefined,
                 }}
               />
             </div>
-            <span className={`text-[10px] font-medium group-hover:underline ${
-              isDone    ? 'text-emerald-600 dark:text-emerald-400' :
-              isActive  ? 'text-amber-600 dark:text-amber-400' :
-              'text-slate-400 dark:text-slate-500'
-            }`}>
+            <span
+              className="text-[10px] font-medium group-hover:underline"
+              style={{
+                fontFamily: 'var(--mono)',
+                color: isDone ? 'var(--green)' : isActive ? 'var(--amber)' : 'var(--text-dim)',
+              }}
+            >
               {stage.label}
             </span>
           </Link>
@@ -145,9 +105,9 @@ function Dashboard() {
       <div className="flex flex-col items-center justify-center h-72 gap-4">
         <div
           className="w-8 h-8 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }}
+          style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }}
         />
-        <p className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>Loading dashboard…</p>
+        <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Loading dashboard…</p>
       </div>
     )
   }
@@ -161,11 +121,11 @@ function Dashboard() {
       <div>
         <h1
           className="text-2xl font-bold tracking-tight"
-          style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
+          style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}
         >
           Overview
         </h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+        <p className="mt-1 text-sm" style={{ color: 'var(--text-dim)' }}>
           Current status of your datasets and pipelines
         </p>
       </div>
@@ -178,21 +138,24 @@ function Dashboard() {
             <div
               key={card.title}
               className="surface p-5 flex items-center gap-4"
-              style={{ borderLeftColor: card.border, borderLeftWidth: '3px' }}
+              style={{ borderLeftColor: card.color, borderLeftWidth: '3px' }}
             >
-              <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${card.iconBg}`}>
-                <Icon size={17} className={card.iconCls} strokeWidth={2} />
+              <div
+                className="flex-shrink-0 w-9 h-9 rounded flex items-center justify-center"
+                style={{ background: `color-mix(in srgb, ${card.color} 18%, transparent)` }}
+              >
+                <Icon size={17} style={{ color: card.color }} strokeWidth={2} />
               </div>
               <div>
                 <p
                   className="text-[11px] font-bold tracking-widest uppercase"
-                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}
+                  style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}
                 >
                   {card.title}
                 </p>
                 <p
                   className="text-2xl font-bold leading-none mt-0.5"
-                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
+                  style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}
                 >
                   {card.value.toLocaleString()}
                 </p>
@@ -207,11 +170,11 @@ function Dashboard() {
         <div className="surface overflow-hidden">
           <div
             className="flex items-center justify-between px-6 py-4"
-            style={{ borderBottom: '1px solid var(--clr-border)' }}
+            style={{ borderBottom: '1px solid var(--border)' }}
           >
             <h2
               className="text-base font-bold"
-              style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
+              style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}
             >
               Dataset Breakdown
             </h2>
@@ -235,14 +198,14 @@ function Dashboard() {
                   {datasetStats.text_datasets.map(ds => (
                     <div
                       key={ds.id}
-                      className="flex items-center justify-between px-4 py-3 rounded-lg"
-                      style={{ background: 'var(--clr-surface-2)' }}
+                      className="flex items-center justify-between px-4 py-3 rounded"
+                      style={{ background: 'var(--bg-input)' }}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--clr-text)' }}>
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-hi)' }}>
                           {ds.name}
                         </p>
-                        <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--clr-text-muted)' }}>
+                        <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--text-dim)' }}>
                           {ds.task_type?.replace(/_/g, ' ')}
                           {ds.has_pipeline === false && ' · No pipeline runs'}
                         </p>
@@ -250,7 +213,7 @@ function Dashboard() {
                       <div className="ml-6 flex-shrink-0">
                         {pipelines[ds.id]
                           ? <PipelineProgress pipeline={pipelines[ds.id]} />
-                          : <span className="text-xs italic" style={{ color: 'var(--clr-text-muted)' }}>Not started</span>
+                          : <span className="text-xs italic" style={{ color: 'var(--text-dim)' }}>Not started</span>
                         }
                       </div>
                     </div>
@@ -269,14 +232,14 @@ function Dashboard() {
                     return (
                       <div
                         key={ds.id}
-                        className="flex items-center justify-between px-4 py-3 rounded-lg"
-                        style={{ background: 'var(--clr-surface-2)' }}
+                        className="flex items-center justify-between px-4 py-3 rounded"
+                        style={{ background: 'var(--bg-input)' }}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--clr-text)' }}>
+                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-hi)' }}>
                             {ds.name}
                           </p>
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                             {ds.pending_count} pending · {ds.completed_count}/{ds.file_count} files
                           </p>
                         </div>
@@ -284,7 +247,7 @@ function Dashboard() {
                           <div className="w-28 progress-track">
                             <div className="progress-fill" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-xs font-semibold w-9 text-right tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>
+                          <span className="text-xs font-semibold w-9 text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>
                             {pct}%
                           </span>
                         </div>
@@ -296,7 +259,7 @@ function Dashboard() {
             )}
 
             {(!datasetStats.text_datasets?.length && !datasetStats.asr_datasets?.length) && (
-              <p className="text-sm text-center py-6" style={{ color: 'var(--clr-text-muted)' }}>
+              <p className="text-sm text-center py-6" style={{ color: 'var(--text-dim)' }}>
                 No datasets yet. Create one to get started.
               </p>
             )}
@@ -308,19 +271,19 @@ function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <a
           href="/text"
-          className="surface p-5 group flex items-start gap-4 hover:shadow-md transition-shadow"
+          className="surface p-5 group flex items-start gap-4 transition-colors"
         >
           <div
-            className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ background: '#EFF6FF' }}
+            className="flex-shrink-0 w-10 h-10 rounded flex items-center justify-center"
+            style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}
           >
-            <Workflow size={18} style={{ color: '#3B82F6' }} strokeWidth={1.8} />
+            <Workflow size={18} style={{ color: 'var(--accent)' }} strokeWidth={1.8} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>
               BR Pipeline
             </p>
-            <p className="text-sm mt-0.5 leading-snug" style={{ color: 'var(--clr-text-muted)' }}>
+            <p className="text-sm mt-0.5 leading-snug" style={{ color: 'var(--text-dim)' }}>
               Batch-process Bahasa Rojak data through the 4-stage automated pipeline
             </p>
           </div>
@@ -328,25 +291,25 @@ function Dashboard() {
             size={16}
             strokeWidth={2}
             className="flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ color: 'var(--clr-text-muted)' }}
+            style={{ color: 'var(--text-dim)' }}
           />
         </a>
 
         <a
           href="/asr"
-          className="surface p-5 group flex items-start gap-4 hover:shadow-md transition-shadow"
+          className="surface p-5 group flex items-start gap-4 transition-colors"
         >
           <div
-            className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ background: '#F5F3FF' }}
+            className="flex-shrink-0 w-10 h-10 rounded flex items-center justify-center"
+            style={{ background: "color-mix(in srgb, #a78bfa 15%, transparent)" }}
           >
-            <Mic size={18} style={{ color: '#8B5CF6' }} strokeWidth={1.8} />
+            <Mic size={18} style={{ color: '#a78bfa' }} strokeWidth={1.8} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>
               ASR Datasets
             </p>
-            <p className="text-sm mt-0.5 leading-snug" style={{ color: 'var(--clr-text-muted)' }}>
+            <p className="text-sm mt-0.5 leading-snug" style={{ color: 'var(--text-dim)' }}>
               Transcribe and correct audio files using Whisper or Qwen3 ASR
             </p>
           </div>
@@ -354,7 +317,7 @@ function Dashboard() {
             size={16}
             strokeWidth={2}
             className="flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ color: 'var(--clr-text-muted)' }}
+            style={{ color: 'var(--text-dim)' }}
           />
         </a>
       </div>
@@ -363,12 +326,12 @@ function Dashboard() {
       <div className="surface overflow-hidden">
         <div
           className="px-6 py-4 flex items-center gap-2"
-          style={{ borderBottom: '1px solid var(--clr-border)' }}
+          style={{ borderBottom: '1px solid var(--border)' }}
         >
-          <TrendingUp size={15} style={{ color: 'var(--clr-text-muted)' }} strokeWidth={2} />
+          <TrendingUp size={15} style={{ color: 'var(--text-dim)' }} strokeWidth={2} />
           <h2
             className="text-base font-bold"
-            style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
+            style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}
           >
             Getting Started
           </h2>
@@ -378,12 +341,12 @@ function Dashboard() {
           {/* BR Pipeline */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Workflow size={14} style={{ color: '#3B82F6' }} strokeWidth={2} />
-              <h3 className="text-sm font-bold" style={{ color: 'var(--clr-text)' }}>
+              <Workflow size={14} style={{ color: 'var(--accent)' }} strokeWidth={2} />
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-hi)' }}>
                 BR Pipeline (Automated)
               </h3>
             </div>
-            <ol className="space-y-1.5 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+            <ol className="space-y-1.5 text-sm" style={{ color: 'var(--text-dim)' }}>
               {[
                 'Create a text dataset with "General (For BR Pipeline)" type',
                 'Upload a JSON or CSV file with Malaysian English conversation data',
@@ -394,7 +357,7 @@ function Dashboard() {
                 <li key={i} className="flex items-start gap-2">
                   <span
                     className="flex-shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center mt-0.5"
-                    style={{ background: '#EFF6FF', color: '#3B82F6' }}
+                    style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}
                   >
                     {i + 1}
                   </span>
@@ -403,10 +366,10 @@ function Dashboard() {
               ))}
             </ol>
             <div
-              className="mt-4 px-4 py-3 rounded-lg text-xs leading-relaxed"
-              style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text-muted)' }}
+              className="mt-4 px-4 py-3 rounded text-xs leading-relaxed"
+              style={{ background: 'var(--bg-input)', color: 'var(--text-dim)' }}
             >
-              <strong style={{ color: 'var(--clr-text)' }}>Tip:</strong> Stages 1–3 run fully
+              <strong style={{ color: 'var(--text-hi)' }}>Tip:</strong> Stages 1–3 run fully
               automatically. You only need to review Stage 4 responses.
             </div>
           </div>
@@ -414,12 +377,12 @@ function Dashboard() {
           {/* ASR Workflow */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Mic size={14} style={{ color: '#8B5CF6' }} strokeWidth={2} />
-              <h3 className="text-sm font-bold" style={{ color: 'var(--clr-text)' }}>
+              <Mic size={14} style={{ color: '#a78bfa' }} strokeWidth={2} />
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-hi)' }}>
                 ASR Annotation Workflow
               </h3>
             </div>
-            <ol className="space-y-1.5 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+            <ol className="space-y-1.5 text-sm" style={{ color: 'var(--text-dim)' }}>
               {[
                 'Create an ASR dataset',
                 'Upload audio files in batch (MP3, WAV, etc.) or import from YouTube',
@@ -431,7 +394,7 @@ function Dashboard() {
                 <li key={i} className="flex items-start gap-2">
                   <span
                     className="flex-shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center mt-0.5"
-                    style={{ background: '#F5F3FF', color: '#8B5CF6' }}
+                    style={{ background: 'color-mix(in srgb, #a78bfa 20%, transparent)', color: '#a78bfa' }}
                   >
                     {i + 1}
                   </span>

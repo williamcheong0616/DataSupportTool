@@ -19,19 +19,23 @@ import {
   getTaskStatus,
   pollTaskUntilDone,
 } from '../api'
+import ActionChip from '../components/ActionChip'
 
 const STATUS_CFG = {
-  pending:     { label: 'Pending',     cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' },
-  transcribing:{ label: 'Processing',  cls: 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300' },
-  transcribed: { label: 'Transcribed', cls: 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300' },
-  annotating:  { label: 'In Progress', cls: 'bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300' },
-  completed:   { label: 'Completed',   cls: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' },
+  pending:      { label: 'Pending',     color: 'var(--text-dim)' },
+  transcribing: { label: 'Processing',  color: 'var(--amber)' },
+  transcribed:  { label: 'Transcribed', color: 'var(--accent)' },
+  annotating:   { label: 'In Progress', color: '#a78bfa' },
+  completed:    { label: 'Completed',   color: 'var(--green)' },
 }
 
-function StatusChip({ status, size = 'xs' }) {
+function StatusChip({ status }) {
   const cfg = STATUS_CFG[status] || STATUS_CFG.pending
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-${size} font-medium ${cfg.cls}`}>
+    <span
+      className="dst-badge"
+      style={{ background: `color-mix(in srgb, ${cfg.color} 18%, transparent)`, color: cfg.color }}
+    >
       {cfg.label}
     </span>
   )
@@ -39,8 +43,8 @@ function StatusChip({ status, size = 'xs' }) {
 
 function Kbd({ children }) {
   return (
-    <kbd className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium"
-      style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)', color: 'var(--clr-text-muted)' }}>
+    <kbd className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+      style={{ fontFamily: 'var(--mono)', background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-dim)' }}>
       {children}
     </kbd>
   )
@@ -93,9 +97,9 @@ function ASRAnnotate() {
 
     const ws = WaveSurfer.create({
       container: waveformRef.current,
-      waveColor: '#5EEAD4',       // teal-300
-      progressColor: '#0D9488',   // teal-600
-      cursorColor: '#0F766E',     // teal-700
+      waveColor: '#353c52',      // border-hi
+      progressColor: '#4a9eff',  // accent
+      cursorColor: '#e8eaf0',    // text-hi
       cursorWidth: 2, barWidth: 2, barGap: 1, barRadius: 2,
       height: 80, normalize: true, url: getAudioUrl(cur.id),
     })
@@ -270,8 +274,8 @@ function ASRAnnotate() {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4">
         <div className="w-8 h-8 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
-        <p className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>Loading files…</p>
+          style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Loading files…</p>
       </div>
     )
   }
@@ -287,25 +291,23 @@ function ASRAnnotate() {
           <button
             onClick={() => navigate('/asr')}
             className="inline-flex items-center gap-1.5 text-sm font-medium mb-2 transition-colors"
-            style={{ color: 'var(--clr-text-muted)' }}
-            onMouseOver={e => e.currentTarget.style.color = 'var(--clr-primary)'}
-            onMouseOut={e => e.currentTarget.style.color = 'var(--clr-text-muted)'}
+            style={{ color: 'var(--text-dim)' }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--accent)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--text-dim)'}
           >
             <ArrowLeft size={14} /> Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
             {dataset?.name || 'ASR Annotation'}
           </h1>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={toggleFuse}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors border ${
-              fuseMode
-                ? 'text-white border-teal-600'
-                : 'border-slate-300 dark:border-slate-600'
-            }`}
-            style={fuseMode ? { background: 'var(--clr-primary)' } : { color: 'var(--clr-text)' }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded transition-colors border"
+            style={fuseMode
+              ? { background: 'var(--accent)', borderColor: 'var(--accent)', color: 'var(--accent-text)' }
+              : { borderColor: 'var(--border-hi)', color: 'var(--text-hi)' }}
           >
             <Link2 size={13} /> {fuseMode ? 'Fuse Mode On' : 'Fuse Audio'}
           </button>
@@ -313,7 +315,8 @@ function ASRAnnotate() {
             <button
               onClick={doFuse}
               disabled={fusing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded text-white disabled:opacity-50 transition-colors"
+              style={{ background: 'var(--green)', fontFamily: 'var(--mono)' }}
             >
               <Zap size={13} /> {fusing ? 'Fusing…' : `Fuse ${selected.length} Files`}
             </button>
@@ -327,21 +330,21 @@ function ASRAnnotate() {
           {/* Counters */}
           <div className="flex items-center gap-5">
             {[
-              { label: 'Total', val: totalAll, color: 'var(--clr-primary)' },
-              { label: 'Pending', val: counts.pending, color: 'var(--clr-text-muted)' },
-              { label: 'Transcribed', val: counts.transcribed, color: '#3B82F6' },
-              { label: 'Completed', val: counts.completed, color: '#10B981' },
+              { label: 'Total', val: totalAll, color: 'var(--accent)' },
+              { label: 'Pending', val: counts.pending, color: 'var(--text-dim)' },
+              { label: 'Transcribed', val: counts.transcribed, color: 'var(--accent)' },
+              { label: 'Completed', val: counts.completed, color: 'var(--green)' },
             ].map(({ label, val, color }) => (
               <div key={label} className="text-center">
-                <div className="text-xl font-bold" style={{ fontFamily: 'Raleway, sans-serif', color }}>{val}</div>
-                <div className="text-[11px] mt-0.5" style={{ color: 'var(--clr-text-muted)' }}>{label}</div>
+                <div className="text-xl font-bold" style={{ fontFamily: 'var(--mono)', color }}>{val}</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{label}</div>
               </div>
             ))}
           </div>
 
           {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
               <span>Sort</span>
               <select
                 value={sortBy}
@@ -355,14 +358,14 @@ function ASRAnnotate() {
               <button
                 onClick={toggleSortOrder}
                 className="inline-flex items-center gap-0.5 px-2 py-1 rounded border text-xs transition-colors"
-                style={{ borderColor: 'var(--clr-border)', color: 'var(--clr-text-muted)' }}
+                style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
               >
                 {sortOrder === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
                 {sortOrder === 'asc' ? 'Asc' : 'Desc'}
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
               <span>Filter</span>
               <select value={filter} onChange={e => changeFilter(e.target.value)} className="form-input !w-auto !py-1 text-xs">
                 <option value="all">All Files</option>
@@ -374,7 +377,7 @@ function ASRAnnotate() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>{pct}%</span>
+              <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--text-dim)' }}>{pct}%</span>
               <div className="w-28 progress-track">
                 <div className="progress-fill" style={{ width: `${pct}%` }} />
               </div>
@@ -386,14 +389,14 @@ function ASRAnnotate() {
       {/* ── Fuse mode banner ────────────────────────────────── */}
       {fuseMode && (
         <div
-          className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm"
-          style={{ background: 'var(--clr-primary-bg)', border: '1px solid color-mix(in srgb, var(--clr-primary) 30%, transparent)' }}
+          className="flex items-center gap-3 px-4 py-3 rounded text-sm"
+          style={{ background: 'var(--accent-dim)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}
         >
-          <Link2 size={15} style={{ color: 'var(--clr-primary)' }} />
-          <div style={{ color: 'var(--clr-text)' }}>
+          <Link2 size={15} style={{ color: 'var(--accent)' }} />
+          <div style={{ color: 'var(--text-hi)' }}>
             <span className="font-semibold">Fuse mode active</span>
-            <span className="ml-2" style={{ color: 'var(--clr-text-muted)' }}>Select 2+ files using checkboxes to concatenate them.</span>
-            {selected.length > 0 && <span className="ml-2 font-medium" style={{ color: 'var(--clr-primary)' }}>{selected.length} selected</span>}
+            <span className="ml-2" style={{ color: 'var(--text-dim)' }}>Select 2+ files using checkboxes to concatenate them.</span>
+            {selected.length > 0 && <span className="ml-2 font-medium" style={{ color: 'var(--accent)' }}>{selected.length} selected</span>}
           </div>
           <button onClick={toggleFuse} className="ml-auto opacity-50 hover:opacity-100 text-base leading-none">×</button>
         </div>
@@ -401,8 +404,8 @@ function ASRAnnotate() {
 
       {files.length === 0 ? (
         <div className="surface p-12 text-center">
-          <p className="text-sm font-medium" style={{ color: 'var(--clr-text)' }}>No files found</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--clr-text-muted)' }}>Upload audio files or change the filter.</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-hi)' }}>No files found</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>Upload audio files or change the filter.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -410,13 +413,13 @@ function ASRAnnotate() {
           {/* ── File list sidebar ─────────────────────────── */}
           <div className="surface p-4 h-fit lg:sticky lg:top-20">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+              <h2 className="text-sm font-bold" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
                 Files
               </h2>
-              <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+              <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
                 {filteredTotal}{filter !== 'all' ? ` ${filter}` : ''} total
                 {fuseMode && selected.length > 0 && (
-                  <span className="ml-1.5 font-medium" style={{ color: 'var(--clr-primary)' }}>· {selected.length} selected</span>
+                  <span className="ml-1.5 font-medium" style={{ color: 'var(--accent)' }}>· {selected.length} selected</span>
                 )}
               </span>
             </div>
@@ -427,10 +430,10 @@ function ASRAnnotate() {
                 return (
                   <div
                     key={file.id}
-                    className="relative rounded-lg transition-colors"
+                    className="relative rounded transition-colors"
                     style={{
-                      background: isActive ? 'var(--clr-primary-bg)' : undefined,
-                      border: `1px solid ${isActive ? 'color-mix(in srgb, var(--clr-primary) 40%, transparent)' : 'var(--clr-border)'}`,
+                      background: isActive ? 'var(--accent-dim)' : undefined,
+                      border: `1px solid ${isActive ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'var(--border)'}`,
                     }}
                   >
                     {fuseMode && (
@@ -439,7 +442,8 @@ function ASRAnnotate() {
                           type="checkbox"
                           checked={selected.includes(file.id)}
                           onChange={() => toggleSelect(file.id)}
-                          className="w-3.5 h-3.5 rounded accent-teal-600"
+                          className="w-3.5 h-3.5 rounded"
+                          style={{ accentColor: 'var(--accent)' }}
                           onClick={e => e.stopPropagation()}
                         />
                       </div>
@@ -450,13 +454,13 @@ function ASRAnnotate() {
                       style={{ paddingLeft: fuseMode ? '28px' : undefined }}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-xs font-medium truncate flex-1" style={{ color: 'var(--clr-text)' }}>
+                        <span className="text-xs font-medium truncate flex-1" style={{ color: 'var(--text-hi)' }}>
                           {file.filename}
                         </span>
                         <StatusChip status={file.status} />
                       </div>
                       {file.duration && (
-                        <span className="text-[11px] mt-0.5 block" style={{ color: 'var(--clr-text-muted)' }}>
+                        <span className="text-[11px] mt-0.5 block" style={{ color: 'var(--text-dim)' }}>
                           {fmtTime(file.duration)}
                         </span>
                       )}
@@ -470,24 +474,24 @@ function ASRAnnotate() {
             {pages > 1 && (
               <div
                 className="flex items-center justify-between mt-3 pt-3"
-                style={{ borderTop: '1px solid var(--clr-border)' }}
+                style={{ borderTop: '1px solid var(--border)' }}
               >
                 <button
                   onClick={() => goPage(page - 1)}
                   disabled={page === 1}
-                  className="px-2 py-1 text-xs rounded-md transition-colors disabled:opacity-40"
-                  style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                  className="px-2 py-1 text-xs rounded transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-hi)' }}
                 >
                   Prev
                 </button>
-                <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
                   {page} / {pages}
                 </span>
                 <button
                   onClick={() => goPage(page + 1)}
                   disabled={page === pages}
-                  className="px-2 py-1 text-xs rounded-md transition-colors disabled:opacity-40"
-                  style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                  className="px-2 py-1 text-xs rounded transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-hi)' }}
                 >
                   Next
                 </button>
@@ -503,51 +507,50 @@ function ASRAnnotate() {
                 <div className="surface p-5">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-sm font-bold truncate" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+                      <h2 className="text-sm font-bold truncate" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
                         {cur.filename}
                       </h2>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <StatusChip status={cur.status} />
-                      <button
+                      <ActionChip
                         onClick={() => doRetranscribe('whisper')}
                         disabled={transcribing}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 disabled:opacity-50"
+                        color="var(--accent)"
+                        icon={RefreshCw}
                         title="Re-transcribe with Whisper"
                       >
-                        <RefreshCw size={10} /> Whisper
-                      </button>
-                      <button
+                        Whisper
+                      </ActionChip>
+                      <ActionChip
                         onClick={() => doRetranscribe('qwen3')}
                         disabled={transcribing}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 hover:bg-violet-100 disabled:opacity-50"
+                        color="#a78bfa"
+                        icon={RefreshCw}
                         title="Re-transcribe with Qwen3"
                       >
-                        <RefreshCw size={10} /> Qwen3
-                      </button>
-                      <button
-                        onClick={doDelete}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 hover:bg-red-100"
-                      >
-                        <Trash2 size={10} /> Delete
-                      </button>
+                        Qwen3
+                      </ActionChip>
+                      <ActionChip onClick={doDelete} color="var(--red)" icon={Trash2}>
+                        Delete
+                      </ActionChip>
                     </div>
                   </div>
 
                   {/* Waveform */}
-                  <div className="rounded-lg overflow-hidden mb-3" style={{ background: 'var(--clr-surface-2)' }}>
+                  <div className="rounded overflow-hidden mb-3" style={{ background: 'var(--bg-input)' }}>
                     <div ref={waveformRef} style={{ minHeight: '80px' }} />
                     {!waveReady && !waveError && (
-                      <div className="flex items-center justify-center h-20 gap-2 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                      <div className="flex items-center justify-center h-20 gap-2 text-xs" style={{ color: 'var(--text-dim)' }}>
                         <div className="w-4 h-4 rounded-full border border-transparent animate-spin"
-                          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
+                          style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }} />
                         Loading waveform…
                       </div>
                     )}
                   </div>
                   {waveError && (
                     <div className="mb-3">
-                      <p className="text-xs text-red-500 mb-2">{waveError}</p>
+                      <p className="text-xs mb-2" style={{ color: 'var(--red)' }}>{waveError}</p>
                       <audio
                         controls
                         className="w-full"
@@ -559,7 +562,7 @@ function ASRAnnotate() {
                   )}
 
                   {/* Time display */}
-                  <div className="flex justify-between text-xs mb-4 tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>
+                  <div className="flex justify-between text-xs mb-4 tabular-nums" style={{ color: 'var(--text-dim)' }}>
                     <span>{fmtTime(curTime)}</span>
                     <span>{fmtTime(dur)}</span>
                   </div>
@@ -569,8 +572,8 @@ function ASRAnnotate() {
                     <button
                       onClick={() => skip(-5)}
                       disabled={!waveReady}
-                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
-                      style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                      className="flex items-center gap-1 px-3 py-2 rounded text-xs font-medium transition-colors disabled:opacity-40"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-hi)' }}
                     >
                       <SkipBack size={13} /> −5s
                     </button>
@@ -578,23 +581,23 @@ function ASRAnnotate() {
                       onClick={playPause}
                       disabled={!waveReady}
                       className="w-11 h-11 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40 hover:brightness-110 active:scale-95"
-                      style={{ background: 'var(--clr-primary)' }}
+                      style={{ background: 'var(--accent)' }}
                     >
                       {playing ? <Pause size={18} /> : <Play size={18} />}
                     </button>
                     <button
                       onClick={stop}
                       disabled={!waveReady}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40"
-                      style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                      className="w-8 h-8 rounded flex items-center justify-center transition-colors disabled:opacity-40"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-hi)' }}
                     >
                       <Square size={13} />
                     </button>
                     <button
                       onClick={() => skip(5)}
                       disabled={!waveReady}
-                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
-                      style={{ background: 'var(--clr-surface-2)', color: 'var(--clr-text)' }}
+                      className="flex items-center gap-1 px-3 py-2 rounded text-xs font-medium transition-colors disabled:opacity-40"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-hi)' }}
                     >
                       +5s <SkipForward size={13} />
                     </button>
@@ -602,7 +605,7 @@ function ASRAnnotate() {
 
                   {/* Speed */}
                   <div className="flex items-center justify-center gap-2">
-                    <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>Speed</span>
+                    <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Speed</span>
                     <div className="flex gap-1">
                       {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
                         <button
@@ -610,8 +613,8 @@ function ASRAnnotate() {
                           onClick={() => setRate(r)}
                           className="px-2 py-0.5 rounded text-xs font-medium transition-colors"
                           style={{
-                            background: rate === r ? 'var(--clr-primary)' : 'var(--clr-surface-2)',
-                            color: rate === r ? '#fff' : 'var(--clr-text-muted)',
+                            background: rate === r ? 'var(--accent)' : 'var(--bg-input)',
+                            color: rate === r ? '#fff' : 'var(--text-dim)',
                           }}
                         >
                           {r}×
@@ -621,7 +624,7 @@ function ASRAnnotate() {
                   </div>
 
                   {/* Keyboard hints */}
-                  <p className="mt-3 text-center text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                  <p className="mt-3 text-center text-[11px]" style={{ color: 'var(--text-dim)' }}>
                     <Kbd>Space</Kbd> play/pause &nbsp;·&nbsp;
                     <Kbd>←</Kbd> <Kbd>→</Kbd> skip 5s
                   </p>
@@ -632,7 +635,7 @@ function ASRAnnotate() {
                   {/* Whisper */}
                   <div className="surface p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                         Whisper
                       </p>
                       <div className="flex gap-1.5">
@@ -640,7 +643,7 @@ function ASRAnnotate() {
                           <button
                             onClick={() => setTranscript(cur.whisper_transcript)}
                             className="px-2 py-0.5 text-xs font-medium rounded transition-colors"
-                            style={{ background: 'var(--clr-primary-bg)', color: 'var(--clr-primary)' }}
+                            style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}
                           >
                             Use as base
                           </button>
@@ -649,7 +652,8 @@ function ASRAnnotate() {
                           <button
                             onClick={() => doTranscribe('whisper')}
                             disabled={transcribing}
-                            className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-200 disabled:opacity-50"
+                            className="px-2 py-0.5 text-xs font-medium rounded disabled:opacity-50 transition-colors"
+                            style={{ background: 'var(--amber-dim)', color: 'var(--amber)', fontFamily: 'var(--mono)' }}
                           >
                             {transcribing ? '…' : 'Run'}
                           </button>
@@ -657,18 +661,18 @@ function ASRAnnotate() {
                       </div>
                     </div>
                     {cur.whisper_transcript ? (
-                      <div className="p-3 rounded-lg" style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--clr-text)' }}>{cur.whisper_transcript}</p>
+                      <div className="p-3 rounded" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-hi)' }}>{cur.whisper_transcript}</p>
                         {cur.whisper_language && (
-                          <p className="mt-2 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>
                             Lang: {cur.whisper_language}{cur.whisper_confidence ? ` · Conf: ${(cur.whisper_confidence * 100).toFixed(0)}%` : ''}
                           </p>
                         )}
                       </div>
                     ) : (
                       <div
-                        className="p-3 rounded-lg text-center text-xs border-dashed border"
-                        style={{ color: 'var(--clr-text-muted)', background: 'var(--clr-surface-2)', borderColor: 'var(--clr-border-2)' }}
+                        className="p-3 rounded text-center text-xs border-dashed border"
+                        style={{ color: 'var(--text-dim)', background: 'var(--bg-input)', borderColor: 'var(--border-hi)' }}
                       >
                         {cur.status === 'transcribing' ? 'Processing…' : 'Not available'}
                       </div>
@@ -678,7 +682,7 @@ function ASRAnnotate() {
                   {/* Qwen3 */}
                   <div className="surface p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                         Qwen3 ASR
                       </p>
                       <div className="flex gap-1.5">
@@ -686,7 +690,7 @@ function ASRAnnotate() {
                           <button
                             onClick={() => setTranscript(cur.qwen3_transcript)}
                             className="px-2 py-0.5 text-xs font-medium rounded transition-colors"
-                            style={{ background: 'var(--clr-primary-bg)', color: 'var(--clr-primary)' }}
+                            style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}
                           >
                             Use as base
                           </button>
@@ -695,7 +699,8 @@ function ASRAnnotate() {
                           <button
                             onClick={() => doTranscribe('qwen3')}
                             disabled={transcribing}
-                            className="px-2 py-0.5 text-xs font-medium rounded bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 hover:bg-violet-200 disabled:opacity-50"
+                            className="px-2 py-0.5 text-xs font-medium rounded disabled:opacity-50 transition-colors"
+                            style={{ background: 'color-mix(in srgb, #a78bfa 20%, transparent)', color: '#a78bfa', fontFamily: 'var(--mono)' }}
                           >
                             {transcribing ? '…' : 'Run'}
                           </button>
@@ -703,16 +708,16 @@ function ASRAnnotate() {
                       </div>
                     </div>
                     {cur.qwen3_transcript ? (
-                      <div className="p-3 rounded-lg" style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--clr-text)' }}>{cur.qwen3_transcript}</p>
+                      <div className="p-3 rounded" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-hi)' }}>{cur.qwen3_transcript}</p>
                         {cur.qwen3_language && (
-                          <p className="mt-2 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>Lang: {cur.qwen3_language}</p>
+                          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>Lang: {cur.qwen3_language}</p>
                         )}
                       </div>
                     ) : (
                       <div
-                        className="p-3 rounded-lg text-center text-xs border-dashed border"
-                        style={{ color: 'var(--clr-text-muted)', background: 'var(--clr-surface-2)', borderColor: 'var(--clr-border-2)' }}
+                        className="p-3 rounded text-center text-xs border-dashed border"
+                        style={{ color: 'var(--text-dim)', background: 'var(--bg-input)', borderColor: 'var(--border-hi)' }}
                       >
                         {cur.status === 'transcribing' ? 'Processing…' : 'Not yet run — click Run to start'}
                       </div>
@@ -723,12 +728,13 @@ function ASRAnnotate() {
                 {/* Corrected transcript */}
                 <div className="surface p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                       Corrected Transcription
                     </p>
                     <div className="flex gap-1.5">
                       {cur.corrected_transcript && (
-                        <span className="px-2 py-0.5 text-xs font-medium rounded bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
+                        <span className="px-2 py-0.5 text-xs font-medium rounded"
+                          style={{ background: 'var(--accent-dim)', color: 'var(--accent)', fontFamily: 'var(--mono)' }}>
                           Saved
                         </span>
                       )}
@@ -743,12 +749,12 @@ function ASRAnnotate() {
                     placeholder="Edit transcript here…"
                     className="form-input font-mono text-sm leading-relaxed"
                   />
-                  <p className="mt-1.5 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                  <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-dim)' }}>
                     This corrected version will be saved as ground truth.
                   </p>
 
                   <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
-                    <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--clr-text-muted)' }}>
+                    <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-dim)' }}>
                       <Kbd>Ctrl+S</Kbd> save &nbsp;
                       <Kbd>Ctrl+↵</Kbd> complete &nbsp;
                       <Kbd>Ctrl+H</Kbd> find/replace
@@ -756,12 +762,10 @@ function ASRAnnotate() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setShowFindReplace(prev => !prev)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                          showFindReplace
-                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-700 dark:text-amber-300'
-                            : 'border-slate-300 dark:border-slate-600'
-                        }`}
-                        style={!showFindReplace ? { color: 'var(--clr-text)' } : undefined}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border transition-colors"
+                        style={showFindReplace
+                          ? { background: 'var(--amber-dim)', borderColor: 'var(--amber)', color: 'var(--amber)' }
+                          : { borderColor: 'var(--border-hi)', color: 'var(--text-hi)' }}
                       >
                         <Search size={11} /> Find & Replace
                       </button>
@@ -775,7 +779,8 @@ function ASRAnnotate() {
                       <button
                         onClick={markComplete}
                         disabled={saving}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded text-white disabled:opacity-50 transition-colors"
+                        style={{ background: 'var(--green)', fontFamily: 'var(--mono)' }}
                       >
                         <CheckCircle2 size={12} /> Complete
                       </button>
@@ -785,24 +790,24 @@ function ASRAnnotate() {
                   {/* Find & Replace Panel */}
                   {showFindReplace && (
                     <div
-                      className="mt-4 p-4 rounded-lg"
-                      style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}
+                      className="mt-4 p-4 rounded"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+                        <p className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                           Find & Replace
                         </p>
                         <button
                           onClick={() => setShowFindReplace(false)}
                           className="text-xs opacity-50 hover:opacity-80"
-                          style={{ color: 'var(--clr-text)' }}
+                          style={{ color: 'var(--text-hi)' }}
                         >
                           Close
                         </button>
                       </div>
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--clr-text-muted)' }}>Find</label>
+                          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-dim)' }}>Find</label>
                           <input
                             type="text"
                             value={findText}
@@ -812,7 +817,7 @@ function ASRAnnotate() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--clr-text-muted)' }}>Replace with</label>
+                          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-dim)' }}>Replace with</label>
                           <input
                             type="text"
                             value={replaceText}
@@ -824,17 +829,18 @@ function ASRAnnotate() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--clr-text-muted)' }}>
+                          <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--text-dim)' }}>
                             <input
                               type="checkbox"
                               checked={caseSensitive}
                               onChange={e => setCaseSensitive(e.target.checked)}
-                              className="w-3.5 h-3.5 rounded accent-teal-600"
+                              className="w-3.5 h-3.5 rounded"
+                          style={{ accentColor: 'var(--accent)' }}
                             />
                             Case sensitive
                           </label>
                           {findText && (
-                            <span className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
                               {matchCount} match{matchCount !== 1 ? 'es' : ''}
                             </span>
                           )}
@@ -842,7 +848,8 @@ function ASRAnnotate() {
                         <button
                           onClick={doReplaceAll}
                           disabled={!findText || matchCount === 0}
-                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 text-xs font-semibold rounded text-white disabled:opacity-50 transition-colors"
+                          style={{ background: 'var(--amber)', color: '#000', fontFamily: 'var(--mono)' }}
                         >
                           Replace All ({matchCount})
                         </button>
@@ -860,7 +867,7 @@ function ASRAnnotate() {
                   >
                     ← Previous
                   </button>
-                  <span className="text-xs tabular-nums" style={{ color: 'var(--clr-text-muted)' }}>
+                  <span className="text-xs tabular-nums" style={{ color: 'var(--text-dim)' }}>
                     {(page - 1) * PER_PAGE + idx + 1} of {filteredTotal}
                   </span>
                   <button

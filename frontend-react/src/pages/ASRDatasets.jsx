@@ -19,21 +19,22 @@ import {
   downloadASRExport,
   pollTaskUntilDone
 } from '../api'
+import ActionChip from '../components/ActionChip'
 
 /* ── Shared modal chrome ───────────────────────────────────── */
 function Modal({ title, onClose, children, footer }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="surface w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--clr-border)' }}>
-          <h2 className="text-base font-bold" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <h2 className="text-base font-bold" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
             {title}
           </h2>
           <button onClick={onClose} className="text-xl leading-none opacity-40 hover:opacity-70 transition-opacity">×</button>
         </div>
         <div className="p-6 overflow-y-auto flex-1">{children}</div>
         {footer && (
-          <div className="px-6 py-4 flex justify-end gap-2" style={{ borderTop: '1px solid var(--clr-border)' }}>
+          <div className="px-6 py-4 flex justify-end gap-2" style={{ borderTop: '1px solid var(--border)' }}>
             {footer}
           </div>
         )}
@@ -45,7 +46,7 @@ function Modal({ title, onClose, children, footer }) {
 /* ── Label / field helpers ─────────────────────────────────── */
 function FieldLabel({ children }) {
   return (
-    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text-muted)' }}>
+    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
       {children}
     </label>
   )
@@ -219,8 +220,8 @@ function ASRDatasets() {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4">
         <div className="w-8 h-8 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--clr-primary)', borderRightColor: 'var(--clr-primary)' }} />
-        <p className="text-sm" style={{ color: 'var(--clr-text-muted)' }}>Loading datasets…</p>
+          style={{ borderTopColor: 'var(--accent)', borderRightColor: 'var(--accent)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Loading datasets…</p>
       </div>
     )
   }
@@ -233,16 +234,16 @@ function ASRDatasets() {
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
             ASR Datasets
           </h1>
-          <p className="mt-0.5 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+          <p className="mt-0.5 text-sm" style={{ color: 'var(--text-dim)' }}>
             Manage audio datasets for transcription and annotation
           </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" style={{ color: 'var(--clr-text)' }} />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" style={{ color: 'var(--text-hi)' }} />
             <input
               type="text"
               placeholder="Search datasets…"
@@ -316,8 +317,8 @@ function ASRDatasets() {
             {/* Upload files */}
             <div className="surface p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Upload size={14} style={{ color: 'var(--clr-text-muted)' }} />
-                <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>Upload Audio Files</p>
+                <Upload size={14} style={{ color: 'var(--text-dim)' }} />
+                <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>Upload Audio Files</p>
               </div>
               <input
                 type="file"
@@ -327,7 +328,7 @@ function ASRDatasets() {
                 className="form-input"
               />
               {uploadFiles.length > 0 && (
-                <p className="text-xs" style={{ color: 'var(--clr-text-muted)' }}>{uploadFiles.length} file(s) selected</p>
+                <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{uploadFiles.length} file(s) selected</p>
               )}
               <button
                 onClick={handleUpload}
@@ -339,10 +340,10 @@ function ASRDatasets() {
             </div>
 
             {/* YouTube import */}
-            <div className="surface p-4 space-y-3" style={{ borderColor: '#FECACA' }}>
+            <div className="surface p-4 space-y-3" style={{ borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)' }}>
               <div className="flex items-center gap-2">
-                <Youtube size={14} className="text-red-500" />
-                <p className="text-sm font-semibold" style={{ color: 'var(--clr-text)' }}>Import from YouTube</p>
+                <Youtube size={14} style={{ color: "var(--red)" }} />
+                <p className="text-sm font-semibold" style={{ color: 'var(--text-hi)' }}>Import from YouTube</p>
               </div>
               <input
                 type="text"
@@ -352,7 +353,7 @@ function ASRDatasets() {
                 className="form-input"
               />
 
-              <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+              <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-dim)' }}>
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -374,7 +375,7 @@ function ASRDatasets() {
               </div>
 
               {youtubeAutoSegment && (
-                <div className="flex gap-4 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+                <div className="flex gap-4 text-sm" style={{ color: 'var(--text-dim)' }}>
                   {[{ label: 'VAD (natural speech)', val: true }, { label: 'Fixed-length', val: false }].map(opt => (
                     <label key={String(opt.val)} className="flex items-center gap-1.5 cursor-pointer">
                       <input type="radio" name="vadMode" checked={useVad === opt.val} onChange={() => setUseVad(opt.val)} />
@@ -385,20 +386,20 @@ function ASRDatasets() {
               )}
 
               {youtubeAutoSegment && useVad && (
-                <div className="space-y-3 p-3 rounded-lg" style={{ background: 'var(--clr-surface-2)' }}>
+                <div className="space-y-3 p-3 rounded" style={{ background: 'var(--bg-input)' }}>
                   {[
                     { label: 'Min Speech Duration', val: minSpeechDuration, setter: setMinSpeechDuration, min: 100, max: 2000, step: 100, unit: 'ms' },
                     { label: 'Min Silence Duration', val: minSilenceDuration, setter: setMinSilenceDuration, min: 100, max: 2000, step: 50, unit: 'ms' },
                   ].map(({ label, val, setter, min, max, step, unit }) => (
                     <div key={label}>
-                      <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--clr-text-muted)' }}>
+                      <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--text-dim)' }}>
                         <span className="font-medium">{label}</span>
                         <span>{val}{unit}</span>
                       </div>
                       <input
                         type="range" min={min} max={max} step={step} value={val}
                         onChange={e => setter(Number(e.target.value))}
-                        className="w-full accent-teal-600"
+                        className="w-full" style={{ accentColor: 'var(--accent)' }}
                       />
                     </div>
                   ))}
@@ -408,7 +409,8 @@ function ASRDatasets() {
               <button
                 onClick={() => handleYoutubeImport(showUpload)}
                 disabled={youtubeImporting || !youtubeUrl.trim()}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg bg-red-500 hover:bg-red-600 transition disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded transition disabled:opacity-50"
+                style={{ background: 'var(--red)', fontFamily: 'var(--mono)' }}
               >
                 <Youtube size={14} />
                 {youtubeImporting ? 'Importing…' : 'Import from YouTube'}
@@ -421,9 +423,9 @@ function ASRDatasets() {
       {/* ── Dataset list ─────────────────────────────────────── */}
       {visibleDatasets.length === 0 ? (
         <div className="surface p-12 text-center">
-          <Music2 size={32} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--clr-text)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--clr-text)' }}>No ASR datasets yet</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--clr-text-muted)' }}>
+          <Music2 size={32} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--text-hi)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-hi)' }}>No ASR datasets yet</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>
             Create a dataset and add audio files to get started.
           </p>
         </div>
@@ -439,13 +441,13 @@ function ASRDatasets() {
                 <div className="flex items-start justify-between gap-4">
                   {/* Left: info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold truncate" style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}>
+                    <h3 className="text-base font-bold truncate" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
                       {dataset.name}
                     </h3>
                     {dataset.description && (
-                      <p className="text-sm mt-0.5 truncate" style={{ color: 'var(--clr-text-muted)' }}>{dataset.description}</p>
+                      <p className="text-sm mt-0.5 truncate" style={{ color: 'var(--text-dim)' }}>{dataset.description}</p>
                     )}
-                    <div className="flex flex-wrap gap-4 mt-2 text-xs" style={{ color: 'var(--clr-text-muted)' }}>
+                    <div className="flex flex-wrap gap-4 mt-2 text-xs" style={{ color: 'var(--text-dim)' }}>
                       <span className="flex items-center gap-1"><Music2 size={11} /> {dataset.file_count || 0} files</span>
                       <span className="flex items-center gap-1"><Clock size={11} /> {dataset.pending_count || 0} pending</span>
                       <span className="flex items-center gap-1"><RefreshCw size={11} /> {dataset.transcribed_count || 0} ready</span>
@@ -455,13 +457,13 @@ function ASRDatasets() {
                     {dataset.file_count > 0 && (
                       <div className="mt-3 space-y-2 max-w-xs">
                         <div>
-                          <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--clr-text-muted)' }}>
+                          <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--text-dim)' }}>
                             <span>Transcription</span><span>{transcriptionPct.toFixed(0)}%</span>
                           </div>
-                          <div className="progress-track"><div className="progress-fill" style={{ width: `${transcriptionPct}%`, background: '#3B82F6' }} /></div>
+                          <div className="progress-track"><div className="progress-fill" style={{ width: `${transcriptionPct}%`, background: 'var(--accent)' }} /></div>
                         </div>
                         <div>
-                          <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--clr-text-muted)' }}>
+                          <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--text-dim)' }}>
                             <span>Annotation</span><span>{annotationPct.toFixed(0)}%</span>
                           </div>
                           <div className="progress-track"><div className="progress-fill" style={{ width: `${annotationPct}%` }} /></div>
@@ -473,33 +475,29 @@ function ASRDatasets() {
                   {/* Right: actions */}
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     <div className="flex flex-wrap gap-1.5">
-                      <button
-                        onClick={() => setShowUpload(dataset.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950"
-                      >
-                        <Plus size={11} /> Add Audio
-                      </button>
+                      <ActionChip onClick={() => setShowUpload(dataset.id)} color="var(--green)" icon={Plus}>
+                        Add Audio
+                      </ActionChip>
                       {dataset.file_count > 0 && (
                         <>
-                          <button
+                          <ActionChip
                             onClick={() => handleSegmentAll(dataset.id)}
                             disabled={segmenting[dataset.id]}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950 disabled:opacity-50"
+                            color="#a78bfa"
+                            icon={Scissors}
                             title="Segment using VAD"
                           >
-                            <Scissors size={11} /> {segmenting[dataset.id] ? 'Segmenting…' : 'Segment'}
-                          </button>
-                          <button
+                            {segmenting[dataset.id] ? 'Segmenting…' : 'Segment'}
+                          </ActionChip>
+                          <ActionChip
                             onClick={() => handleTranscribeAll(dataset.id)}
                             disabled={transcribing[dataset.id]}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950 disabled:opacity-50"
+                            color="var(--amber)"
+                            icon={Mic}
                           >
-                            <Mic size={11} /> {transcribing[dataset.id] ? 'Processing…' : 'Transcribe All'}
-                          </button>
-                          <button
-                            onClick={() => navigate(`/asr/${dataset.id}/annotate`)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors btn-primary"
-                          >
+                            {transcribing[dataset.id] ? 'Processing…' : 'Transcribe All'}
+                          </ActionChip>
+                          <button onClick={() => navigate(`/asr/${dataset.id}/annotate`)} className="btn-primary">
                             Annotate
                           </button>
                         </>
@@ -507,33 +505,32 @@ function ASRDatasets() {
                     </div>
                     {dataset.file_count > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        <button
+                        <ActionChip
                           onClick={() => handleExport(dataset.id, 'csv')}
                           disabled={exporting[dataset.id]}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 disabled:opacity-50"
+                          color="var(--accent)"
+                          icon={Download}
                           title="Export as CSV + Audio ZIP"
                         >
-                          <Download size={11} /> CSV + Audio
-                        </button>
-                        <button
+                          CSV + Audio
+                        </ActionChip>
+                        <ActionChip
                           onClick={() => handleExport(dataset.id, 'jsonl')}
                           disabled={exporting[dataset.id]}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 hover:bg-violet-100 disabled:opacity-50"
+                          color="#a78bfa"
+                          icon={Download}
                           title="Export as JSONL + Audio ZIP"
                         >
-                          <Download size={11} /> JSONL + Audio
-                        </button>
+                          JSONL + Audio
+                        </ActionChip>
                         {exporting[dataset.id] && (
-                          <span className="text-xs italic self-center" style={{ color: 'var(--clr-text-muted)' }}>Packing…</span>
+                          <span className="text-xs italic self-center" style={{ color: 'var(--text-dim)' }}>Packing…</span>
                         )}
                       </div>
                     )}
-                    <button
-                      onClick={() => handleDelete(dataset.id)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 hover:bg-red-100 self-start"
-                    >
-                      <Trash2 size={11} /> Delete
-                    </button>
+                    <ActionChip onClick={() => handleDelete(dataset.id)} color="var(--red)" icon={Trash2}>
+                      Delete
+                    </ActionChip>
                   </div>
                 </div>
               </div>
@@ -543,11 +540,11 @@ function ASRDatasets() {
       )}
 
       {/* ── How-to tip ──────────────────────────────────────── */}
-      <div className="surface p-5" style={{ borderLeftColor: '#3B82F6', borderLeftWidth: '3px' }}>
-        <p className="text-xs font-bold mb-2 uppercase tracking-widest" style={{ fontFamily: 'Raleway, sans-serif', color: '#3B82F6' }}>
+      <div className="surface p-5" style={{ borderLeftColor: 'var(--accent)', borderLeftWidth: '3px' }}>
+        <p className="text-xs font-bold mb-2 uppercase tracking-widest" style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>
           How ASR Annotation Works
         </p>
-        <ol className="space-y-1 text-sm" style={{ color: 'var(--clr-text-muted)' }}>
+        <ol className="space-y-1 text-sm" style={{ color: 'var(--text-dim)' }}>
           {[
             'Create a dataset and add audio — upload files or import from YouTube',
             'Optional: Segment long recordings into speech segments using VAD',
@@ -557,7 +554,7 @@ function ASRDatasets() {
           ].map((step, i) => (
             <li key={i} className="flex items-start gap-2">
               <span className="flex-shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center mt-0.5"
-                style={{ background: '#EFF6FF', color: '#3B82F6' }}>
+                style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}>
                 {i + 1}
               </span>
               {step}

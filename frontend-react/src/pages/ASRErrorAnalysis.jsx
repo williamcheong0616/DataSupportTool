@@ -56,13 +56,13 @@ const ASRErrorAnalysis = () => {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-gray-500 dark:text-gray-400">Loading ASR analysis data...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+  if (loading) return <div className="p-8 text-center text-[var(--text-dim)]">Loading ASR analysis data...</div>;
+  if (error) return <div className="p-8 text-center text-[var(--red)]">{error}</div>;
   if (records.length === 0) return (
-    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+    <div className="p-8 text-center text-[var(--text-dim)]">
       No records found. Try seeding data via the API!
       <div className="mt-4">
-        <Link to="/" className="text-indigo-600 underline">Back to Dashboard</Link>
+        <Link to="/" className="text-[var(--accent)] underline">Back to Dashboard</Link>
       </div>
     </div>
   );
@@ -72,22 +72,22 @@ const ASRErrorAnalysis = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ASR Error Analysis</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-hi)]">ASR Error Analysis</h1>
         <div className="flex gap-2">
           <button 
             onClick={() => setCurrentIndex(c => Math.max(0, c - 1))}
             disabled={currentIndex === 0}
-            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50 dark:text-white"
+            className="px-3 py-1 bg-[var(--bg-input)] rounded disabled:opacity-50"
           >
             Prev
           </button>
-          <span className="py-1 px-3 bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 rounded font-medium">
+          <span className="py-1 px-3 bg-[var(--accent-dim)] text-[var(--accent)] rounded font-medium">
             {currentIndex + 1} / {records.length}
           </span>
           <button 
             onClick={() => setCurrentIndex(c => Math.min(records.length - 1, c + 1))}
             disabled={currentIndex === records.length - 1}
-            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50 dark:text-white"
+            className="px-3 py-1 bg-[var(--bg-input)] rounded disabled:opacity-50"
           >
             Next
           </button>
@@ -95,8 +95,8 @@ const ASRErrorAnalysis = () => {
       </div>
 
       {/* Audio Player */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border dark:border-gray-700 flex flex-col gap-3">
-        <h2 className="text-lg font-medium dark:text-gray-200 truncate" title={currentRecord.filename}>
+      <div className="bg-[var(--bg-panel)] p-4 rounded border border flex flex-col gap-3">
+        <h2 className="text-lg font-medium  truncate" title={currentRecord.filename}>
           Listen: {currentRecord.filename}
         </h2>
         <audio 
@@ -110,8 +110,8 @@ const ASRErrorAnalysis = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Ground Truth Column */}
         <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Reference Transcript</h2>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Reference Transcript</h2>
+          <div className="text-sm text-[var(--text-dim)] mb-2">
             Highlight text to add a comment referencing a failure in the model.
           </div>
           
@@ -127,17 +127,17 @@ const ASRErrorAnalysis = () => {
         {/* Finetuned Outputs Column */}
         <div className="flex flex-col gap-6">
           {currentRecord.finetuned_outputs.length === 0 ? (
-            <div className="text-gray-500 italic p-4 border rounded dark:border-gray-700">No model outputs available for this record.</div>
+            <div className="text-[var(--text-dim)] italic p-4 border rounded">No model outputs available for this record.</div>
           ) : (
             currentRecord.finetuned_outputs.map((output, idx) => (
               <div key={output.id} className="flex flex-col gap-2">
-                <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-[var(--text)] flex items-center justify-between">
                   Hypothesis Transcript
-                  <span className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 px-2 py-1 rounded-full">
+                  <span className="text-xs bg-[color-mix(in_srgb,#a78bfa_20%,transparent)] text-[#a78bfa] px-2 py-1 rounded-full">
                     {output.model_name}
                   </span>
                 </h2>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                <div className="text-sm text-[var(--text-dim)] mb-2">
                   Highlight text to tag specific errors made by the ASR model.
                 </div>
                 
