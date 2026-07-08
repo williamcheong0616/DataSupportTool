@@ -124,51 +124,51 @@ function Settings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="text-lg text-gray-500 dark:text-gray-400">Loading settings...</div>
+        <div className="text-lg text-[var(--text-dim)]">Loading settings...</div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">⚙️ Settings</h1>
+      <h1 className="text-2xl font-bold text-[var(--text-hi)]">⚙️ Settings</h1>
 
       {msg && (
-        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${
+        <div className={`px-4 py-3 rounded text-sm font-medium ${
           msg.type === 'error'
-            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+            ? 'bg-[var(--red-dim)] text-[var(--red)]  '
+            : 'bg-[var(--green-dim)] text-[var(--green)]  '
         }`}>
           {msg.text}
         </div>
       )}
 
       {/* User Identity */}
-      <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">👤 User Identity</h2>
-        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+      <div className="p-6 bg-[var(--bg-panel)] rounded border">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--text-hi)]">👤 User Identity</h2>
+        <p className="mb-3 text-sm text-[var(--text-dim)]">
           Your name is used to track who created datasets and annotated records.
         </p>
         <div className="max-w-md">
-          <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Your Name</label>
+          <label className="block mb-1 text-sm font-medium text-[var(--text)]">Your Name</label>
           <input
             type="text"
             value={username}
             onChange={e => saveUsername(e.target.value)}
             placeholder="Enter your name"
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
           />
         </div>
       </div>
 
       {/* Ollama Configuration */}
-      <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+      <div className="p-6 bg-[var(--bg-panel)] rounded border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🤖 Ollama (LLM)</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-hi)]">🤖 Ollama (LLM)</h2>
           <span className={`px-2 py-1 text-xs font-medium rounded-full ${
             ollamaRunning
-              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              ? 'bg-[var(--green-dim)] text-[var(--green)]  '
+              : 'bg-[var(--red-dim)] text-[var(--red)]  '
           }`}>
             {ollamaRunning ? '● Running' : '● Not Running'}
           </span>
@@ -177,23 +177,23 @@ function Settings() {
         <div className="space-y-4">
           {/* Base URL */}
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Base URL</label>
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">Base URL</label>
             <input
               type="text"
               value={config?.ollama_base_url || ''}
               onChange={e => setConfig({ ...config, ollama_base_url: e.target.value })}
-              className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full max-w-md px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
             />
           </div>
 
           {/* Active Model */}
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Active Model</label>
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">Active Model</label>
             <div className="flex items-center max-w-md gap-2">
               <select
                 value={config?.ollama_model || ''}
                 onChange={e => setConfig({ ...config, ollama_model: e.target.value })}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
               >
                 {ollamaModels.map(m => (
                   <option key={m.name} value={m.name}>
@@ -210,8 +210,8 @@ function Settings() {
 
           {/* Pull New Model */}
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Pull New Model</label>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">Pull New Model</label>
+            <p className="mb-2 text-xs text-[var(--text-dim)]">
               Enter a model name from the Ollama library (e.g. <code>llama3:8b</code>, <code>mistral:7b</code>, <code>gemma3:4b</code>)
             </p>
             <div className="flex items-center max-w-md gap-2">
@@ -220,13 +220,13 @@ function Settings() {
                 value={pullModel}
                 onChange={e => setPullModel(e.target.value)}
                 placeholder="e.g. gemma3:4b"
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
                 onKeyDown={e => e.key === 'Enter' && handlePull()}
               />
               <button
                 onClick={handlePull}
                 disabled={pulling || !pullModel.trim()}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {pulling ? 'Pulling...' : 'Pull Model'}
               </button>
@@ -236,17 +236,17 @@ function Settings() {
           {/* Available Models */}
           {ollamaModels.length > 0 && (
             <div>
-              <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="block mb-2 text-sm font-medium text-[var(--text)]">
                 Downloaded Models ({ollamaModels.length})
               </label>
               <div className="flex flex-wrap gap-2">
                 {ollamaModels.map(m => (
                   <span
                     key={m.name}
-                    className={`px-3 py-1 text-xs rounded-full cursor-pointer transition-colors ${
+                    className={`px-3 py-1 text-xs rounded-full cursor-pointer transition-colors border-2 ${
                       config?.ollama_model === m.name
-                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 ring-2 ring-indigo-500'
-                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--accent)] font-semibold'
+                        : 'bg-[var(--bg-input)] text-[var(--text-dim)] border-transparent hover:bg-[var(--bg-hover)]'
                     }`}
                     onClick={() => setConfig({ ...config, ollama_model: m.name })}
                   >
@@ -260,13 +260,13 @@ function Settings() {
       </div>
 
       {/* Whisper Configuration */}
-      <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+      <div className="p-6 bg-[var(--bg-panel)] rounded border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🎙️ Whisper (ASR)</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-hi)]">🎙️ Whisper (ASR)</h2>
           <span className={`px-2 py-1 text-xs font-medium rounded-full ${
             whisperStatus?.available
-              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-              : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+              ? 'bg-[var(--green-dim)] text-[var(--green)]  '
+              : 'bg-[var(--amber-dim)] text-[var(--amber)]  '
           }`}>
             {whisperStatus?.detected_backend
               ? `● ${whisperStatus.detected_backend.toUpperCase()} backend`
@@ -276,25 +276,25 @@ function Settings() {
 
         <div className="space-y-4">
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Model Name (HuggingFace)</label>
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">Model Name (HuggingFace)</label>
             <input
               type="text"
               value={config?.whisper_model || ''}
               onChange={e => setConfig({ ...config, whisper_model: e.target.value })}
               placeholder="mlx-community/whisper-large-v3-turbo"
-              className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full max-w-md px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-[var(--text-dim)]">
               HuggingFace repo for MLX, or model size for CUDA/CPU (e.g. <code>large-v3-turbo</code>)
             </p>
           </div>
 
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Backend</label>
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">Backend</label>
             <select
               value={config?.whisper_backend || 'auto'}
               onChange={e => setConfig({ ...config, whisper_backend: e.target.value })}
-              className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full max-w-md px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
             >
               <option value="auto">Auto-detect</option>
               <option value="mlx">MLX (Apple Silicon)</option>
@@ -306,22 +306,22 @@ function Settings() {
       </div>
 
       {/* Database Backup */}
-      <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+      <div className="p-6 bg-[var(--bg-panel)] rounded border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">💾 Database Backup</h2>
-          <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+          <h2 className="text-lg font-semibold text-[var(--text-hi)]">💾 Database Backup</h2>
+          <span className="px-2 py-1 text-xs font-medium rounded-full bg-[var(--accent-dim)] text-[var(--accent)]">
             Auto-backup daily at 6:00 PM
           </span>
         </div>
 
-        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          Create a full SQL dump of the database. Backups are saved to <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">sql_backups/</code> and the last 30 are kept.
+        <p className="mb-4 text-sm text-[var(--text-dim)]">
+          Create a full SQL dump of the database. Backups are saved to <code className="px-1 py-0.5 bg-[var(--bg-input)] rounded text-xs">sql_backups/</code> and the last 30 are kept.
         </p>
 
         <button
           onClick={handleBackup}
           disabled={backingUp}
-          className="px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-colors inline-flex items-center gap-2"
+          className="px-5 py-2.5 text-sm font-medium text-white bg-[var(--green)] rounded hover:bg-[var(--green)] disabled:opacity-50 disabled:cursor-not-allowed border transition-colors inline-flex items-center gap-2"
         >
           {backingUp ? (
             <>
@@ -347,28 +347,28 @@ function Settings() {
           const standardBackups = backups.filter(b => !b.filename.includes('_10min_') && !b.filename.includes('_30min_'));
 
           const renderTable = (list) => (
-            <div className="overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700">
+            <div className="overflow-hidden border rounded">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                <thead className="bg-[var(--bg)]">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Filename</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Size</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-[var(--text-dim)] uppercase">Filename</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-[var(--text-dim)] uppercase">Size</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-[var(--text-dim)] uppercase">Created</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-[var(--text-dim)] uppercase">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y  ">
                   {list.slice(0, 10).map((b) => (
-                    <tr key={b.filename} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-900 dark:text-gray-100">{b.filename}</td>
-                      <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{b.size_human}</td>
-                      <td className="px-4 py-2 text-gray-500 dark:text-gray-400">
+                    <tr key={b.filename} className="hover:bg-[var(--bg-hover)]">
+                      <td className="px-4 py-2 font-mono text-xs text-[var(--text-hi)]">{b.filename}</td>
+                      <td className="px-4 py-2 text-[var(--text-dim)]">{b.size_human}</td>
+                      <td className="px-4 py-2 text-[var(--text-dim)]">
                         {new Date(b.created_at).toLocaleString()}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <button
                           onClick={() => handleDownloadBackup(b.filename)}
-                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 text-xs font-medium"
+                          className="text-[var(--accent)] hover:text-[var(--accent)] text-xs font-medium"
                         >
                           Download
                         </button>
@@ -377,7 +377,7 @@ function Settings() {
                   ))}
                   {list.length === 0 && (
                     <tr>
-                      <td colSpan="4" className="px-4 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
+                      <td colSpan="4" className="px-4 py-4 text-center text-xs text-[var(--text-dim)]">
                         No backups found in this category.
                       </td>
                     </tr>
@@ -391,8 +391,8 @@ function Settings() {
             <div className="mt-8 space-y-6">
               {/* Scheduled Frequency Snapshots */}
               <div>
-                <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                <h3 className="mb-2 text-sm font-medium text-[var(--text)] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent)]"></span>
                   High-Frequency Auto-Snapshots ({scheduledBackups.length} stored)
                 </h3>
                 {renderTable(scheduledBackups)}
@@ -400,15 +400,15 @@ function Settings() {
 
               {/* Standard Backups */}
               <div>
-                <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <h3 className="mb-2 text-sm font-medium text-[var(--text)] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--green)]"></span>
                   Full Backups (Daily & Manual) ({standardBackups.length} stored)
                 </h3>
                 {renderTable(standardBackups)}
               </div>
 
               {loadingBackups && (
-                <p className="mt-2 text-xs text-gray-400">Loading backups...</p>
+                <p className="mt-2 text-xs text-[var(--text-dim)]">Loading backups...</p>
               )}
             </div>
           );
@@ -420,7 +420,7 @@ function Settings() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 shadow-sm"
+          className="px-6 py-2.5 text-sm font-medium text-white bg-[var(--accent)] rounded hover:bg-[var(--accent)] disabled:opacity-50 border"
         >
           {saving ? 'Saving...' : 'Save Settings'}
         </button>

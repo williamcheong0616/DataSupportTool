@@ -415,15 +415,15 @@ function BRRestructure() {
     const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-gray-900 dark:text-white rounded px-0.5">{part}</mark>
+        ? <mark key={i} className="bg-[var(--amber)] text-[var(--text-hi)] rounded px-0.5">{part}</mark>
         : part
     )
   }
 
   if (loading && records.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-600 dark:text-gray-400">Loading restructure records...</div>
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+        <div className="text-[var(--text-dim)]">Loading restructure records...</div>
       </div>
     )
   }
@@ -447,35 +447,35 @@ function BRRestructure() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6" ref={containerRef}>
+    <div className="min-h-screen bg-[var(--bg)] p-6" ref={containerRef}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-3xl font-bold text-[var(--text-hi)]">
               Stage 2: Text Restructure
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
+            <p className="text-[var(--text-dim)] mt-1">
               Only Bahasa Rojak records shown. Consolidate text or keep original.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={handleExportCSV}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+              className="px-4 py-2 bg-[var(--green)] text-white rounded hover:bg-[var(--green)] flex items-center gap-2"
             >
               📥 Export CSV
             </button>
             <button
               onClick={() => setShowRerunModal(true)}
               disabled={rerunning}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-[var(--accent)] text-white rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {rerunning ? 'Starting...' : 'Rerun Stage 2'}
             </button>
             <button
               onClick={() => navigate('/text')}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              className="px-4 py-2 text-[var(--text-dim)] hover:text-[var(--text-hi)]"
             >
               Back to Datasets
             </button>
@@ -483,29 +483,29 @@ function BRRestructure() {
         </div>
 
         {/* Stage Navigation */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <div className="bg-[var(--bg-panel)] rounded border p-4 mb-6">
           <div className="flex items-center gap-2">
             <Link
               to={`/br-pipeline/classification/${pipelineId}`}
-              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)]"
             >
               1. Classification
             </Link>
-            <span className="text-gray-400">-&gt;</span>
-            <span className="px-3 py-1 text-sm bg-indigo-600 text-white rounded">
+            <span className="text-[var(--text-dim)]">-&gt;</span>
+            <span className="px-3 py-1 text-sm bg-[var(--accent-dim)] text-white rounded">
               2. Restructure
             </span>
-            <span className="text-gray-400">-&gt;</span>
+            <span className="text-[var(--text-dim)]">-&gt;</span>
             <Link
               to={`/br-pipeline/questions/${pipelineId}`}
-              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)]"
             >
               3. Question Validation
             </Link>
-            <span className="text-gray-400">-&gt;</span>
+            <span className="text-[var(--text-dim)]">-&gt;</span>
             <Link
               to={`/br-pipeline/responses/${pipelineId}`}
-              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)]"
             >
               4. Model Responses
             </Link>
@@ -513,32 +513,32 @@ function BRRestructure() {
         </div>
 
         {/* Keyboard Shortcuts Help */}
-        <div className="bg-gray-800 dark:bg-gray-900 rounded-lg shadow p-3 mb-6">
-          <div className="flex items-center gap-4 flex-wrap text-xs text-gray-300">
-            <span className="font-semibold text-gray-100">⌨ Hotkeys:</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">A</kbd> Keep Original</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">W</kbd> Discard</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">R</kbd> Restore</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">D</kbd> Save</span>
-            <span className="border-l border-gray-600 pl-4"><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">↑</kbd><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono ml-1">↓</kbd> Navigate cards</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">S</kbd> Next page</span>
-            <span><kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-200 font-mono">P</kbd> Prev page</span>
+        <div className="bg-[var(--bg-panel)] rounded border p-3 mb-6">
+          <div className="flex items-center gap-4 flex-wrap text-xs text-[var(--text-hi)]">
+            <span className="font-semibold text-[var(--text-hi)]">⌨ Hotkeys:</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">A</kbd> Keep Original</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">W</kbd> Discard</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">R</kbd> Restore</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">D</kbd> Save</span>
+            <span className="border-l pl-4"><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">↑</kbd><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono ml-1">↓</kbd> Navigate cards</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">S</kbd> Next page</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[var(--bg-input)] rounded text-[var(--text-hi)] font-mono">P</kbd> Prev page</span>
           </div>
         </div>
 
         {/* Progress Banner (shown when running) */}
         {polling && progress && (
-          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6">
+          <div className="bg-[var(--accent-dim)] border border-[var(--accent)] rounded p-4 mb-6">
             <div className="flex items-center gap-3">
-              <div className="animate-spin text-blue-600 dark:text-blue-400">&#9203;</div>
+              <div className="animate-spin text-[var(--accent)]">&#9203;</div>
               <div>
-                <div className="font-medium text-blue-900 dark:text-blue-200">
+                <div className="font-medium text-[var(--accent)]">
                   Stage 2 running in background...
                 </div>
-                <div className="text-sm text-blue-700 dark:text-blue-300">
+                <div className="text-sm text-[var(--accent)]">
                   {progress.stage2_restructured} / {progress.bahasa_rojak_count} BR records restructured
                   {progress.error_message && (
-                    <span className="text-red-600 ml-2">Error: {progress.error_message}</span>
+                    <span className="text-[var(--red)] ml-2">Error: {progress.error_message}</span>
                   )}
                 </div>
               </div>
@@ -547,26 +547,26 @@ function BRRestructure() {
         )}
 
         {/* Stats Bar */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <div className="bg-[var(--bg-panel)] rounded border p-4 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                <div className="text-2xl font-bold text-[var(--accent)]">
                   {total}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">BR Records</div>
+                <div className="text-sm text-[var(--text-dim)]">BR Records</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                <div className="text-2xl font-bold text-[var(--green)]">
                   {restructuredCount}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Restructured</div>
+                <div className="text-sm text-[var(--text-dim)]">Restructured</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                <div className="text-2xl font-bold text-[var(--amber)]">
                   {total - restructuredCount}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Pending</div>
+                <div className="text-sm text-[var(--text-dim)]">Pending</div>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -576,22 +576,22 @@ function BRRestructure() {
                   setMergeMode(!mergeMode)
                   setSelectedIds([])
                 }}
-                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                className={`px-4 py-2 rounded text-sm font-medium ${
                   mergeMode
-                    ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-2 border-amber-400'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'bg-[var(--amber-dim)] text-[var(--amber)] border-2 border-[var(--amber)]'
+                    : 'bg-[var(--bg-input)] text-[var(--text)] hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 {mergeMode ? 'Cancel Merge' : 'Merge Mode'}
               </button>
 
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-[var(--text-dim)]">
                   {total > 0 ? Math.round((restructuredCount / total) * 100) : 0}% Complete
                 </span>
-                <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div className="w-32 bg-[var(--bg-input)] rounded-full h-2">
                   <div
-                    className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                    className="bg-[var(--accent)] h-2 rounded-full transition-all duration-300"
                     style={{ width: `${total > 0 ? (restructuredCount / total) * 100 : 0}%` }}
                   />
                 </div>
@@ -602,18 +602,18 @@ function BRRestructure() {
 
         {/* Status Filter + Merge Bar + Search */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Filter:</span>
+          <span className="text-sm text-[var(--text-dim)] font-medium">Filter:</span>
           {['all', 'pending', 'completed', 'discarded'].map(f => (
             <button
               key={f}
               onClick={() => changeFilter(f)}
-              className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+              className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${
                 statusFilter === f
-                  ? f === 'all' ? 'bg-indigo-600 text-white'
-                    : f === 'pending' ? 'bg-orange-500 text-white'
-                    : f === 'discarded' ? 'bg-red-600 text-white'
-                    : 'bg-green-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? f === 'all' ? 'bg-[var(--accent)] text-white'
+                    : f === 'pending' ? 'bg-[var(--amber)] text-white'
+                    : f === 'discarded' ? 'bg-[var(--red)] text-white'
+                    : 'bg-[var(--green)] text-white'
+                  : 'bg-[var(--bg-input)]  text-[var(--text)]  hover:bg-[var(--bg-hover)] '
               }`}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -623,20 +623,20 @@ function BRRestructure() {
           {/* Search bar */}
           <form onSubmit={handleSearch} className="flex items-center gap-1 ml-auto">
             <div className="relative">
-              <span className="absolute inset-y-0 left-2 flex items-center text-gray-400 pointer-events-none text-sm">🔍</span>
+              <span className="absolute inset-y-0 left-2 flex items-center text-[var(--text-dim)] pointer-events-none text-sm">🔍</span>
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search original or restructured text…"
-                className="pl-7 pr-3 py-1.5 text-sm w-72 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="pl-7 pr-3 py-1.5 text-sm w-72 border bg-[var(--bg-panel)] text-[var(--text-hi)] rounded"
               />
             </div>
             <button
               type="submit"
               disabled={isSearching || !searchQuery.trim()}
-              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              className="px-3 py-1.5 text-sm bg-[var(--accent)] text-white rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               {isSearching ? '⏳' : 'Search'}
             </button>
@@ -644,7 +644,7 @@ function BRRestructure() {
               <button
                 type="button"
                 onClick={() => setSearchPanelOpen(false)}
-                className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                className="px-3 py-1.5 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)]"
               >
                 Close Panel
               </button>
@@ -654,26 +654,26 @@ function BRRestructure() {
 
         {/* Merge Bar (shown when in merge mode with selections) */}
         {mergeMode && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
+          <div className="bg-[var(--amber-dim)] border border-[var(--amber)] rounded p-4 mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-amber-900 dark:text-amber-200">
+                <div className="font-medium text-[var(--amber)]">
                   Merge Mode: Select records to concatenate
                 </div>
-                <div className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                <div className="text-sm text-[var(--amber)] mt-1">
                   {selectedIds.length === 0 
                     ? 'Click the checkboxes to select records. They will be merged in selection order.'
                     : `${selectedIds.length} records selected (IDs: ${selectedIds.join(', ')})`
                   }
                 </div>
-                <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                <div className="text-xs text-[var(--amber)] mt-1">
                   Original texts are preserved. Only the restructured_text field is updated.
                 </div>
               </div>
               <button
                 onClick={handleMerge}
                 disabled={selectedIds.length < 2 || merging}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-[var(--amber-dim)] text-white rounded hover:bg-[var(--amber-dim)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {merging ? 'Merging...' : `Merge ${selectedIds.length} Records`}
               </button>
@@ -695,15 +695,15 @@ function BRRestructure() {
                 key={record.id}
                 ref={el => cardRefs.current[idx] = el}
                 onClick={() => setActiveIndex(idx)}
-                className={`rounded-lg shadow transition-all duration-200 cursor-pointer
-                  ${isActive 
-                    ? 'bg-white dark:bg-gray-800 ring-2 ring-indigo-500 scale-[1.01] shadow-lg' 
+                className={`rounded border transition-all duration-200 cursor-pointer
+                  ${isActive
+                    ? 'bg-[var(--bg-panel)] scale-[1.01] border-2 border-[var(--accent)]'
                     : isDone
-                      ? 'bg-gray-50 dark:bg-gray-800/60 opacity-60 hover:opacity-80'
-                      : 'bg-white dark:bg-gray-800 hover:shadow-md'
+                      ? 'bg-[var(--bg)] opacity-60 hover:opacity-80'
+                      : 'bg-[var(--bg-panel)] hover:border'
                   }
                   ${isMerged ? 'opacity-40' : ''}
-                  ${isSelected ? 'ring-2 ring-amber-500' : ''}
+                  ${isSelected ? 'border-2 border-[var(--green)]' : ''}
                   p-5`}
               >
                 <div className="flex items-start gap-4 mb-3">
@@ -714,10 +714,10 @@ function BRRestructure() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelect(record.id)}
-                        className="w-5 h-5 text-amber-600 rounded cursor-pointer"
+                        className="w-5 h-5 text-[var(--amber)] rounded cursor-pointer"
                       />
                       {isSelected && (
-                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                        <span className="text-xs font-bold text-[var(--amber)]">
                           #{selectionIndex + 1}
                         </span>
                       )}
@@ -727,9 +727,9 @@ function BRRestructure() {
                   {/* Card number + active indicator */}
                   <div className="flex items-center gap-2">
                     {isActive && (
-                      <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                      <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
                     )}
-                    <div className={`text-sm font-medium ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    <div className={`text-sm font-medium ${isActive ? 'text-[var(--accent)] ' : 'text-[var(--text-dim)] '}`}>
                       #{(page - 1) * perPage + idx + 1}
                     </div>
                   </div>
@@ -738,22 +738,22 @@ function BRRestructure() {
                     {/* Language badge + status */}
                     <div className="flex items-center gap-2 mb-3">
                       {record.detected_language && (
-                        <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-[var(--accent-dim)] text-[var(--accent)] rounded">
                           {record.detected_language}
                         </span>
                       )}
                       {record.was_restructured && (
-                        <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-[var(--green-dim)] text-[var(--green)] rounded">
                           ✓ Done
                         </span>
                       )}
                       {record.is_discarded && (
-                        <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-[var(--red-dim)] text-[var(--red)] rounded">
                           ✗ Discarded
                         </span>
                       )}
                       {isMerged && (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-[var(--bg-input)] text-[var(--text-dim)] rounded">
                           {record.restructured_text}
                         </span>
                       )}
@@ -764,32 +764,32 @@ function BRRestructure() {
                         {/* Original Text */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <label className="block text-sm font-medium text-[var(--text)]">
                               Original Text (preserved)
                             </label>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleCopyOriginal(record.id, record.original_text) }}
-                              className="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                              className="px-2 py-0.5 text-xs bg-[var(--bg-input)] text-[var(--text-dim)] rounded hover:bg-[var(--bg-hover)] transition-colors"
                               title="Copy original text to clipboard"
                             >
                               {copiedId === record.id ? '✓ Copied!' : '📋 Copy'}
                             </button>
                           </div>
-                          <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white min-h-[120px] whitespace-pre-wrap">
+                          <div className="p-3 bg-[var(--bg)] rounded border text-sm text-[var(--text-hi)] min-h-[120px] whitespace-pre-wrap">
                             {record.original_text}
                           </div>
                         </div>
                         
                         {/* Restructured Text */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          <label className="block text-sm font-medium text-[var(--text)] mb-2">
                             Restructured Text
                           </label>
                           <textarea
                             value={record.restructured_text || ''}
                             onChange={(e) => handleRestructuredTextChange(record.id, e.target.value)}
                             placeholder="Click 'Keep Original' to use as-is, 'Auto-Restructure' for LLM, or edit manually..."
-                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[120px] text-sm resize-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full p-3 border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] min-h-[120px] text-sm resize-none"
                           />
                         </div>
                       </div>
@@ -804,7 +804,7 @@ function BRRestructure() {
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRestore(record.id) }}
                         disabled={saving[`restore_${record.id}`]}
-                        className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 disabled:opacity-50"
+                        className="px-3 py-1 text-sm bg-[var(--accent-dim)] text-[var(--accent)] rounded hover:bg-[var(--accent-dim)] disabled:opacity-50"
                       >
                         {saving[`restore_${record.id}`] ? 'Restoring...' : '(R) Restore'}
                       </button>
@@ -813,21 +813,21 @@ function BRRestructure() {
                         <button
                           onClick={(e) => { e.stopPropagation(); handleKeepOriginal(record.id) }}
                           disabled={saving[`keep_${record.id}`]}
-                          className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+                          className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-50"
                         >
                           {saving[`keep_${record.id}`] ? 'Saving...' : '(A) Keep Original'}
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDiscard(record.id) }}
                           disabled={saving[`discard_${record.id}`]}
-                          className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/60 disabled:opacity-50"
+                          className="px-3 py-1 text-sm bg-[var(--red-dim)] text-[var(--red)] rounded hover:bg-[var(--red-dim)] disabled:opacity-50"
                         >
                           {saving[`discard_${record.id}`] ? 'Discarding...' : '(W) Discard'}
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSave(record.id) }}
                           disabled={saving[record.id] || !record.restructured_text}
-                          className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                          className="px-3 py-1 text-sm bg-[var(--green)] text-white rounded hover:bg-[var(--green)] disabled:opacity-50"
                         >
                           {saving[record.id] ? 'Saving...' : '(D) Save'}
                         </button>
@@ -842,45 +842,45 @@ function BRRestructure() {
 
         {/* Pagination */}
         {total > 0 && (
-          <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex items-center justify-between bg-[var(--bg-panel)] rounded border p-4">
+            <div className="text-sm text-[var(--text-dim)]">
               Showing {(page - 1) * perPage + 1} - {Math.min(page * perPage, total)} of {total} BR records
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => goToPage(1)}
                 disabled={page === 1}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 First
               </button>
               <button
                 onClick={() => goToPage(page - 1)}
                 disabled={page === 1}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 (P) Prev
               </button>
-              <span className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
+              <span className="px-3 py-1 text-sm text-[var(--text-dim)]">
                 Page {page} of {totalPages}
               </span>
               <button
                 onClick={() => goToPage(page + 1)}
                 disabled={page === totalPages}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 (S) Next
               </button>
               <button
                 onClick={() => goToPage(totalPages)}
                 disabled={page === totalPages}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Last
               </button>
               {/* Jump to page */}
-              <form onSubmit={handleJumpPage} className="flex items-center gap-1 ml-3 border-l border-gray-300 dark:border-gray-600 pl-3">
-                <label className="text-sm text-gray-500 dark:text-gray-400">Go to:</label>
+              <form onSubmit={handleJumpPage} className="flex items-center gap-1 ml-3 border-l pl-3">
+                <label className="text-sm text-[var(--text-dim)]">Go to:</label>
                 <input
                   type="number"
                   min={1}
@@ -888,11 +888,11 @@ function BRRestructure() {
                   value={jumpPage}
                   onChange={(e) => setJumpPage(e.target.value)}
                   placeholder="#"
-                  className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded focus:ring-2 focus:ring-indigo-500"
+                  className="w-16 px-2 py-1 text-sm border bg-[var(--bg-panel)] rounded"
                 />
                 <button
                   type="submit"
-                  className="px-2 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  className="px-2 py-1 text-sm bg-[var(--accent)] text-white rounded hover:bg-[var(--accent)]"
                 >
                   Go
                 </button>
@@ -902,16 +902,16 @@ function BRRestructure() {
         )}
 
         {total === 0 && !loading && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
-            <div className="text-gray-500 dark:text-gray-400 text-lg">
+          <div className="bg-[var(--bg-panel)] rounded border p-12 text-center">
+            <div className="text-[var(--text-dim)] text-lg">
               No Bahasa Rojak records found for this pipeline.
             </div>
-            <p className="text-gray-400 dark:text-gray-500 mt-2">
+            <p className="text-[var(--text-dim)] mt-2">
               Make sure Stage 1 (Classification) has been run first and records are classified as Bahasa Rojak.
             </p>
             <Link
               to={`/br-pipeline/classification/${pipelineId}`}
-              className="inline-block mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              className="inline-block mt-4 px-4 py-2 bg-[var(--accent)] text-white rounded hover:bg-[var(--accent)]"
             >
               Go to Stage 1: Classification
             </Link>
@@ -921,22 +921,22 @@ function BRRestructure() {
 
       {/* ── Search Side Panel ──────────────────────────────────────────────── */}
       <div
-        className={`fixed top-0 right-0 h-full w-[420px] max-w-full bg-white dark:bg-gray-800 shadow-2xl z-40 flex flex-col transition-transform duration-300 ease-in-out
+        className={`fixed top-0 right-0 h-full w-[420px] max-w-full bg-[var(--bg-panel)]  border z-40 flex flex-col transition-transform duration-300 ease-in-out
           ${searchPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Panel Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 bg-indigo-600">
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-[var(--accent-dim)]">
           <div>
             <h2 className="text-white font-semibold text-base">Search Results</h2>
             {lastSearchQuery && (
-              <p className="text-indigo-200 text-xs mt-0.5">
+              <p className="text-[var(--accent)] text-xs mt-0.5">
                 "{lastSearchQuery}" — {searchTotal} match{searchTotal !== 1 ? 'es' : ''}
               </p>
             )}
           </div>
           <button
             onClick={() => setSearchPanelOpen(false)}
-            className="text-white hover:text-indigo-200 text-xl leading-none p-1"
+            className="text-white hover:text-[var(--accent)] text-xl leading-none p-1"
             title="Close panel"
           >
             ✕
@@ -944,18 +944,18 @@ function BRRestructure() {
         </div>
 
         {/* Search form inside panel for re-searching */}
-        <form onSubmit={handleSearch} className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <form onSubmit={handleSearch} className="flex items-center gap-2 px-4 py-3 border-b">
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search again…"
-            className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            className="flex-1 px-3 py-1.5 text-sm border bg-[var(--bg-panel)] text-[var(--text-hi)] rounded"
           />
           <button
             type="submit"
             disabled={isSearching || !searchQuery.trim()}
-            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm bg-[var(--accent-dim)] text-white rounded hover:bg-[var(--accent-dim)] disabled:opacity-50"
           >
             {isSearching ? '⏳' : '🔍'}
           </button>
@@ -965,46 +965,46 @@ function BRRestructure() {
         <div className="flex-1 overflow-y-auto">
           {isSearching && (
             <div className="flex items-center justify-center py-12">
-              <div className="text-indigo-500 animate-spin text-2xl mr-3">⏳</div>
-              <span className="text-gray-500 dark:text-gray-400">Searching…</span>
+              <div className="text-[var(--accent)] animate-spin text-2xl mr-3">⏳</div>
+              <span className="text-[var(--text-dim)]">Searching…</span>
             </div>
           )}
 
           {!isSearching && searchResults.length === 0 && lastSearchQuery && (
             <div className="text-center py-12">
               <div className="text-4xl mb-3">🔍</div>
-              <p className="text-gray-500 dark:text-gray-400">No matches found for</p>
-              <p className="font-medium text-gray-700 dark:text-gray-200 mt-1">"{lastSearchQuery}"</p>
+              <p className="text-[var(--text-dim)]">No matches found for</p>
+              <p className="font-medium text-[var(--text)] mt-1">"{lastSearchQuery}"</p>
             </div>
           )}
 
           {!isSearching && searchResults.map((result) => (
             <div
               key={result.id}
-              className="border-b border-gray-100 dark:border-gray-700 px-4 py-4 hover:bg-indigo-50 dark:hover:bg-gray-700/60 transition-colors"
+              className="border-b px-4 py-4 hover:bg-[var(--accent-dim)] transition-colors"
             >
               {/* Record meta */}
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                <span className="text-xs font-bold text-[var(--accent)]">
                   #{result.global_position}
                 </span>
                 {result.detected_language && (
-                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">
+                  <span className="px-1.5 py-0.5 text-xs bg-[var(--accent-dim)] text-[var(--accent)] rounded">
                     {result.detected_language}
                   </span>
                 )}
                 {result.was_restructured && (
-                  <span className="px-1.5 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
+                  <span className="px-1.5 py-0.5 text-xs bg-[var(--green-dim)] text-[var(--green)] rounded">
                     ✓ Done
                   </span>
                 )}
-                <span className="ml-auto text-xs text-gray-400">Page {result.target_page}</span>
+                <span className="ml-auto text-xs text-[var(--text-dim)]">Page {result.target_page}</span>
               </div>
 
               {/* Original text snippet */}
               <div className="mb-2">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Original:</p>
-                <p className="text-xs text-gray-800 dark:text-gray-200 line-clamp-3 leading-relaxed">
+                <p className="text-xs font-medium text-[var(--text-dim)] mb-1">Original:</p>
+                <p className="text-xs text-[var(--text-hi)] line-clamp-3 leading-relaxed">
                   {highlightText(result.original_text?.slice(0, 300) + (result.original_text?.length > 300 ? '…' : ''), lastSearchQuery)}
                 </p>
               </div>
@@ -1012,8 +1012,8 @@ function BRRestructure() {
               {/* Restructured text snippet if different */}
               {result.restructured_text && result.restructured_text !== result.original_text && (
                 <div className="mb-2">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Restructured:</p>
-                  <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 leading-relaxed italic">
+                  <p className="text-xs font-medium text-[var(--text-dim)] mb-1">Restructured:</p>
+                  <p className="text-xs text-[var(--text)] line-clamp-2 leading-relaxed italic">
                     {highlightText(result.restructured_text?.slice(0, 200) + (result.restructured_text?.length > 200 ? '…' : ''), lastSearchQuery)}
                   </p>
                 </div>
@@ -1022,7 +1022,7 @@ function BRRestructure() {
               {/* Navigate button */}
               <button
                 onClick={() => navigateToRecord(result)}
-                className="mt-1 w-full px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1"
+                className="mt-1 w-full px-3 py-1.5 text-xs font-semibold bg-[var(--accent)] text-white rounded hover:bg-[var(--accent)] transition-colors flex items-center justify-center gap-1"
               >
                 ✏️ Open &amp; Edit this Record
               </button>
@@ -1032,21 +1032,21 @@ function BRRestructure() {
 
         {/* Panel Pagination */}
         {searchTotalPages > 1 && !isSearching && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-[var(--bg)]">
             <button
               onClick={() => loadMoreSearchResults(searchPage - 1)}
               disabled={searchPage === 1}
-              className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-xs bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               ← Prev
             </button>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-[var(--text-dim)]">
               {searchPage} / {searchTotalPages}
             </span>
             <button
               onClick={() => loadMoreSearchResults(searchPage + 1)}
               disabled={searchPage === searchTotalPages}
-              className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-xs bg-[var(--bg-input)] text-[var(--text)] rounded hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Next →
             </button>
@@ -1065,18 +1065,18 @@ function BRRestructure() {
       {/* Rerun Modal */}
       {showRerunModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+          <div className="bg-[var(--bg-panel)] rounded p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-[var(--text-hi)] mb-4">
               Rerun Stage 2: Text Restructure
             </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-[var(--text-dim)] mb-2">
               Only <strong>Bahasa Rojak</strong> records will be processed.
             </p>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-[var(--text-dim)] mb-4">
               Choose restructuring option:
             </p>
             <div className="space-y-3 mb-6">
-              <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+              <label className="flex items-start gap-3 p-3 border rounded cursor-pointer hover:bg-[var(--bg-hover)]">
                 <input
                   type="radio"
                   checked={!skipRestructure}
@@ -1084,15 +1084,15 @@ function BRRestructure() {
                   className="mt-1"
                 />
                 <div>
-                  <div className="font-medium text-gray-900 dark:text-white">
+                  <div className="font-medium text-[var(--text-hi)]">
                     Consolidate Text (LLM)
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-[var(--text-dim)]">
                     LLM will consolidate text while keeping original language
                   </div>
                 </div>
               </label>
-              <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+              <label className="flex items-start gap-3 p-3 border rounded cursor-pointer hover:bg-[var(--bg-hover)]">
                 <input
                   type="radio"
                   checked={skipRestructure}
@@ -1100,30 +1100,30 @@ function BRRestructure() {
                   className="mt-1"
                 />
                 <div>
-                  <div className="font-medium text-gray-900 dark:text-white">
+                  <div className="font-medium text-[var(--text-hi)]">
                     Keep Original Text
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-[var(--text-dim)]">
                     Text is already contextualized enough - no changes needed
                   </div>
                 </div>
               </label>
             </div>
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg mb-4">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            <div className="bg-[var(--amber)] p-3 rounded mb-4">
+              <p className="text-sm text-[var(--amber)]">
                 Original language is always preserved. No translation will occur.
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={handleRerunStage}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                className="flex-1 px-4 py-2 bg-[var(--accent)] text-white rounded hover:bg-[var(--accent)]"
               >
                 Confirm Rerun
               </button>
               <button
                 onClick={() => setShowRerunModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                className="flex-1 px-4 py-2 bg-[var(--bg-input)] text-[var(--text-hi)] rounded hover:bg-[var(--bg-hover)]"
               >
                 Cancel
               </button>

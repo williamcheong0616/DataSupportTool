@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 're
 import {
   LayoutDashboard, FileText, Mic, Search, Settings2,
   Sun, Moon, ChevronDown, ScanSearch, MicOff,
-  FlaskConical, BarChart2, Database,
+  FlaskConical, BarChart2, Database, Zap,
 } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import TextDatasets from './pages/TextDatasets'
@@ -23,15 +23,9 @@ import ASRErrorAnalysis from './pages/ASRErrorAnalysis'
 import EvalErrorAnalysis from './pages/EvalErrorAnalysis'
 import ErrorAnalytics from './pages/ErrorAnalytics'
 
-/* ── Shared nav classes ────────────────────────────────────── */
-const NAV_BASE =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold tracking-widest uppercase font-display transition-all duration-150 select-none'
-const NAV_ACTIVE =
-  'nav-active'
-const NAV_INACTIVE =
-  'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+const THEME_KEY = 'dst-theme'
 
-/** Dropdown nav group */
+/** Dropdown nav group, styled to match the dst-tab bar */
 function NavDropdown({ label, icon: Icon, links }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -48,25 +42,21 @@ function NavDropdown({ label, icon: Icon, links }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className={`${NAV_BASE} gap-1.5 ${isAnyActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+        className={`dst-tab gap-1.5 ${isAnyActive ? 'dst-tab-active' : ''}`}
       >
         {Icon && <Icon size={12} strokeWidth={2.5} />}
         {label}
         <ChevronDown
           size={10}
           strokeWidth={3}
-          className={`ml-0.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open && (
         <div
-          className="absolute top-full left-0 mt-1.5 w-56 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden"
-          style={{
-            background: 'var(--clr-surface)',
-            border: '1px solid var(--clr-border)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          }}
+          className="dst-panel absolute top-full left-0 mt-1 w-52 z-50 py-1 overflow-hidden"
+          style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
         >
           {links.map(l => (
             <NavLink
@@ -74,14 +64,17 @@ function NavDropdown({ label, icon: Icon, links }) {
               to={l.to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/50'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                }`
+                'flex items-center gap-2.5 px-3 py-2 text-xs transition-colors'
               }
+              style={({ isActive }) => ({
+                fontFamily: 'var(--mono)',
+                color: isActive ? 'var(--accent)' : 'var(--text)',
+                background: isActive ? 'var(--accent-dim)' : 'transparent',
+              })}
+              onMouseEnter={(e) => { if (!e.currentTarget.classList.contains('active')) e.currentTarget.style.background = 'var(--bg-hover)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = location.pathname === l.to ? 'var(--accent-dim)' : 'transparent' }}
             >
-              {l.icon && <l.icon size={14} strokeWidth={2} className="flex-shrink-0 opacity-70" />}
+              {l.icon && <l.icon size={13} strokeWidth={2} className="flex-shrink-0" style={{ opacity: 0.7 }} />}
               {l.label}
             </NavLink>
           ))}
@@ -91,108 +84,96 @@ function NavDropdown({ label, icon: Icon, links }) {
   )
 }
 
-function AppLayout({ darkMode, toggleDarkMode }) {
+function ThemeToggle({ theme, toggle }) {
   return (
-    <div className="min-h-screen" style={{ background: 'var(--clr-bg)' }}>
-      {/* ── Navigation ──────────────────────────────────────── */}
-      <nav
-        className="sticky top-0 z-40"
+    <button
+      onClick={toggle}
+      title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      className="flex items-center justify-center transition-all duration-150"
+      style={{
+        background: 'none',
+        border: '1px solid var(--border)',
+        borderRadius: 4,
+        cursor: 'pointer',
+        color: 'var(--text-dim)',
+        padding: '5px 7px',
+        lineHeight: 1,
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-hi)'; e.currentTarget.style.borderColor = 'var(--border-hi)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-dim)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+    >
+      {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+    </button>
+  )
+}
+
+function AppLayout({ theme, toggleTheme }) {
+  return (
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+      {/* ── Top nav ─────────────────────────────────────────── */}
+      <header
+        className="sticky top-0 z-40 flex items-stretch"
         style={{
-          background: 'var(--clr-surface)',
-          borderBottom: '1px solid var(--clr-border)',
-          backdropFilter: 'blur(8px)',
+          background: 'var(--bg-panel)',
+          borderBottom: '1px solid var(--border)',
+          height: 40,
+          paddingLeft: 12,
         }}
       >
-        <div className="px-4 mx-auto max-w-7xl">
-          <div className="flex items-center justify-between h-14">
-
-            {/* Brand + links */}
-            <div className="flex items-center gap-5">
-              {/* Logo mark */}
-              <div className="flex items-center gap-2.5 mr-1">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'var(--clr-primary)' }}
-                >
-                  <Database size={14} className="text-white" strokeWidth={2.5} />
-                </div>
-                <span
-                  className="text-[15px] font-bold tracking-tight"
-                  style={{ fontFamily: 'Raleway, sans-serif', color: 'var(--clr-text)' }}
-                >
-                  DataTool
-                </span>
-              </div>
-
-              {/* Divider */}
-              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
-
-              {/* Primary links */}
-              <div className="flex items-center gap-0.5">
-                <NavLink
-                  to="/"
-                  end
-                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
-                >
-                  <LayoutDashboard size={12} strokeWidth={2.5} />
-                  Dashboard
-                </NavLink>
-
-                <NavLink
-                  to="/text"
-                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
-                >
-                  <FileText size={12} strokeWidth={2.5} />
-                  Text
-                </NavLink>
-
-                <NavLink
-                  to="/asr"
-                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
-                >
-                  <Mic size={12} strokeWidth={2.5} />
-                  ASR
-                </NavLink>
-
-                <NavDropdown
-                  label="Error Analysis"
-                  icon={Search}
-                  links={[
-                    { to: '/text-error-analysis', label: 'Text Errors',  icon: ScanSearch },
-                    { to: '/asr-error-analysis',  label: 'ASR Errors',   icon: MicOff     },
-                    { to: '/eval-error-analysis', label: 'Eval Errors',  icon: FlaskConical },
-                    { to: '/error-analytics',     label: 'Analytics',    icon: BarChart2  },
-                  ]}
-                />
-
-                <NavLink
-                  to="/settings"
-                  className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
-                >
-                  <Settings2 size={12} strokeWidth={2.5} />
-                  Settings
-                </NavLink>
-              </div>
-            </div>
-
-            {/* Dark mode toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-150"
-              style={{ background: 'var(--clr-surface-2)', border: '1px solid var(--clr-border)' }}
-              title={darkMode ? 'Light mode' : 'Dark mode'}
-            >
-              {darkMode
-                ? <Sun size={15} className="text-amber-400" strokeWidth={2} />
-                : <Moon size={15} className="text-slate-500" strokeWidth={2} />
-              }
-            </button>
-          </div>
+        {/* Brand */}
+        <div
+          className="flex items-center gap-2 flex-shrink-0"
+          style={{ paddingRight: 20, borderRight: '1px solid var(--border)', marginRight: 4 }}
+        >
+          <Zap size={14} style={{ color: 'var(--accent)' }} fill="var(--accent)" />
+          <span
+            style={{
+              fontFamily: 'var(--mono)', fontWeight: 600, fontSize: 12,
+              color: 'var(--text-hi)', letterSpacing: '0.04em',
+            }}
+          >
+            DataSupportTool
+          </span>
         </div>
-      </nav>
+
+        {/* Tabs */}
+        <nav className="flex items-stretch overflow-x-auto">
+          <NavLink to="/" end className={({ isActive }) => `dst-tab ${isActive ? 'dst-tab-active' : ''}`}>
+            <LayoutDashboard size={12} strokeWidth={2.5} className="mr-1.5" />
+            Dashboard
+          </NavLink>
+          <NavLink to="/text" className={({ isActive }) => `dst-tab ${isActive ? 'dst-tab-active' : ''}`}>
+            <FileText size={12} strokeWidth={2.5} className="mr-1.5" />
+            Text
+          </NavLink>
+          <NavLink to="/asr" className={({ isActive }) => `dst-tab ${isActive ? 'dst-tab-active' : ''}`}>
+            <Mic size={12} strokeWidth={2.5} className="mr-1.5" />
+            ASR
+          </NavLink>
+          <NavDropdown
+            label="Error Analysis"
+            icon={Search}
+            links={[
+              { to: '/text-error-analysis', label: 'Text Errors', icon: ScanSearch },
+              { to: '/asr-error-analysis', label: 'ASR Errors', icon: MicOff },
+              { to: '/eval-error-analysis', label: 'Eval Errors', icon: FlaskConical },
+              { to: '/error-analytics', label: 'Analytics', icon: BarChart2 },
+            ]}
+          />
+          <NavLink to="/settings" className={({ isActive }) => `dst-tab ${isActive ? 'dst-tab-active' : ''}`}>
+            <Settings2 size={12} strokeWidth={2.5} className="mr-1.5" />
+            Settings
+          </NavLink>
+        </nav>
+
+        {/* Right side */}
+        <div className="flex items-center ml-auto" style={{ paddingRight: 14, gap: 10 }}>
+          <ThemeToggle theme={theme} toggle={toggleTheme} />
+        </div>
+      </header>
 
       {/* ── Main content ────────────────────────────────────── */}
-      <main className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      <main className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/text" element={<TextDatasets />} />
@@ -221,16 +202,21 @@ function AppLayout({ darkMode, toggleDarkMode }) {
 }
 
 function App() {
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true')
+  const [theme, setTheme] = useState(() => {
+    const stored = localStorage.getItem(THEME_KEY)
+    return stored === 'light' || stored === 'dark' ? stored : 'dark'
+  })
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode)
-    localStorage.setItem('darkMode', darkMode)
-  }, [darkMode])
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
+
+  const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
 
   return (
     <Router>
-      <AppLayout darkMode={darkMode} toggleDarkMode={() => setDarkMode(d => !d)} />
+      <AppLayout theme={theme} toggleTheme={toggleTheme} />
     </Router>
   )
 }

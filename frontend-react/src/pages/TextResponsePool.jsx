@@ -1,20 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Search, ArrowLeft } from 'lucide-react'
 import { getResponsePool } from '../api'
 
 const PAGE_SIZE = 100
 
-// Assign a stable color per dataset name using a fixed palette
-const PALETTE = [
-  'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700',
-  'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700',
-  'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 border-green-200 dark:border-green-700',
-  'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700',
-  'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-200 border-pink-200 dark:border-pink-700',
-  'bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-200 border-teal-200 dark:border-teal-700',
-  'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-700',
-  'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 border-indigo-200 dark:border-indigo-700',
-]
+// Assign a stable qualitative color per dataset name
+const PALETTE = ['#4a9eff', '#a78bfa', '#3dd68c', '#fb923c', '#f472b6', '#2dd4bf', '#e8a820', '#818cf8']
 
 function highlightText(text, query) {
   if (!query) return <span>{text}</span>
@@ -23,10 +15,26 @@ function highlightText(text, query) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase()
-          ? <mark key={i} className="bg-yellow-300 dark:bg-yellow-600 text-black dark:text-white rounded px-0.5">{part}</mark>
+          ? <mark key={i} className="rounded px-0.5" style={{ background: 'var(--amber)', color: '#000' }}>{part}</mark>
           : <span key={i}>{part}</span>
       )}
     </>
+  )
+}
+
+function DatasetBadge({ name, color }) {
+  return (
+    <span
+      className="px-2 py-0.5 text-xs font-semibold rounded"
+      style={{
+        fontFamily: 'var(--mono)',
+        background: `color-mix(in srgb, ${color} 18%, transparent)`,
+        color,
+        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+      }}
+    >
+      {name}
+    </span>
   )
 }
 
@@ -107,16 +115,30 @@ function TextResponsePool() {
 
   const displayed = results
 
+  const STATS = [
+    { label: 'Total Entries',    value: total,              color: 'var(--text-hi)' },
+    { label: 'Original Texts',   value: originalCount,       color: 'var(--accent)' },
+    { label: 'Model Responses',  value: modelResponseCount,  color: '#a78bfa' },
+  ]
+
   return (
     <div>
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <button onClick={() => navigate('/text')} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-2">
-            ← Back to Datasets
+          <button
+            onClick={() => navigate('/text')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium mb-2 transition-colors"
+            style={{ color: 'var(--text-dim)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-dim)' }}
+          >
+            <ArrowLeft size={14} /> Back to Datasets
           </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">🔍 Cross-Dataset Response Pool</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'var(--mono)', color: 'var(--text-hi)' }}>
+            Cross-Dataset Response Pool
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>
             All original texts and model responses from every dataset — search to detect overlap and assess over/under-training risk.
           </p>
         </div>
@@ -124,39 +146,39 @@ function TextResponsePool() {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          { label: 'Total Entries', value: total, color: 'text-gray-700 dark:text-gray-300' },
-          { label: 'Original Texts', value: originalCount, color: 'text-blue-600 dark:text-blue-400' },
-          { label: 'Model Responses', value: modelResponseCount, color: 'text-purple-600 dark:text-purple-400' },
-        ].map(s => (
-          <div key={s.label} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 text-center">
-            <div className={`text-3xl font-bold ${s.color}`}>{s.value.toLocaleString()}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">{s.label}</div>
+        {STATS.map(s => (
+          <div key={s.label} className="surface p-4 text-center">
+            <div className="text-3xl font-bold" style={{ fontFamily: 'var(--mono)', color: s.color }}>
+              {s.value.toLocaleString()}
+            </div>
+            <div className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>{s.label}</div>
           </div>
         ))}
       </div>
 
       {/* Search + filter bar */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6 flex flex-col sm:flex-row gap-3">
+      <div className="surface p-4 mb-6 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">🔍</span>
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dim)' }} />
           <input
             type="text"
             value={searchInput}
             onChange={handleSearchChange}
             placeholder="Search across all original texts and model responses…"
-            className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            className="dst-input pl-9"
+            style={{ height: 34 }}
           />
           {loading && (
             <span className="absolute inset-y-0 right-3 flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600" />
+              <div className="dst-spin" />
             </span>
           )}
         </div>
         <select
           value={filterType}
           onChange={e => { setFilterType(e.target.value); setOffset(0) }}
-          className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          className="dst-input dst-select"
+          style={{ height: 34, width: 'auto' }}
         >
           <option value="all">All types</option>
           <option value="original_text">Original texts only</option>
@@ -167,52 +189,61 @@ function TextResponsePool() {
       {/* Dataset legend */}
       {Object.keys(datasetColorMap).length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
-          {Object.entries(datasetColorMap).map(([name, cls]) => (
-            <span key={name} className={`px-2 py-0.5 rounded text-xs border font-medium ${cls}`}>
-              {name}
-            </span>
+          {Object.entries(datasetColorMap).map(([name, color]) => (
+            <DatasetBadge key={name} name={name} color={color} />
           ))}
         </div>
       )}
 
       {/* Results */}
       {displayed.length === 0 && !loading ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center text-gray-500 dark:text-gray-400">
+        <div className="surface p-12 text-center text-sm" style={{ color: 'var(--text-dim)' }}>
           {activeQuery ? `No results matching "${activeQuery}"` : 'No entries found across datasets.'}
         </div>
       ) : (
         <div className="space-y-2">
           {displayed.map((item, i) => {
-            const colorCls = datasetColorMap[item.dataset_name] || PALETTE[0]
+            const color = datasetColorMap[item.dataset_name] || PALETTE[0]
             return (
-              <div key={`${item.type}-${item.record_id}-${item.model_name}-${i}`}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <div key={`${item.type}-${item.record_id}-${item.model_name}-${i}`} className="surface p-4">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   {/* Dataset badge */}
-                  <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${colorCls}`}>
-                    {item.dataset_name}
-                  </span>
+                  <DatasetBadge name={item.dataset_name} color={color} />
                   {/* Type badge */}
                   {item.type === 'original_text' ? (
-                    <span className="px-2 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                    <span
+                      className="px-2 py-0.5 text-xs rounded"
+                      style={{ fontFamily: 'var(--mono)', background: 'var(--bg-input)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}
+                    >
                       Original Text
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 text-xs rounded bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+                    <span
+                      className="px-2 py-0.5 text-xs rounded"
+                      style={{
+                        fontFamily: 'var(--mono)',
+                        background: 'color-mix(in srgb, #a78bfa 15%, transparent)',
+                        color: '#a78bfa',
+                        border: '1px solid color-mix(in srgb, #a78bfa 35%, transparent)',
+                      }}
+                    >
                       Model Response · {item.model_name}
                     </span>
                   )}
-                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">record #{item.record_id}</span>
+                  <span className="text-xs ml-auto" style={{ color: 'var(--text-dim)' }}>record #{item.record_id}</span>
                 </div>
 
                 {/* If model response, show the question it was answering */}
                 {item.type === 'model_response' && item.question && (
-                  <div className="mb-2 text-xs text-gray-500 dark:text-gray-400 italic border-l-2 border-gray-300 dark:border-gray-600 pl-2">
+                  <div
+                    className="mb-2 text-xs italic pl-2"
+                    style={{ color: 'var(--text-dim)', borderLeft: '2px solid var(--border-hi)' }}
+                  >
                     Q: {item.question}
                   </div>
                 )}
 
-                <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)' }}>
                   {highlightText(item.text, activeQuery)}
                 </p>
               </div>
@@ -224,8 +255,7 @@ function TextResponsePool() {
       {/* Load more */}
       {hasMore && !loading && (
         <div className="mt-6 text-center">
-          <button onClick={handleLoadMore}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+          <button onClick={handleLoadMore} className="btn-primary">
             Load more ({results.length} / {total} loaded)
           </button>
         </div>
@@ -233,7 +263,7 @@ function TextResponsePool() {
 
       {loading && results.length > 0 && (
         <div className="mt-4 flex justify-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+          <div className="dst-spin" />
         </div>
       )}
     </div>
