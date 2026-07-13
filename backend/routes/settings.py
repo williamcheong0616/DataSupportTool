@@ -10,7 +10,7 @@ import secrets
 import requests
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -204,6 +204,31 @@ def _mask_key(key: Optional[str]) -> Optional[str]:
     return f"{key[:4]}…{key[-4:]}"
 
 
+def _require_current_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> None:
+    """
+    Require proof of the CURRENT provider key before rotating or revoking it.
+
+    Without this, anyone who can reach the server could mint themselves a
+    fresh provider_api_key (or knock out the integration) with a single
+    unauthenticated call — the key is otherwise the only thing gating
+    /api/provider/*. First-ever generation is left open since there's
+    nothing to prove yet (mirrors /api/provider/* itself being closed by
+    default until a key exists).
+
+    Raises:
+        HTTPException: 401 if a key already exists and the caller didn't
+            supply it via X-API-Key.
+    """
+    current = load_settings().get("provider_api_key")
+    if not current:
+        return
+    if not x_api_key or x_api_key != current:
+        raise HTTPException(
+            status_code=401,
+            detail="Rotating or revoking an existing key requires the current key in the X-API-Key header",
+        )
+
+
 @router.get("/provider")
 def get_provider_settings():
     """Get the provider API's status, masked key, and base URL."""
@@ -227,13 +252,15 @@ def update_provider_settings(data: ProviderSettingsUpdate):
 
 
 @router.post("/provider/generate-key")
-def generate_provider_api_key():
+def generate_provider_api_key(_: None = Depends(_require_current_key)):
     """
     Generate (or rotate) the provider API key.
 
     Takes effect immediately — no server restart required. The full key is
     returned once in this response only; afterwards only a masked form is
-    ever shown again, so the caller must copy it now.
+    ever shown again, so the caller must copy it now. If a key already
+    exists, rotating it requires that current key (see
+    _require_current_key) — only the very first generation is open.
     """
     current = load_settings()
     new_key = secrets.token_hex(32)
@@ -247,8 +274,8 @@ def generate_provider_api_key():
 
 
 @router.delete("/provider/key")
-def revoke_provider_api_key():
-    """Disable the provider API by clearing its key."""
+def revoke_provider_api_key(_: None = Depends(_require_current_key)):
+    """Disable the provider API by clearing its key. Requires the current key."""
     current = load_settings()
     current["provider_api_key"] = None
     save_settings(current)

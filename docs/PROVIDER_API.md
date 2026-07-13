@@ -262,16 +262,18 @@ Streams the raw audio bytes for one completed file. `409` if the file isn't `COM
 
 ---
 
-### 5.6 Settings endpoints (internal — not API-key gated)
+### 5.6 Settings endpoints
 
-These configure the provider API itself and are only reachable from the DataSupportTool UI/backend (same trust level as the rest of `/api/settings/*`, which has no auth).
+These configure the provider API itself. `GET`/`PUT` are unauthenticated (same trust level as the rest of `/api/settings/*`, which has no auth) — they don't expose or change anything secret. `generate-key` and `revoke`, however, mint or clear the one credential that gates `/api/provider/*`, so they additionally require proof of the **current** key via `X-API-Key` — except the very first-ever generation, which is left open since there's nothing to prove yet (mirrors `/api/provider/*` itself being closed-by-default until a key exists).
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/settings/provider` | `{"enabled": bool, "masked_key": "a333…ab15" \| null, "provider_base_url": str}` |
-| `PUT` | `/api/settings/provider` | Body `{"provider_base_url": str}` — updates the displayed base URL |
-| `POST` | `/api/settings/provider/generate-key` | Generates/rotates the key. Returns `{"provider_api_key": "<full key, once>", "provider_base_url": str}` |
-| `DELETE` | `/api/settings/provider/key` | Clears the key — disables the whole provider API (`503` afterwards) |
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/settings/provider` | None | `{"enabled": bool, "masked_key": "a333…ab15" \| null, "provider_base_url": str}` |
+| `PUT` | `/api/settings/provider` | None | Body `{"provider_base_url": str}` — updates the displayed base URL |
+| `POST` | `/api/settings/provider/generate-key` | Current `X-API-Key` (skipped if no key exists yet) | Generates/rotates the key. Returns `{"provider_api_key": "<full key, once>", "provider_base_url": str}` |
+| `DELETE` | `/api/settings/provider/key` | Current `X-API-Key` | Clears the key — disables the whole provider API (`503` afterwards) |
+
+The Settings UI keeps the just-generated key in memory for the rest of that browser session so **Regenerate**/**Revoke** work with no extra step right after generating. If you reload the page (or come back later), it only has the masked form, so it prompts for the current key before allowing a rotate/revoke.
 
 ---
 
@@ -292,7 +294,7 @@ curl -s -H "X-API-Key: $KEY" "$BASE/api/provider/text/20/export?format=sharegpt"
 - `settings.json` holds `provider_api_key` in plaintext. It is written with **`0600`** permissions (`save_settings()` in `backend/routes/settings.py`), and `load_settings()` tightens the mode on every read if it's ever found broader than `0600`.
 - `settings.json` is **gitignored** — a secret-free `settings.example.json` documents the schema instead. If you're setting up a new environment, copy it: `cp settings.example.json settings.json`.
 - Treat the full key as compromised the moment it's displayed anywhere it could be logged or shared (chat transcripts, screen shares, tickets) — regenerate it from Settings rather than reusing an exposed value.
-- The provider API is unauthenticated-by-default in the sense that `/api/settings/*` (where the key itself is managed) has no auth of its own — it assumes the same trust boundary as the rest of the DataSupportTool app (internal network / trusted operator). Don't expose the DataSupportTool UI itself to an untrusted network without adding auth in front of it.
+- Minting/clearing the key (`generate-key`/`revoke`) requires the current key once one exists (§5.6) — this closes the gap where anyone reaching the server could otherwise mint themselves a fresh credential or disable the integration with a single unauthenticated call. Everything else under `/api/settings/*` (Ollama config, Whisper backend, DB backup download, etc.) still has no auth of its own — it assumes the same trust boundary as the rest of the DataSupportTool app (internal network / trusted operator). Don't expose the DataSupportTool UI itself to an untrusted network without adding auth in front of it.
 
 ---
 

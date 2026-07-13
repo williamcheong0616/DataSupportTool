@@ -438,8 +438,10 @@ export const getWhisperStatus = () => api.get('/settings/models/whisper/status')
 // Provider API (external integration, e.g. training pipeline)
 export const getProviderSettings = () => api.get('/settings/provider')
 export const updateProviderSettings = (data) => api.put('/settings/provider', data)
-export const generateProviderApiKey = () => api.post('/settings/provider/generate-key')
-export const revokeProviderApiKey = () => api.delete('/settings/provider/key')
+export const generateProviderApiKey = (currentKey) =>
+  api.post('/settings/provider/generate-key', {}, currentKey ? { headers: { 'X-API-Key': currentKey } } : {})
+export const revokeProviderApiKey = (currentKey) =>
+  api.delete('/settings/provider/key', currentKey ? { headers: { 'X-API-Key': currentKey } } : {})
 
 // Database Backup
 export const createDatabaseBackup = () => api.post('/settings/backup')

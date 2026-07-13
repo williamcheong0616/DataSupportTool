@@ -27,6 +27,7 @@ function Settings() {
   const [generatingKey, setGeneratingKey] = useState(false)
   const [revokingKey, setRevokingKey] = useState(false)
   const [revealedKey, setRevealedKey] = useState(null)
+  const [currentKeyInput, setCurrentKeyInput] = useState('')
 
   const flash = (text, type = 'success') => {
     setMsg({ text, type })
@@ -122,13 +123,18 @@ function Settings() {
     if (providerSettings?.enabled && !confirm('This replaces the existing key — anything using the old one will stop working. Continue?')) return
     setGeneratingKey(true)
     try {
-      const res = await generateProviderApiKey()
+      const res = await generateProviderApiKey(revealedKey || currentKeyInput || undefined)
       setRevealedKey(res.data.provider_api_key)
+      setCurrentKeyInput('')
       const refreshed = await getProviderSettings()
       setProviderSettings(refreshed.data)
       flash('New provider API key generated')
     } catch (e) {
-      flash('Failed to generate key', 'error')
+      if (e.response?.status === 401) {
+        flash('Enter the current key below, then try again', 'error')
+      } else {
+        flash('Failed to generate key', 'error')
+      }
     }
     setGeneratingKey(false)
   }
@@ -137,12 +143,17 @@ function Settings() {
     if (!confirm('This disables the provider API immediately — external systems will lose access. Continue?')) return
     setRevokingKey(true)
     try {
-      const res = await revokeProviderApiKey()
+      const res = await revokeProviderApiKey(revealedKey || currentKeyInput || undefined)
       setProviderSettings(res.data)
       setRevealedKey(null)
+      setCurrentKeyInput('')
       flash('Provider API key revoked')
     } catch (e) {
-      flash('Failed to revoke key', 'error')
+      if (e.response?.status === 401) {
+        flash('Enter the current key below, then try again', 'error')
+      } else {
+        flash('Failed to revoke key', 'error')
+      }
     }
     setRevokingKey(false)
   }
@@ -432,6 +443,20 @@ function Settings() {
                 </button>
               )}
             </div>
+            {providerSettings?.enabled && !revealedKey && (
+              <div className="mt-2 max-w-md">
+                <label className="block mb-1 text-xs text-[var(--text-dim)]">
+                  Current key (required to rotate/revoke — this browser doesn't have it in memory)
+                </label>
+                <input
+                  type="password"
+                  value={currentKeyInput}
+                  onChange={e => setCurrentKeyInput(e.target.value)}
+                  placeholder="Paste the current provider API key"
+                  className="w-full px-3 py-1.5 text-xs border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
+                />
+              </div>
+            )}
           </div>
 
           {/* One-time reveal of a freshly generated key */}
