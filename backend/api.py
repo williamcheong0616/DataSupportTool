@@ -120,11 +120,12 @@ logger.info("✓ Settings routes registered")
 
 # Provider API routes (external integrations, e.g. training pipeline)
 from backend.routes.provider import router as provider_router
+from backend.routes.settings import load_settings as _load_settings
 app.include_router(provider_router)
-if os.getenv("PROVIDER_API_KEY"):
+if _load_settings().get("provider_api_key"):
     logger.info("✓ Provider API routes registered (external access ENABLED)")
 else:
-    logger.info("✓ Provider API routes registered (external access disabled — set PROVIDER_API_KEY to enable)")
+    logger.info("✓ Provider API routes registered (external access disabled — generate a key from Settings to enable)")
 
 
 # ==================== STATIC FRONTEND (SPA) ====================

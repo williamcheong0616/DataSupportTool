@@ -435,6 +435,12 @@ export const pullOllamaModel = (modelName) =>
   api.post(`/settings/models/ollama/pull?model_name=${encodeURIComponent(modelName)}`)
 export const getWhisperStatus = () => api.get('/settings/models/whisper/status')
 
+// Provider API (external integration, e.g. training pipeline)
+export const getProviderSettings = () => api.get('/settings/provider')
+export const updateProviderSettings = (data) => api.put('/settings/provider', data)
+export const generateProviderApiKey = () => api.post('/settings/provider/generate-key')
+export const revokeProviderApiKey = () => api.delete('/settings/provider/key')
+
 // Database Backup
 export const createDatabaseBackup = () => api.post('/settings/backup')
 export const listDatabaseBackups = () => api.get('/settings/backups')

@@ -54,11 +54,4 @@ WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://localhost:9000")
 # Model endpoint for LLM inference (Ollama, vLLM, etc.)
 MODEL_ENDPOINT = os.getenv("MODEL_ENDPOINT", "http://localhost:8080/v1/completions")
 
-# ==================== PROVIDER API (external integrations) ====================
-# Shared secret required in the `X-API-Key` header for /api/provider/* routes.
-# These routes let external systems (e.g. a training pipeline) pull finished
-# datasets. Left unset by default so the endpoints stay closed until someone
-# deliberately opts in.
-PROVIDER_API_KEY = os.getenv("PROVIDER_API_KEY")
-
 

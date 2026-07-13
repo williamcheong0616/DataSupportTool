@@ -6,6 +6,7 @@ Supports listing available Ollama models and pulling new ones.
 """
 import json
 import os
+import secrets
 import requests
 import logging
 from typing import Optional
@@ -25,6 +26,8 @@ DEFAULTS = {
     "qwen3_enabled": False,
     "ollama_model": "gemma3:4b",
     "ollama_base_url": "http://localhost:11434",
+    "provider_api_key": os.getenv("PROVIDER_API_KEY") or None,
+    "provider_base_url": "",
     "response_system_prompt": """You are a helpful AI assistant that answers questions in Bahasa Rojak (Malaysian/Singaporean code-mixed style).
 
 Bahasa Rojak characteristics:
@@ -48,6 +51,11 @@ def load_settings() -> dict:
     """Load settings from JSON file, falling back to defaults."""
     if os.path.exists(SETTINGS_FILE):
         try:
+            # settings.json holds provider_api_key; tighten permissions on
+            # every read in case the file predates this check or something
+            # else widened its mode.
+            if os.stat(SETTINGS_FILE).st_mode & 0o077:
+                os.chmod(SETTINGS_FILE, 0o600)
             with open(SETTINGS_FILE) as f:
                 saved = json.load(f)
             return {**DEFAULTS, **saved}
@@ -56,9 +64,10 @@ def load_settings() -> dict:
     return dict(DEFAULTS)
 
 
-def save_settings(settings: dict):
-    """Persist settings to JSON file."""
-    with open(SETTINGS_FILE, "w") as f:
+def save_settings(settings: dict) -> None:
+    """Persist settings to JSON file with owner-only (0600) permissions."""
+    fd = os.open(SETTINGS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         json.dump(settings, f, indent=2)
 
 
@@ -178,6 +187,73 @@ def get_qwen3_status():
             "enabled": settings.get("qwen3_enabled", False),
             "error": str(e),
         }
+
+
+# ==================== PROVIDER API (external integrations) ====================
+
+class ProviderSettingsUpdate(BaseModel):
+    provider_base_url: Optional[str] = None
+
+
+def _mask_key(key: Optional[str]) -> Optional[str]:
+    """Shorten a key to a display-safe 'first4…last4' form."""
+    if not key:
+        return None
+    if len(key) <= 8:
+        return "…"
+    return f"{key[:4]}…{key[-4:]}"
+
+
+@router.get("/provider")
+def get_provider_settings():
+    """Get the provider API's status, masked key, and base URL."""
+    settings = load_settings()
+    key = settings.get("provider_api_key")
+    return {
+        "enabled": bool(key),
+        "masked_key": _mask_key(key),
+        "provider_base_url": settings.get("provider_base_url", ""),
+    }
+
+
+@router.put("/provider")
+def update_provider_settings(data: ProviderSettingsUpdate):
+    """Update the provider base URL shown to external integrators."""
+    current = load_settings()
+    if data.provider_base_url is not None:
+        current["provider_base_url"] = data.provider_base_url
+    save_settings(current)
+    return get_provider_settings()
+
+
+@router.post("/provider/generate-key")
+def generate_provider_api_key():
+    """
+    Generate (or rotate) the provider API key.
+
+    Takes effect immediately — no server restart required. The full key is
+    returned once in this response only; afterwards only a masked form is
+    ever shown again, so the caller must copy it now.
+    """
+    current = load_settings()
+    new_key = secrets.token_hex(32)
+    current["provider_api_key"] = new_key
+    save_settings(current)
+    logger.info("Provider API key regenerated")
+    return {
+        "provider_api_key": new_key,
+        "provider_base_url": current.get("provider_base_url", ""),
+    }
+
+
+@router.delete("/provider/key")
+def revoke_provider_api_key():
+    """Disable the provider API by clearing its key."""
+    current = load_settings()
+    current["provider_api_key"] = None
+    save_settings(current)
+    logger.info("Provider API key revoked")
+    return get_provider_settings()
 
 
 # ==================== DATABASE BACKUP ====================

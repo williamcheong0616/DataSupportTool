@@ -94,6 +94,9 @@ data/exports/*
 *.key
 secrets/
 
+# Runtime app settings — can contain provider_api_key
+settings.json
+
 # Misc
 *.bak
 *.tmp

@@ -3,6 +3,7 @@ import {
   getModelConfig, updateModelConfig,
   getOllamaModels, pullOllamaModel,
   getWhisperStatus,
+  getProviderSettings, updateProviderSettings, generateProviderApiKey, revokeProviderApiKey,
   createDatabaseBackup, listDatabaseBackups, downloadDatabaseBackup
 } from '../api'
 
@@ -20,6 +21,12 @@ function Settings() {
   const [backingUp, setBackingUp] = useState(false)
   const [backups, setBackups] = useState([])
   const [loadingBackups, setLoadingBackups] = useState(false)
+  const [providerSettings, setProviderSettings] = useState(null)
+  const [providerBaseUrlInput, setProviderBaseUrlInput] = useState('')
+  const [savingProviderUrl, setSavingProviderUrl] = useState(false)
+  const [generatingKey, setGeneratingKey] = useState(false)
+  const [revokingKey, setRevokingKey] = useState(false)
+  const [revealedKey, setRevealedKey] = useState(null)
 
   const flash = (text, type = 'success') => {
     setMsg({ text, type })
@@ -40,15 +47,18 @@ function Settings() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [cfgRes, ollamaRes, whisperRes] = await Promise.all([
+      const [cfgRes, ollamaRes, whisperRes, providerRes] = await Promise.all([
         getModelConfig(),
         getOllamaModels(),
-        getWhisperStatus()
+        getWhisperStatus(),
+        getProviderSettings()
       ])
       setConfig(cfgRes.data)
       setOllamaModels(ollamaRes.data.models || [])
       setOllamaRunning(ollamaRes.data.ollama_running)
       setWhisperStatus(whisperRes.data)
+      setProviderSettings(providerRes.data)
+      setProviderBaseUrlInput(providerRes.data.provider_base_url || '')
     } catch (e) {
       flash('Failed to load settings', 'error')
     }
@@ -85,6 +95,56 @@ function Settings() {
       flash(detail, 'error')
     }
     setPulling(false)
+  }
+
+  const handleCopy = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      flash(`${label} copied to clipboard`)
+    } catch (e) {
+      flash('Copy failed — select and copy manually', 'error')
+    }
+  }
+
+  const handleSaveProviderUrl = async () => {
+    setSavingProviderUrl(true)
+    try {
+      const res = await updateProviderSettings({ provider_base_url: providerBaseUrlInput })
+      setProviderSettings(res.data)
+      flash('Provider base URL saved')
+    } catch (e) {
+      flash('Failed to save base URL', 'error')
+    }
+    setSavingProviderUrl(false)
+  }
+
+  const handleGenerateKey = async () => {
+    if (providerSettings?.enabled && !confirm('This replaces the existing key — anything using the old one will stop working. Continue?')) return
+    setGeneratingKey(true)
+    try {
+      const res = await generateProviderApiKey()
+      setRevealedKey(res.data.provider_api_key)
+      const refreshed = await getProviderSettings()
+      setProviderSettings(refreshed.data)
+      flash('New provider API key generated')
+    } catch (e) {
+      flash('Failed to generate key', 'error')
+    }
+    setGeneratingKey(false)
+  }
+
+  const handleRevokeKey = async () => {
+    if (!confirm('This disables the provider API immediately — external systems will lose access. Continue?')) return
+    setRevokingKey(true)
+    try {
+      const res = await revokeProviderApiKey()
+      setProviderSettings(res.data)
+      setRevealedKey(null)
+      flash('Provider API key revoked')
+    } catch (e) {
+      flash('Failed to revoke key', 'error')
+    }
+    setRevokingKey(false)
   }
 
   const saveUsername = (val) => {
@@ -302,6 +362,107 @@ function Settings() {
               <option value="cpu">CPU</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Provider API (external integration) */}
+      <div className="p-6 bg-[var(--bg-panel)] rounded border">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-[var(--text-hi)]">🔌 Provider API (Training Pipeline Integration)</h2>
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+            providerSettings?.enabled
+              ? 'bg-[var(--green-dim)] text-[var(--green)]'
+              : 'bg-[var(--red-dim)] text-[var(--red)]'
+          }`}>
+            {providerSettings?.enabled ? '● Enabled' : '● Disabled'}
+          </span>
+        </div>
+
+        <p className="mb-4 text-sm text-[var(--text-dim)]">
+          Lets an external system (e.g. a training pipeline) pull verified datasets over HTTP via <code className="px-1 py-0.5 bg-[var(--bg-input)] rounded text-xs">/api/provider/*</code>. Changes here take effect immediately — no server restart needed.
+        </p>
+
+        <div className="space-y-4">
+          {/* Base URL */}
+          <div>
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">Base URL</label>
+            <p className="mb-2 text-xs text-[var(--text-dim)]">
+              Where the external system should reach this server (e.g. <code>http://localhost:8000</code>, or a tunnel/public hostname if it runs elsewhere).
+            </p>
+            <div className="flex items-center max-w-md gap-2">
+              <input
+                type="text"
+                value={providerBaseUrlInput}
+                onChange={e => setProviderBaseUrlInput(e.target.value)}
+                placeholder="http://localhost:8000"
+                className="flex-1 px-3 py-2 text-sm border rounded bg-[var(--bg-panel)] text-[var(--text-hi)] focus:border-transparent"
+                onKeyDown={e => e.key === 'Enter' && handleSaveProviderUrl()}
+              />
+              <button
+                onClick={handleSaveProviderUrl}
+                disabled={savingProviderUrl}
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded hover:bg-[var(--accent)] disabled:opacity-50 whitespace-nowrap"
+              >
+                {savingProviderUrl ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+
+          {/* API Key */}
+          <div>
+            <label className="block mb-1 text-sm font-medium text-[var(--text)]">API Key</label>
+            <div className="flex items-center gap-3">
+              <code className="px-3 py-1.5 text-sm bg-[var(--bg-input)] rounded text-[var(--text-hi)]">
+                {providerSettings?.masked_key || 'No key generated yet'}
+              </code>
+              <button
+                onClick={handleGenerateKey}
+                disabled={generatingKey}
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded hover:bg-[var(--accent)] disabled:opacity-50 whitespace-nowrap"
+              >
+                {generatingKey ? 'Generating...' : providerSettings?.enabled ? 'Regenerate Key' : 'Generate Key'}
+              </button>
+              {providerSettings?.enabled && (
+                <button
+                  onClick={handleRevokeKey}
+                  disabled={revokingKey}
+                  className="px-4 py-2 text-sm font-medium text-[var(--red)] bg-[var(--bg-panel)] border border-[var(--red)] rounded hover:bg-[var(--red-dim)] disabled:opacity-50 whitespace-nowrap"
+                >
+                  {revokingKey ? 'Revoking...' : 'Revoke'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* One-time reveal of a freshly generated key */}
+          {revealedKey && (
+            <div className="p-4 bg-[var(--amber-dim)] border-2 border-[var(--amber)] rounded">
+              <p className="mb-2 text-sm font-semibold text-[var(--amber)]">
+                Copy this now — it won't be shown again after you leave this page.
+              </p>
+              <div className="p-3 mb-2 bg-[var(--bg)] rounded font-mono text-xs text-[var(--text-hi)] break-all">
+                PROVIDER_BASE_URL={providerBaseUrlInput || 'http://localhost:8000'}<br />
+                PROVIDER_API_KEY={revealedKey}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleCopy(
+                    `PROVIDER_BASE_URL=${providerBaseUrlInput || 'http://localhost:8000'}\nPROVIDER_API_KEY=${revealedKey}`,
+                    'Connection info'
+                  )}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-[var(--amber)] rounded hover:opacity-90"
+                >
+                  Copy Connection Info
+                </button>
+                <button
+                  onClick={() => setRevealedKey(null)}
+                  className="px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] bg-[var(--bg-input)] rounded hover:bg-[var(--bg-hover)]"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
