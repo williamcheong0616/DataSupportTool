@@ -34,11 +34,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-import config
 from backend.database import get_db
 from backend.enums import TranscriptionStatus
 from backend.models import ASRDataset, AudioFile, TextDataset, TextRecord
 from backend.br_pipeline_models import BRPipelineRun, BRRecordStage
+from backend.routes.settings import load_settings
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +53,14 @@ def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -
         x_api_key: Value of the `X-API-Key` request header.
 
     Raises:
-        HTTPException: 503 if PROVIDER_API_KEY is unset on the server (feature
+        HTTPException: 503 if no provider key has been generated yet (feature
             disabled by default), 401 if the header is missing or wrong.
     """
-    configured_key = config.PROVIDER_API_KEY
+    configured_key = load_settings().get("provider_api_key")
     if not configured_key:
         raise HTTPException(
             status_code=503,
-            detail="Provider API is disabled. Set PROVIDER_API_KEY in .env to enable external access.",
+            detail="Provider API is disabled. Generate a key from Settings to enable external access.",
         )
     if not x_api_key or x_api_key != configured_key:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")

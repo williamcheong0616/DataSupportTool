@@ -1,0 +1,10 @@
+{
+  "whisper_model": "mlx-community/whisper-large-v3-turbo",
+  "whisper_backend": "auto",
+  "qwen3_model": "Qwen/Qwen3-ASR-1.7B",
+  "qwen3_enabled": false,
+  "ollama_model": "gemma3:4b",
+  "ollama_base_url": "http://localhost:11434",
+  "provider_api_key": null,
+  "provider_base_url": ""
+}
